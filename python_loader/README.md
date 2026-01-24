@@ -2,10 +2,16 @@
 
 Stdlib-only loader for Virtuous runtime-generated Python clients.
 
+## Install
+
+```bash
+pip install virtuous
+```
+
 ## Usage
 
 ```python
-from virtuous_loader import load_module, load_module_to_disk, get_remote_hash
+from virtuous import load_module, load_module_to_disk, get_remote_hash
 
 module = load_module("https://api.example.com/client.gen.py")
 client = module.create_client("https://api.example.com")
