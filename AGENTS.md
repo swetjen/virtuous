@@ -28,6 +28,7 @@ These instructions describe how to understand and work with this repository.
 - For no-body responses, use the sentinel types in `virtuous/types.go`.
 - Add `doc:"..."` tags to improve schema and client docs.
 - Update `CHANGELOG.md` with a new version entry whenever adding functionality, fixing bugs, or changing behavior.
+- For Python, do not use `from __future__ import annotations`.
 
 ## Extension Points
 - Router-level type overrides via `SetTypeOverrides`.

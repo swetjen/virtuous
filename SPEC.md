@@ -132,6 +132,8 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
   - `client.Service.method(request, { auth?: string })` if guarded
 - Injects auth per guard spec.
 - Path parameters from `{param}` segments are required method arguments and are serialized into the URL.
+- Client outputs include a `Virtuous client hash` header comment.
+- Hash helpers can be served via `ServeClientJSHash`, `ServeClientTSHash`, and `ServeClientPYHash`.
 
 ## Usage example (main.go)
 

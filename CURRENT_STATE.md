@@ -37,6 +37,7 @@
 ## TS Client Generation
 - Similar runtime client with typed `pathParams` and `AuthOptions`.
 - Request and response bodies are currently typed as `any`.
+- Client outputs include a `Virtuous client hash` header comment, with helpers to serve hashes.
 
 ## OpenAPI Generation
 - OpenAPI 3.0.3 document is built from registered typed routes.
@@ -48,3 +49,6 @@
 ## Example App
 - Demonstrates typed routes, guard usage, OpenAPI JSON emission, and JS client generation.
 - Uses `doc` tags on struct fields to enrich OpenAPI and JSDoc output.
+
+## Python Loader
+- `python_loader/` provides a stdlib-only loader that fetches a Virtuous Python client and loads it as a module.

@@ -185,8 +185,16 @@ def _append_query(url: str, key: str, value: str) -> str:
 
 // WriteClientPY writes a runtime-generated Python client to w.
 func (r *Router) WriteClientPY(w io.Writer) error {
-	spec := buildPythonClientSpec(r.Routes(), r.typeOverrides)
-	return clientPyTemplate.Execute(w, spec)
+	body, err := r.clientPYBody()
+	if err != nil {
+		return err
+	}
+	hash := hashClientBytes(body)
+	if _, err := io.WriteString(w, "# Virtuous client hash: "+hash+"\n"); err != nil {
+		return err
+	}
+	_, err = w.Write(body)
+	return err
 }
 
 // WriteClientPYFile writes a runtime-generated Python client to the file at path.
@@ -199,10 +207,41 @@ func (r *Router) WriteClientPYFile(path string) error {
 	return r.WriteClientPY(f)
 }
 
+// WriteClientPYHash writes the hash of the Python client output to w.
+func (r *Router) WriteClientPYHash(w io.Writer) error {
+	hash, err := r.clientPYHash()
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, hash)
+	return err
+}
+
 // ServeClientPY writes a runtime-generated Python client as an HTTP response.
 func (r *Router) ServeClientPY(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/x-python; charset=utf-8")
 	if err := r.WriteClientPY(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// ServeClientPYHash writes the hash of the Python client as an HTTP response.
+func (r *Router) ServeClientPYHash(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if err := r.WriteClientPYHash(w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (r *Router) clientPYBody() ([]byte, error) {
+	spec := buildPythonClientSpec(r.Routes(), r.typeOverrides)
+	return renderClientTemplate(clientPyTemplate, spec)
+}
+
+func (r *Router) clientPYHash() (string, error) {
+	body, err := r.clientPYBody()
+	if err != nil {
+		return "", err
+	}
+	return hashClientBytes(body), nil
 }

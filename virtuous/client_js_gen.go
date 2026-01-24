@@ -118,8 +118,16 @@ export function createClient(basepath = "/") {
 
 // WriteClientJS writes a runtime-generated JS client to w.
 func (r *Router) WriteClientJS(w io.Writer) error {
-	spec := buildClientSpec(r.Routes(), r.typeOverrides)
-	return clientJSTemplate.Execute(w, spec)
+	body, err := r.clientJSBody()
+	if err != nil {
+		return err
+	}
+	hash := hashClientBytes(body)
+	if _, err := io.WriteString(w, "// Virtuous client hash: "+hash+"\n"); err != nil {
+		return err
+	}
+	_, err = w.Write(body)
+	return err
 }
 
 // WriteClientJSFile writes a runtime-generated JS client to the file at path.
@@ -132,10 +140,41 @@ func (r *Router) WriteClientJSFile(path string) error {
 	return r.WriteClientJS(f)
 }
 
+// WriteClientJSHash writes the hash of the JS client output to w.
+func (r *Router) WriteClientJSHash(w io.Writer) error {
+	hash, err := r.clientJSHash()
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, hash)
+	return err
+}
+
 // ServeClientJS writes a runtime-generated JS client as an HTTP response.
 func (r *Router) ServeClientJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
 	if err := r.WriteClientJS(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// ServeClientJSHash writes the hash of the JS client as an HTTP response.
+func (r *Router) ServeClientJSHash(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if err := r.WriteClientJSHash(w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (r *Router) clientJSBody() ([]byte, error) {
+	spec := buildClientSpec(r.Routes(), r.typeOverrides)
+	return renderClientTemplate(clientJSTemplate, spec)
+}
+
+func (r *Router) clientJSHash() (string, error) {
+	body, err := r.clientJSBody()
+	if err != nil {
+		return "", err
+	}
+	return hashClientBytes(body), nil
 }

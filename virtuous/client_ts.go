@@ -2,6 +2,7 @@ package virtuous
 
 import (
 	"io"
+	"net/http"
 	"os"
 	"text/template"
 )
@@ -94,8 +95,16 @@ export function createClient(basepath: string = "/") {
 
 // WriteClientTS writes a runtime-generated TS client to w.
 func (r *Router) WriteClientTS(w io.Writer) error {
-	spec := buildClientSpec(r.Routes(), r.typeOverrides)
-	return clientTSTemplate.Execute(w, spec)
+	body, err := r.clientTSBody()
+	if err != nil {
+		return err
+	}
+	hash := hashClientBytes(body)
+	if _, err := io.WriteString(w, "// Virtuous client hash: "+hash+"\n"); err != nil {
+		return err
+	}
+	_, err = w.Write(body)
+	return err
 }
 
 // WriteClientTSFile writes a runtime-generated TS client to the file at path.
@@ -106,4 +115,43 @@ func (r *Router) WriteClientTSFile(path string) error {
 	}
 	defer f.Close()
 	return r.WriteClientTS(f)
+}
+
+// WriteClientTSHash writes the hash of the TS client output to w.
+func (r *Router) WriteClientTSHash(w io.Writer) error {
+	hash, err := r.clientTSHash()
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, hash)
+	return err
+}
+
+// ServeClientTS writes a runtime-generated TS client as an HTTP response.
+func (r *Router) ServeClientTS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/typescript")
+	if err := r.WriteClientTS(w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// ServeClientTSHash writes the hash of the TS client as an HTTP response.
+func (r *Router) ServeClientTSHash(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if err := r.WriteClientTSHash(w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (r *Router) clientTSBody() ([]byte, error) {
+	spec := buildClientSpec(r.Routes(), r.typeOverrides)
+	return renderClientTemplate(clientTSTemplate, spec)
+}
+
+func (r *Router) clientTSHash() (string, error) {
+	body, err := r.clientTSBody()
+	if err != nil {
+		return "", err
+	}
+	return hashClientBytes(body), nil
 }

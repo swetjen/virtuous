@@ -8,6 +8,14 @@
 - Mark pointer fields as nullable in OpenAPI output.
 - Add OpenAPI tests for nullable vs required fields.
 
+## 0.0.3
+
+- Emit client hashes in JS/TS/PY outputs and provide hash response helpers.
+- Add stdlib-only Python loader package under `python_loader/`.
+- Document client hash endpoints and loader usage.
+
+## 0.0.2
+
 ## 0.0.1
 
 - Add runtime type registry powering richer JS JSDoc output.
