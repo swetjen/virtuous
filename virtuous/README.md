@@ -61,6 +61,8 @@ _ = router.WriteClientTS(ts)
 
 Client outputs include a `Virtuous client hash` header comment. Hash endpoints can be served via `router.ServeClientJSHash`, `router.ServeClientTSHash`, and `router.ServeClientPYHash`.
 
+For dynamic Python loading, see `python_loader/` in the repo for a stdlib-only module loader.
+
 See the root README and `reference/` for a complete example.
 
 ## Attribution

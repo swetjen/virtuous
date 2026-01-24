@@ -253,6 +253,15 @@ _ = router.WriteClientTS(ts)
 
 See `python_loader/` for a stdlib-only loader that fetches a Virtuous Python client from a URL and returns a module ready for `create_client`.
 
+Example:
+
+```python
+from virtuous_loader import load_module
+
+module = load_module("https://api.example.com/client.gen.py")
+client = module.create_client("https://api.example.com")
+```
+
 ## Testing
 
 Run `make test` to execute Go tests plus optional JS/Python/TS syntax checks (skips missing runtimes).

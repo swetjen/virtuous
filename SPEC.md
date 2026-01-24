@@ -135,6 +135,10 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 - Client outputs include a `Virtuous client hash` header comment.
 - Hash helpers can be served via `ServeClientJSHash`, `ServeClientTSHash`, and `ServeClientPYHash`.
 
+## Python loader
+- `python_loader/` provides a stdlib-only loader for fetching a Virtuous Python client and loading it as a module.
+- The loader returns a module compatible with `create_client(basepath)` from generated clients.
+
 ## Usage example (main.go)
 
 ```

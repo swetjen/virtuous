@@ -8,6 +8,10 @@
 - Mark pointer fields as nullable in OpenAPI output.
 - Add OpenAPI tests for nullable vs required fields.
 
+## 0.0.4
+
+- Document Python loader usage in the docs.
+
 ## 0.0.3
 
 - Emit client hashes in JS/TS/PY outputs and provide hash response helpers.
