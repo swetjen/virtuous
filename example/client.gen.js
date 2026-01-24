@@ -7,6 +7,12 @@
 
 // Type definitions
 /**
+ * @typedef {Object} CreateUserRequest
+ * @property {string} email
+ * @property {string} name
+ * @property {string} role
+ */
+/**
  * @typedef {Object} State
  * @property {number} id - Numeric state ID.
  * @property {string} code - Two-letter state code.
@@ -20,6 +26,23 @@
 /**
  * @typedef {Object} StatesResponse
  * @property {State[]} data
+ * @property {string} [error]
+ */
+/**
+ * @typedef {Object} User
+ * @property {number} id - User ID.
+ * @property {string} email - Login email address.
+ * @property {string} name - Display name.
+ * @property {string} role - Authorization role.
+ */
+/**
+ * @typedef {Object} UserResponse
+ * @property {User} user
+ * @property {string} [error]
+ */
+/**
+ * @typedef {Object} UsersResponse
+ * @property {User[]} data
  * @property {string} [error]
  */
 
@@ -128,6 +151,135 @@ export function createClient(basepath = "/") {
 					"Content-Type": "application/json",
 				}
 				let url = basepath + "/api/v1/lookup/states/"
+				const response = await fetch(url, {
+					method: "GET",
+					headers,
+				})
+				const text = await response.text()
+				let json = null
+				if (text) {
+					try {
+						json = JSON.parse(text)
+					} catch (e) {
+						if (!response.ok) {
+							throw new Error(response.status + " " + response.statusText)
+						}
+						throw e
+					}
+				}
+				if (!response.ok) {
+					if (json && json.error) {
+						throw new Error(json.error)
+					}
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return json || {}
+			},
+		},
+		Users: {
+			/**
+			 * Create user
+			 *
+			 * @param {CreateUserRequest } [request]
+			 * @param {AuthOptions} [options]
+			 * @returns {Promise<UserResponse>}
+			 */
+			async create(request, options) {
+				const headers = {
+					"Accept": "application/json",
+					"Content-Type": "application/json",
+				}
+				let url = basepath + "/api/v1/admin/users"
+				const authValue = options && options.auth
+				if (authValue) {
+					headers["Authorization"] = "Bearer " + authValue
+				}
+				const response = await fetch(url, {
+					method: "POST",
+					headers,
+					body: JSON.stringify(request || {}),
+				})
+				const text = await response.text()
+				let json = null
+				if (text) {
+					try {
+						json = JSON.parse(text)
+					} catch (e) {
+						if (!response.ok) {
+							throw new Error(response.status + " " + response.statusText)
+						}
+						throw e
+					}
+				}
+				if (!response.ok) {
+					if (json && json.error) {
+						throw new Error(json.error)
+					}
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return json || {}
+			},
+			/**
+			 * Get user by id
+			 *
+			 * @param {Object} pathParams
+			 * @param {AuthOptions} [options]
+			 * @returns {Promise<UserResponse>}
+			 */
+			async getByID(pathParams, options) {
+				const headers = {
+					"Accept": "application/json",
+					"Content-Type": "application/json",
+				}
+				let url = basepath + "/api/v1/admin/users/{id}"
+				if (!pathParams) {
+					throw new Error("pathParams is required")
+				}
+				url = url.replace("{id}", encodeURIComponent(String(pathParams.id)))
+				const authValue = options && options.auth
+				if (authValue) {
+					headers["Authorization"] = "Bearer " + authValue
+				}
+				const response = await fetch(url, {
+					method: "GET",
+					headers,
+				})
+				const text = await response.text()
+				let json = null
+				if (text) {
+					try {
+						json = JSON.parse(text)
+					} catch (e) {
+						if (!response.ok) {
+							throw new Error(response.status + " " + response.statusText)
+						}
+						throw e
+					}
+				}
+				if (!response.ok) {
+					if (json && json.error) {
+						throw new Error(json.error)
+					}
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return json || {}
+			},
+			/**
+			 * List users
+			 *
+			 * @param {AuthOptions} [options]
+			 * @returns {Promise<UsersResponse>}
+			 */
+			async getMany(options) {
+				const headers = {
+					"Accept": "application/json",
+					"Content-Type": "application/json",
+				}
+				let url = basepath + "/api/v1/admin/users"
+				const authValue = options && options.auth
+				if (authValue) {
+					headers["Authorization"] = "Bearer " + authValue
+				}
 				const response = await fetch(url, {
 					method: "GET",
 					headers,

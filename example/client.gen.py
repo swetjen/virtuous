@@ -12,6 +12,12 @@ from urllib import error, parse, request
 
 # Type definitions
 @dataclass
+class CreateUserRequest:
+    email: str
+    name: str
+    role: str
+
+@dataclass
 class State:
     # Numeric state ID.
     id: int
@@ -22,17 +28,38 @@ class State:
 
 @dataclass
 class StateResponse:
-    state: State
+    state: "State"
     error: str | None = None
 
 @dataclass
 class StatesResponse:
-    data: list[State]
+    data: list["State"]
+    error: str | None = None
+
+@dataclass
+class User:
+    # User ID.
+    id: int
+    # Login email address.
+    email: str
+    # Display name.
+    name: str
+    # Authorization role.
+    role: str
+
+@dataclass
+class UserResponse:
+    user: "User"
+    error: str | None = None
+
+@dataclass
+class UsersResponse:
+    data: list["User"]
     error: str | None = None
 class _StatesService:
     def __init__(self, basepath: str):
         self._basepath = basepath
-    def getByCode(self, code: str) ->StateResponse:
+    def getByCode(self, code: str) ->"StateResponse":
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -62,8 +89,8 @@ class _StatesService:
             if isinstance(body, dict) and "error" in body:
                 raise RuntimeError(str(body["error"]))
             raise RuntimeError(f"{status} {_status_text(status)}")
-        return _decode_value(StateResponse, body)
-    def getByCodeSecure(self, code: str, bearerAuth: str | None = None) ->StateResponse:
+        return _decode_value("StateResponse", body)
+    def getByCodeSecure(self, code: str, bearerAuth: str | None = None) ->"StateResponse":
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -97,8 +124,8 @@ class _StatesService:
             if isinstance(body, dict) and "error" in body:
                 raise RuntimeError(str(body["error"]))
             raise RuntimeError(f"{status} {_status_text(status)}")
-        return _decode_value(StateResponse, body)
-    def getMany(self) ->StatesResponse:
+        return _decode_value("StateResponse", body)
+    def getMany(self) ->"StatesResponse":
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -127,12 +154,121 @@ class _StatesService:
             if isinstance(body, dict) and "error" in body:
                 raise RuntimeError(str(body["error"]))
             raise RuntimeError(f"{status} {_status_text(status)}")
-        return _decode_value(StatesResponse, body)
+        return _decode_value("StatesResponse", body)
+class _UsersService:
+    def __init__(self, basepath: str):
+        self._basepath = basepath
+    def create(self, body:"CreateUserRequest" | None = None, bearerAuth: str | None = None) ->"UserResponse":
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        url = self._basepath + "/api/v1/admin/users"
+        if bearerAuth is not None:
+            auth_value = bearerAuth
+            auth_value = "Bearer " + bearerAuth
+            headers["Authorization"] = auth_value
+        data = None
+        if body is not None:
+            data = json.dumps(_encode_value(body)).encode("utf-8")
+        req = request.Request(url, data=data, method="POST", headers=headers)
+        status = 0
+        text = ""
+        try:
+            with request.urlopen(req) as resp:
+                status = resp.getcode()
+                text = resp.read().decode("utf-8")
+        except error.HTTPError as err:
+            status = err.code
+            text = err.read().decode("utf-8")
+        body = None
+        if text:
+            try:
+                body = json.loads(text)
+            except json.JSONDecodeError as err:
+                if status >= 400:
+                    raise RuntimeError(f"{status} {_status_text(status)}") from err
+                raise
+        if status >= 400:
+            if isinstance(body, dict) and "error" in body:
+                raise RuntimeError(str(body["error"]))
+            raise RuntimeError(f"{status} {_status_text(status)}")
+        return _decode_value("UserResponse", body)
+    def getByID(self, id: str, bearerAuth: str | None = None) ->"UserResponse":
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        url = self._basepath + "/api/v1/admin/users/{id}"
+        url = url.replace("{id}", parse.quote(str(id)))
+        if bearerAuth is not None:
+            auth_value = bearerAuth
+            auth_value = "Bearer " + bearerAuth
+            headers["Authorization"] = auth_value
+        data = None
+        req = request.Request(url, data=data, method="GET", headers=headers)
+        status = 0
+        text = ""
+        try:
+            with request.urlopen(req) as resp:
+                status = resp.getcode()
+                text = resp.read().decode("utf-8")
+        except error.HTTPError as err:
+            status = err.code
+            text = err.read().decode("utf-8")
+        body = None
+        if text:
+            try:
+                body = json.loads(text)
+            except json.JSONDecodeError as err:
+                if status >= 400:
+                    raise RuntimeError(f"{status} {_status_text(status)}") from err
+                raise
+        if status >= 400:
+            if isinstance(body, dict) and "error" in body:
+                raise RuntimeError(str(body["error"]))
+            raise RuntimeError(f"{status} {_status_text(status)}")
+        return _decode_value("UserResponse", body)
+    def getMany(self, bearerAuth: str | None = None) ->"UsersResponse":
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        url = self._basepath + "/api/v1/admin/users"
+        if bearerAuth is not None:
+            auth_value = bearerAuth
+            auth_value = "Bearer " + bearerAuth
+            headers["Authorization"] = auth_value
+        data = None
+        req = request.Request(url, data=data, method="GET", headers=headers)
+        status = 0
+        text = ""
+        try:
+            with request.urlopen(req) as resp:
+                status = resp.getcode()
+                text = resp.read().decode("utf-8")
+        except error.HTTPError as err:
+            status = err.code
+            text = err.read().decode("utf-8")
+        body = None
+        if text:
+            try:
+                body = json.loads(text)
+            except json.JSONDecodeError as err:
+                if status >= 400:
+                    raise RuntimeError(f"{status} {_status_text(status)}") from err
+                raise
+        if status >= 400:
+            if isinstance(body, dict) and "error" in body:
+                raise RuntimeError(str(body["error"]))
+            raise RuntimeError(f"{status} {_status_text(status)}")
+        return _decode_value("UsersResponse", body)
 
 class Client:
     def __init__(self, basepath: str = "/"):
         self._basepath = basepath
         self.States = _StatesService(basepath)
+        self.Users = _UsersService(basepath)
 
 
 def create_client(basepath: str = "/") -> Client:

@@ -5,6 +5,102 @@
     "version": "0.0.1"
   },
   "paths": {
+    "/api/v1/admin/users": {
+      "get": {
+        "summary": "List users",
+        "tags": [
+          "admin",
+          "users"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/main_UsersResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create user",
+        "tags": [
+          "admin",
+          "users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/main_CreateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/main_UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/users/{id}": {
+      "get": {
+        "summary": "Get user by id",
+        "tags": [
+          "admin",
+          "users"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/main_UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/lookup/states/": {
       "get": {
         "summary": "List all states",
@@ -93,6 +189,25 @@
   },
   "components": {
     "schemas": {
+      "main_CreateUserRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "name",
+          "role"
+        ]
+      },
       "main_State": {
         "type": "object",
         "properties": {
@@ -137,6 +252,65 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/main_State"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "main_User": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Login email address."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "User ID."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "role": {
+            "type": "string",
+            "description": "Authorization role."
+          }
+        },
+        "required": [
+          "email",
+          "id",
+          "name",
+          "role"
+        ]
+      },
+      "main_UserResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/main_User"
+          }
+        },
+        "required": [
+          "user"
+        ]
+      },
+      "main_UsersResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/main_User"
             }
           },
           "error": {

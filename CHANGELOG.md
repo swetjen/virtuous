@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.2
+
+- Add Python client generation using dataclasses and urllib.
+- Add TypeScript client file output and syntax validation hooks in tests.
+- Add example admin user routes and output generation tests.
+
 ## 0.0.1
 
 - Add runtime type registry powering richer JS JSDoc output.

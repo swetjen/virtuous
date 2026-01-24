@@ -1,6 +1,9 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
+	"strconv"
+)
 
 type State struct {
 	ID   int32  `json:"id" doc:"Numeric state ID."`
@@ -83,5 +86,99 @@ var mockData = []State{
 		ID:   2,
 		Code: "tx",
 		Name: "Texas",
+	},
+}
+
+type User struct {
+	ID    int32  `json:"id" doc:"User ID."`
+	Email string `json:"email" doc:"Login email address."`
+	Name  string `json:"name" doc:"Display name."`
+	Role  string `json:"role" doc:"Authorization role."`
+}
+
+type UsersResponse struct {
+	Data  []User `json:"data"`
+	Error string `json:"error,omitempty"`
+}
+
+type UserResponse struct {
+	User  User   `json:"user"`
+	Error string `json:"error,omitempty"`
+}
+
+type CreateUserRequest struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	Role  string `json:"role"`
+}
+
+func UsersGetMany(w http.ResponseWriter, r *http.Request) {
+	var response UsersResponse
+	response.Data = append(response.Data, userData...)
+	Encode(w, r, http.StatusOK, response)
+}
+
+func UserByID(w http.ResponseWriter, r *http.Request) {
+	var response UserResponse
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		response.Error = "invalid user id"
+		Encode(w, r, http.StatusBadRequest, response)
+		return
+	}
+
+	for _, user := range userData {
+		if int(user.ID) == id {
+			response.User = user
+			Encode(w, r, http.StatusOK, response)
+			return
+		}
+	}
+
+	response.Error = "user not found"
+	Encode(w, r, http.StatusNotFound, response)
+}
+
+func UsersCreate(w http.ResponseWriter, r *http.Request) {
+	var response UserResponse
+	req, err := Decode[CreateUserRequest](r)
+	if err != nil {
+		response.Error = "invalid request"
+		Encode(w, r, http.StatusBadRequest, response)
+		return
+	}
+	if req.Email == "" || req.Name == "" || req.Role == "" {
+		response.Error = "email, name, and role are required"
+		Encode(w, r, http.StatusBadRequest, response)
+		return
+	}
+
+	user := User{
+		ID:    nextUserID,
+		Email: req.Email,
+		Name:  req.Name,
+		Role:  req.Role,
+	}
+	nextUserID++
+	userData = append(userData, user)
+	response.User = user
+	Encode(w, r, http.StatusCreated, response)
+}
+
+var nextUserID int32 = 3
+
+var userData = []User{
+	{
+		ID:    1,
+		Email: "admin@example.com",
+		Name:  "Admin User",
+		Role:  "admin",
+	},
+	{
+		ID:    2,
+		Email: "support@example.com",
+		Name:  "Support User",
+		Role:  "support",
 	},
 }

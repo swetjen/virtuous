@@ -4,6 +4,12 @@ export type AuthOptions = {
 	auth?: string
 }
 
+export interface CreateUserRequest {
+	email: string;
+	name: string;
+	role: string;
+}
+
 export interface State {
 	id: number;
 	code: string;
@@ -17,6 +23,23 @@ export interface StateResponse {
 
 export interface StatesResponse {
 	data: State[];
+	error?: string;
+}
+
+export interface User {
+	id: number;
+	email: string;
+	name: string;
+	role: string;
+}
+
+export interface UserResponse {
+	user: User;
+	error?: string;
+}
+
+export interface UsersResponse {
+	data: User[];
 	error?: string;
 }
 
@@ -127,6 +150,118 @@ export function createClient(basepath: string = "/") {
 					throw new Error(response.status + " " + response.statusText)
 				}
 				return json as StatesResponse
+			},
+		},
+		Users: {
+			async create(request: CreateUserRequest, options?: AuthOptions): Promise<UserResponse> {
+				const headers: Record<string, string> = {
+					"Accept": "application/json",
+					"Content-Type": "application/json",
+				}
+				let url = basepath + "/api/v1/admin/users"
+				const authValue = options && options.auth
+				if (authValue) {
+					headers["Authorization"] = "Bearer " + authValue
+				}
+				const response = await fetch(url, {
+					method: "POST",
+					headers,
+					body: JSON.stringify(request || {}),
+				})
+				const text = await response.text()
+				let json: UserResponse | null = null
+				if (text) {
+					try {
+						json = JSON.parse(text)
+					} catch (e) {
+						if (!response.ok) {
+							throw new Error(response.status + " " + response.statusText)
+						}
+						throw e
+					}
+				}
+				if (!response.ok) {
+					const errorBody = json as { error?: string } | null
+					if (errorBody && errorBody.error) {
+						throw new Error(errorBody.error)
+					}
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return json as UserResponse
+			},
+			async getByID(pathParams: {id: string; }, options?: AuthOptions): Promise<UserResponse> {
+				const headers: Record<string, string> = {
+					"Accept": "application/json",
+					"Content-Type": "application/json",
+				}
+				let url = basepath + "/api/v1/admin/users/{id}"
+				if (!pathParams) {
+					throw new Error("pathParams is required")
+				}
+				url = url.replace("{id}", encodeURIComponent(String(pathParams.id)))
+				const authValue = options && options.auth
+				if (authValue) {
+					headers["Authorization"] = "Bearer " + authValue
+				}
+				const response = await fetch(url, {
+					method: "GET",
+					headers,
+				})
+				const text = await response.text()
+				let json: UserResponse | null = null
+				if (text) {
+					try {
+						json = JSON.parse(text)
+					} catch (e) {
+						if (!response.ok) {
+							throw new Error(response.status + " " + response.statusText)
+						}
+						throw e
+					}
+				}
+				if (!response.ok) {
+					const errorBody = json as { error?: string } | null
+					if (errorBody && errorBody.error) {
+						throw new Error(errorBody.error)
+					}
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return json as UserResponse
+			},
+			async getMany(options?: AuthOptions): Promise<UsersResponse> {
+				const headers: Record<string, string> = {
+					"Accept": "application/json",
+					"Content-Type": "application/json",
+				}
+				let url = basepath + "/api/v1/admin/users"
+				const authValue = options && options.auth
+				if (authValue) {
+					headers["Authorization"] = "Bearer " + authValue
+				}
+				const response = await fetch(url, {
+					method: "GET",
+					headers,
+				})
+				const text = await response.text()
+				let json: UsersResponse | null = null
+				if (text) {
+					try {
+						json = JSON.parse(text)
+					} catch (e) {
+						if (!response.ok) {
+							throw new Error(response.status + " " + response.statusText)
+						}
+						throw e
+					}
+				}
+				if (!response.ok) {
+					const errorBody = json as { error?: string } | null
+					if (errorBody && errorBody.error) {
+						throw new Error(errorBody.error)
+					}
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return json as UsersResponse
 			},
 		},
 	}

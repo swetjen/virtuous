@@ -16,37 +16,7 @@ func main() {
 }
 
 func RunServer() error {
-	router := virtuous.NewRouter()
-
-	router.HandleTyped(
-		"GET /api/v1/lookup/states/",
-		virtuous.Wrap(http.HandlerFunc(StatesGetMany), nil, StatesResponse{}, virtuous.HandlerMeta{
-			Service: "States",
-			Method:  "GetMany",
-			Summary: "List all states",
-			Tags:    []string{"states"},
-		}),
-	)
-
-	router.HandleTyped(
-		"GET /api/v1/lookup/states/{code}",
-		virtuous.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, virtuous.HandlerMeta{
-			Service: "States",
-			Method:  "GetByCode",
-			Summary: "Get state by code",
-			Tags:    []string{"states"},
-		}),
-	)
-	router.HandleTyped(
-		"GET /api/v1/secure/states/{code}",
-		virtuous.Wrap(http.HandlerFunc(StateByCodeSecure), nil, StateResponse{}, virtuous.HandlerMeta{
-			Service: "States",
-			Method:  "GetByCodeSecure",
-			Summary: "Get state by code (bearer token required)",
-			Tags:    []string{"states"},
-		}),
-		bearerGuard{},
-	)
+	router := buildRouter()
 
 	if err := writeOpenAPI(router, "openapi.json"); err != nil {
 		return err
@@ -86,6 +56,73 @@ func RunServer() error {
 	fmt.Println("generated client.gen.js")
 	fmt.Println("generated client.gen.ts")
 	return nil
+}
+
+func buildRouter() *virtuous.Router {
+	router := virtuous.NewRouter()
+
+	router.HandleTyped(
+		"GET /api/v1/lookup/states/",
+		virtuous.Wrap(http.HandlerFunc(StatesGetMany), nil, StatesResponse{}, virtuous.HandlerMeta{
+			Service: "States",
+			Method:  "GetMany",
+			Summary: "List all states",
+			Tags:    []string{"states"},
+		}),
+	)
+
+	router.HandleTyped(
+		"GET /api/v1/lookup/states/{code}",
+		virtuous.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, virtuous.HandlerMeta{
+			Service: "States",
+			Method:  "GetByCode",
+			Summary: "Get state by code",
+			Tags:    []string{"states"},
+		}),
+	)
+	router.HandleTyped(
+		"GET /api/v1/secure/states/{code}",
+		virtuous.Wrap(http.HandlerFunc(StateByCodeSecure), nil, StateResponse{}, virtuous.HandlerMeta{
+			Service: "States",
+			Method:  "GetByCodeSecure",
+			Summary: "Get state by code (bearer token required)",
+			Tags:    []string{"states"},
+		}),
+		bearerGuard{},
+	)
+
+	router.HandleTyped(
+		"GET /api/v1/admin/users",
+		virtuous.Wrap(http.HandlerFunc(UsersGetMany), nil, UsersResponse{}, virtuous.HandlerMeta{
+			Service: "Users",
+			Method:  "GetMany",
+			Summary: "List users",
+			Tags:    []string{"admin", "users"},
+		}),
+		bearerGuard{},
+	)
+	router.HandleTyped(
+		"GET /api/v1/admin/users/{id}",
+		virtuous.Wrap(http.HandlerFunc(UserByID), nil, UserResponse{}, virtuous.HandlerMeta{
+			Service: "Users",
+			Method:  "GetByID",
+			Summary: "Get user by id",
+			Tags:    []string{"admin", "users"},
+		}),
+		bearerGuard{},
+	)
+	router.HandleTyped(
+		"POST /api/v1/admin/users",
+		virtuous.Wrap(http.HandlerFunc(UsersCreate), CreateUserRequest{}, UserResponse{}, virtuous.HandlerMeta{
+			Service: "Users",
+			Method:  "Create",
+			Summary: "Create user",
+			Tags:    []string{"admin", "users"},
+		}),
+		bearerGuard{},
+	)
+
+	return router
 }
 
 func writeOpenAPI(router *virtuous.Router, path string) error {

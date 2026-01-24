@@ -56,7 +56,7 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if err := runCommand("node", "--check", jsPath); err != nil {
 		t.Fatalf("node check failed: %v", err)
 	}
-	if err := runCommand("tsc", "--noEmit", tsPath); err != nil {
+	if err := runCommand("tsc", "--noEmit", "--target", "ES2017", "--lib", "ES2017,DOM", tsPath); err != nil {
 		t.Fatalf("tsc check failed: %v", err)
 	}
 	if err := runCommand("python3", "-c", pythonImportSnippet(pyPath)); err != nil {

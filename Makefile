@@ -1,9 +1,12 @@
-.PHONY: test test-go test-js test-python test-ts
+.PHONY: test test-go test-js test-python test-ts test-example
 
-test: test-go test-js test-python test-ts
+test: test-go test-example test-js test-python test-ts
 
 test-go:
 	cd virtuous && go test ./...
+
+test-example:
+	cd example && go test ./...
 
 test-js:
 	@command -v node >/dev/null 2>&1 && echo "node present" || { echo "node not found; skipping"; exit 0; }

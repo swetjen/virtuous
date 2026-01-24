@@ -54,6 +54,9 @@ _ = router.WriteClientJS(f)
 
 py, _ := os.Create("client.gen.py")
 _ = router.WriteClientPY(py)
+
+ts, _ := os.Create("client.gen.ts")
+_ = router.WriteClientTS(ts)
 ```
 
 See the root README and `reference/` for a complete example.

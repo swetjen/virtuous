@@ -27,6 +27,7 @@ These instructions describe how to understand and work with this repository.
 - Use `Wrap` to attach request/response types to handlers.
 - For no-body responses, use the sentinel types in `virtuous/types.go`.
 - Add `doc:"..."` tags to improve schema and client docs.
+- Update `CHANGELOG.md` with a new version entry whenever adding functionality, fixing bugs, or changing behavior.
 
 ## Extension Points
 - Router-level type overrides via `SetTypeOverrides`.

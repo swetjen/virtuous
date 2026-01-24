@@ -64,11 +64,18 @@ _ = router.WriteClientJS(f)
 
 py, _ := os.Create("client.gen.py")
 _ = router.WriteClientPY(py)
+
+ts, _ := os.Create("client.gen.ts")
+_ = router.WriteClientTS(ts)
 ```
 
 - `/openapi.json` can be served for Swagger UI or similar tools.
 - `router.WriteClientTS` writes a TS client at startup.
 - `router.WriteClientPY` writes a Python client at startup.
+
+## Testing
+
+Run `make test` to execute Go tests plus optional JS/Python/TS syntax checks (skips missing runtimes).
 
 ## Guards (auth middleware)
 
