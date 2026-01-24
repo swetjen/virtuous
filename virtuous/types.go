@@ -226,10 +226,17 @@ func (r *typeRegistry) pyType(t reflect.Type) string {
 		if base.Name() == "" {
 			return "dict[str, Any]"
 		}
-		return r.objectName(base)
+		return quotePyType(r.objectName(base))
 	default:
 		return "Any"
 	}
+}
+
+func quotePyType(name string) string {
+	if name == "" {
+		return ""
+	}
+	return "\"" + name + "\""
 }
 
 func (r *typeRegistry) isOverrideScalar(t reflect.Type) bool {
