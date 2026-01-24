@@ -72,6 +72,7 @@ func (r *Router) OpenAPI() ([]byte, error)
 // Runtime client output:
 func (r *Router) WriteClientJS(w io.Writer) error
 func (r *Router) WriteClientTS(w io.Writer) error
+func (r *Router) WriteClientPY(w io.Writer) error
 ```
 
 ### Route metadata
@@ -125,7 +126,8 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 ## Runtime client output
 - At startup:
   - `router.WriteClientJS(os.Create("client.gen.js"))`
-  - `router.WriteClientTS(...)`
+- `router.WriteClientTS(...)`
+- `router.WriteClientPY(...)`
 - Client signatures:
   - `client.Service.method(request, { auth?: string })` if guarded
 - Injects auth per guard spec.

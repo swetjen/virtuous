@@ -51,6 +51,9 @@ _ = os.WriteFile("openapi.json", openapiJSON, 0644)
 
 f, _ := os.Create("client.gen.js")
 _ = router.WriteClientJS(f)
+
+py, _ := os.Create("client.gen.py")
+_ = router.WriteClientPY(py)
 ```
 
 See the root README and `reference/` for a complete example.
