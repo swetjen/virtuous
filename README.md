@@ -8,7 +8,7 @@ Virtuous is an agent-first, batteries-included JSON API framework. It provides a
 ## Install
 
 ```bash
-go get github.com/pacedotdev/virtuous@v0.0.1
+go get github.com/swetjen/virtuous@latest
 ```
 
 ## Quick start
