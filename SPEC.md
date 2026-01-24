@@ -95,7 +95,7 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 - Struct tags:
   - `json:"-"` excludes a field.
   - `omitempty` respected.
-- Pointers: optional in OpenAPI.
+- Pointers: optional and `nullable` in OpenAPI.
 - Slices/maps: mapped to array/object schemas.
 - Known scalar aliases (e.g., `type UUID string`) treated as string.
 - Path parameters (e.g., `{id}`) are always `string` in OpenAPI and client output.

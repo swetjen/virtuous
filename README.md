@@ -72,6 +72,7 @@ _ = router.WriteClientTS(ts)
 - `/openapi.json` can be served for Swagger UI or similar tools.
 - `router.WriteClientTS` writes a TS client at startup.
 - `router.WriteClientPY` writes a Python client at startup.
+- Pointer fields are emitted as `nullable` in OpenAPI.
 
 ## Testing
 

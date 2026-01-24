@@ -198,6 +198,7 @@ type openAPISchema struct {
 	Ref                  string                    `json:"$ref,omitempty"`
 	Type                 string                    `json:"type,omitempty"`
 	Format               string                    `json:"format,omitempty"`
+	Nullable             bool                      `json:"nullable,omitempty"`
 	Description          string                    `json:"description,omitempty"`
 	Properties           map[string]*openAPISchema `json:"properties,omitempty"`
 	Items                *openAPISchema            `json:"items,omitempty"`
@@ -224,21 +225,35 @@ func (g *schemaGen) schemaFor(t reflect.Type) *openAPISchema {
 	if t == nil {
 		return nil
 	}
+	nullable := false
 	for t.Kind() == reflect.Ptr {
+		nullable = true
 		t = t.Elem()
 	}
 	if t == nil {
 		return nil
 	}
 	if name, ok := g.seen[t]; ok {
-		return &openAPISchema{Ref: "#/components/schemas/" + name}
+		schema := &openAPISchema{Ref: "#/components/schemas/" + name}
+		if nullable {
+			schema.Nullable = true
+		}
+		return schema
 	}
 
 	if g.isOverrideScalar(t) {
-		return g.overrideSchema(t)
+		schema := g.overrideSchema(t)
+		if nullable && schema != nil {
+			schema.Nullable = true
+		}
+		return schema
 	}
 	if isTimeType(t) {
-		return &openAPISchema{Type: "string", Format: "date-time"}
+		schema := &openAPISchema{Type: "string", Format: "date-time"}
+		if nullable {
+			schema.Nullable = true
+		}
+		return schema
 	}
 	if t.Kind() == reflect.Struct && t.Name() != "" {
 		name := schemaName(t)
@@ -246,10 +261,18 @@ func (g *schemaGen) schemaFor(t reflect.Type) *openAPISchema {
 		g.components[name] = openAPISchema{}
 		schema := g.structSchema(t)
 		g.components[name] = *schema
-		return &openAPISchema{Ref: "#/components/schemas/" + name}
+		refSchema := &openAPISchema{Ref: "#/components/schemas/" + name}
+		if nullable {
+			refSchema.Nullable = true
+		}
+		return refSchema
 	}
 
-	return g.inlineSchema(t)
+	schema := g.inlineSchema(t)
+	if nullable && schema != nil {
+		schema.Nullable = true
+	}
+	return schema
 }
 
 func (g *schemaGen) isOverrideScalar(t reflect.Type) bool {
@@ -298,15 +321,20 @@ func (g *schemaGen) structSchema(t reflect.Type) *openAPISchema {
 			continue
 		}
 		doc := fieldDoc(field)
+		nullable := schema.Nullable
 		if doc != "" {
 			if schema.Ref != "" {
 				schema = &openAPISchema{
 					AllOf:       []*openAPISchema{{Ref: schema.Ref}},
 					Description: doc,
+					Nullable:    nullable,
 				}
 			} else {
 				schema.Description = doc
 			}
+		}
+		if nullable {
+			schema.Nullable = true
 		}
 		props[name] = schema
 		if !omit && field.Type.Kind() != reflect.Ptr {
