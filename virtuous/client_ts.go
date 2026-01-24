@@ -2,6 +2,7 @@ package virtuous
 
 import (
 	"io"
+	"os"
 	"text/template"
 )
 
@@ -10,13 +11,19 @@ var clientTSTemplate = template.Must(template.New("virtuous-ts").Parse(`// Code 
 export type AuthOptions = {
 	auth?: string
 }
-
+{{range $object := .Objects}}
+export interface {{$object.Name}} {
+{{- range $field := $object.Fields}}
+	{{$field.Name}}{{if $field.Optional}}?{{end}}: {{$field.Type}}{{if $field.Nullable}} | null{{end}};
+{{- end}}
+}
+{{end}}
 export function createClient(basepath: string = "/") {
 	return {
 {{- range $service := .Services }}
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
-			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: { {{- range $param := $method.PathParams }}{{ $param }}: string; {{- end }} }, {{ end }}{{ if $method.HasBody }}request: any, {{ end }}options?: AuthOptions) {
+			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: { {{- range $param := $method.PathParams }}{{ $param }}: string; {{- end }} }, {{ end }}{{ if $method.HasBody }}request: {{ $method.RequestType }}, {{ end }}options?: AuthOptions): Promise<{{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}void{{ end }}> {
 				const headers: Record<string, string> = {
 					"Accept": "application/json",
 					"Content-Type": "application/json",
@@ -58,7 +65,7 @@ export function createClient(basepath: string = "/") {
 {{- end }}
 				})
 				const text = await response.text()
-				let json: any = null
+				let json: {{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}Record<string, unknown>{{ end }} | null = null
 				if (text) {
 					try {
 						json = JSON.parse(text)
@@ -70,12 +77,13 @@ export function createClient(basepath: string = "/") {
 					}
 				}
 				if (!response.ok) {
-					if (json && json.error) {
-						throw new Error(json.error)
+					const errorBody = json as { error?: string } | null
+					if (errorBody && errorBody.error) {
+						throw new Error(errorBody.error)
 					}
 					throw new Error(response.status + " " + response.statusText)
 				}
-				return json || {}
+				return json as {{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}void{{ end }}
 			},
 {{- end }}
 		},
@@ -88,4 +96,14 @@ export function createClient(basepath: string = "/") {
 func (r *Router) WriteClientTS(w io.Writer) error {
 	spec := buildClientSpec(r.Routes(), r.typeOverrides)
 	return clientTSTemplate.Execute(w, spec)
+}
+
+// WriteClientTSFile writes a runtime-generated TS client to the file at path.
+func (r *Router) WriteClientTSFile(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return r.WriteClientTS(f)
 }
