@@ -1,4 +1,4 @@
-.PHONY: test test-go test-js test-python test-ts test-example python-build python-publish python-clean
+.PHONY: test test-go test-js test-python test-ts test-example python-build python-publish python-clean publish
 
 test: test-go test-example test-js test-python test-ts
 
@@ -53,3 +53,13 @@ python-publish:
 	$(MAKE) python-clean
 	cd $(PYTHON_LOADER_DIR) && $(PYTHON) -m build --no-isolation
 	cd $(PYTHON_LOADER_DIR) && $(TWINE) upload dist/*
+
+publish:
+	@git diff --quiet || { echo "working tree is dirty; commit before publishing"; exit 1; }
+	@version="$$(cat VERSION)"; \
+	tag="v$${version}"; \
+	if git rev-parse "$${tag}" >/dev/null 2>&1; then \
+		echo "tag $${tag} already exists"; exit 1; \
+	fi; \
+	git tag "$${tag}"; \
+	git push origin "$${tag}"
