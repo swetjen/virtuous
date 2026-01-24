@@ -42,7 +42,7 @@ handling). The same registry is intended to support additional language emitters
 
 ```go
 router.SetTypeOverrides(map[string]virtuous.TypeOverride{
-    "uuid.UUID": {JSType: "string", OpenAPIType: "string", OpenAPIFormat: "uuid"},
+    "uuid.UUID": {JSType: "string", PyType: "str", OpenAPIType: "string", OpenAPIFormat: "uuid"},
     "time.Duration": {JSType: "number", OpenAPIType: "number"},
 })
 ```

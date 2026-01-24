@@ -57,6 +57,9 @@ func RunServer() error {
 	if err := router.WriteClientTSFile("client.gen.ts"); err != nil {
 		return err
 	}
+	if err := router.WriteClientPYFile("client.gen.py"); err != nil {
+		return err
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/", router)
@@ -70,12 +73,13 @@ func RunServer() error {
 		http.ServeFile(w, r, "openapi.json")
 	})
 	mux.HandleFunc("GET /client.gen.js", router.ServeClientJS)
+	mux.HandleFunc("GET /client.gen.py", router.ServeClientPY)
 
 	server := &http.Server{
 		Addr:    ":8000",
 		Handler: mux,
 	}
-	if false {
+	if true {
 		fmt.Println("Listening on :8000")
 		return server.ListenAndServe()
 	}

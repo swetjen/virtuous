@@ -24,6 +24,7 @@ type clientMethod struct {
 	HasBody      bool
 	HasAuth      bool
 	Auth         GuardSpec
+	AuthParam    string
 	RequestType  string
 	ResponseType string
 }
@@ -42,8 +43,25 @@ type clientField struct {
 }
 
 func buildClientSpec(routes []Route, overrides map[string]TypeOverride) clientSpec {
+	return buildClientSpecWith(routes, overrides, func(registry *typeRegistry) func(reflect.Type) string {
+		return registry.jsType
+	})
+}
+
+func buildPythonClientSpec(routes []Route, overrides map[string]TypeOverride) clientSpec {
+	return buildClientSpecWith(routes, overrides, func(registry *typeRegistry) func(reflect.Type) string {
+		return registry.pyType
+	})
+}
+
+func buildClientSpecWith(
+	routes []Route,
+	overrides map[string]TypeOverride,
+	typeFnFactory func(*typeRegistry) func(reflect.Type) string,
+) clientSpec {
 	serviceMap := make(map[string]*clientService)
 	registry := newTypeRegistry(overrides)
+	typeFn := typeFnFactory(registry)
 	for _, route := range routes {
 		if route.Handler == nil {
 			continue
@@ -65,7 +83,7 @@ func buildClientSpec(routes []Route, overrides map[string]TypeOverride) clientSp
 		responseType := ""
 		if reqType != nil {
 			registry.addType(reflect.TypeOf(reqType))
-			requestType = registry.jsType(reflect.TypeOf(reqType))
+			requestType = typeFn(reflect.TypeOf(reqType))
 		}
 		if respType != nil {
 			respReflect := reflect.TypeOf(respType)
@@ -73,7 +91,7 @@ func buildClientSpec(routes []Route, overrides map[string]TypeOverride) clientSp
 				!isNoResponse(respReflect, reflect.TypeOf(NoResponse204{})) &&
 				!isNoResponse(respReflect, reflect.TypeOf(NoResponse500{})) {
 				registry.addType(respReflect)
-				responseType = registry.jsType(respReflect)
+				responseType = typeFn(respReflect)
 			}
 		}
 		method := clientMethod{
@@ -89,6 +107,7 @@ func buildClientSpec(routes []Route, overrides map[string]TypeOverride) clientSp
 		if len(route.Guards) > 0 {
 			method.HasAuth = true
 			method.Auth = route.Guards[0]
+			method.AuthParam = authParamName(route.Guards[0].Name)
 		}
 		cs.Methods = append(cs.Methods, method)
 	}
@@ -106,6 +125,17 @@ func buildClientSpec(routes []Route, overrides map[string]TypeOverride) clientSp
 
 	return clientSpec{
 		Services: services,
-		Objects:  registry.objectsList(),
+		Objects:  registry.objectsList(typeFn),
 	}
+}
+
+func authParamName(name string) string {
+	if name == "" {
+		return "auth"
+	}
+	candidate := camelizeDown(name)
+	if candidate == "" {
+		return "auth"
+	}
+	return candidate
 }

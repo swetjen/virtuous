@@ -9,21 +9,35 @@ import (
 // TypeOverride customizes how a Go type is rendered for clients and OpenAPI.
 type TypeOverride struct {
 	JSType        string
+	PyType        string
 	OpenAPIType   string
 	OpenAPIFormat string
 }
 
 type typeRegistry struct {
 	overrides  map[string]TypeOverride
-	objects    map[reflect.Type]*clientObject
+	objects    map[reflect.Type]*objectDef
 	nameByType map[reflect.Type]string
 	typeByName map[string]reflect.Type
+}
+
+type objectDef struct {
+	Name   string
+	Fields []fieldDef
+}
+
+type fieldDef struct {
+	Name     string
+	Type     reflect.Type
+	Optional bool
+	Nullable bool
+	Doc      string
 }
 
 func newTypeRegistry(overrides map[string]TypeOverride) *typeRegistry {
 	return &typeRegistry{
 		overrides:  mergeTypeOverrides(overrides),
-		objects:    map[reflect.Type]*clientObject{},
+		objects:    map[reflect.Type]*objectDef{},
 		nameByType: map[reflect.Type]string{},
 		typeByName: map[string]reflect.Type{},
 	}
@@ -44,6 +58,7 @@ func defaultTypeOverrides() map[string]TypeOverride {
 	return map[string]TypeOverride{
 		"time.Time": {
 			JSType:        "string",
+			PyType:        "datetime",
 			OpenAPIType:   "string",
 			OpenAPIFormat: "date-time",
 		},
@@ -67,7 +82,7 @@ func (r *typeRegistry) addType(t reflect.Type) {
 			return
 		}
 		name := r.objectName(base)
-		obj := &clientObject{Name: name}
+		obj := &objectDef{Name: name}
 		r.objects[base] = obj
 		for i := 0; i < base.NumField(); i++ {
 			field := base.Field(i)
@@ -78,13 +93,9 @@ func (r *typeRegistry) addType(t reflect.Type) {
 			if name == "" {
 				continue
 			}
-			fieldType := r.jsType(field.Type)
-			if fieldType == "" {
-				fieldType = "any"
-			}
-			obj.Fields = append(obj.Fields, clientField{
+			obj.Fields = append(obj.Fields, fieldDef{
 				Name:     name,
-				Type:     fieldType,
+				Type:     field.Type,
 				Optional: omit,
 				Nullable: isOptionalType(field.Type),
 				Doc:      fieldDoc(field),
@@ -114,10 +125,24 @@ func (r *typeRegistry) objectName(t reflect.Type) string {
 	return name
 }
 
-func (r *typeRegistry) objectsList() []clientObject {
+func (r *typeRegistry) objectsList(typeFn func(reflect.Type) string) []clientObject {
 	objects := make([]clientObject, 0, len(r.objects))
 	for _, obj := range r.objects {
-		objects = append(objects, *obj)
+		clientObj := clientObject{Name: obj.Name}
+		for _, field := range obj.Fields {
+			fieldType := typeFn(field.Type)
+			if fieldType == "" {
+				fieldType = "any"
+			}
+			clientObj.Fields = append(clientObj.Fields, clientField{
+				Name:     field.Name,
+				Type:     fieldType,
+				Optional: field.Optional,
+				Nullable: field.Nullable,
+				Doc:      field.Doc,
+			})
+		}
+		objects = append(objects, clientObj)
 	}
 	sort.Slice(objects, func(i, j int) bool {
 		return objects[i].Name < objects[j].Name
@@ -162,12 +187,57 @@ func (r *typeRegistry) jsType(t reflect.Type) string {
 	}
 }
 
+func (r *typeRegistry) pyType(t reflect.Type) string {
+	base := derefType(t)
+	if base == nil {
+		return ""
+	}
+	if override, ok := typeOverrideFor(r.overrides, base); ok && override.PyType != "" {
+		return override.PyType
+	}
+	switch base.Kind() {
+	case reflect.Bool:
+		return "bool"
+	case reflect.String:
+		return "str"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "int"
+	case reflect.Float32, reflect.Float64:
+		return "float"
+	case reflect.Interface:
+		return "Any"
+	case reflect.Slice, reflect.Array:
+		elemType := r.pyType(base.Elem())
+		if elemType == "" {
+			elemType = "Any"
+		}
+		return "list[" + elemType + "]"
+	case reflect.Map:
+		valueType := r.pyType(base.Elem())
+		if valueType == "" {
+			valueType = "Any"
+		}
+		if base.Key().Kind() == reflect.String {
+			return "dict[str, " + valueType + "]"
+		}
+		return "dict[Any, " + valueType + "]"
+	case reflect.Struct:
+		if base.Name() == "" {
+			return "dict[str, Any]"
+		}
+		return r.objectName(base)
+	default:
+		return "Any"
+	}
+}
+
 func (r *typeRegistry) isOverrideScalar(t reflect.Type) bool {
 	override, ok := typeOverrideFor(r.overrides, t)
 	if !ok {
 		return false
 	}
-	return override.OpenAPIType != "" || override.OpenAPIFormat != "" || override.JSType != ""
+	return override.OpenAPIType != "" || override.OpenAPIFormat != "" || override.JSType != "" || override.PyType != ""
 }
 
 func typeOverrideFor(overrides map[string]TypeOverride, t reflect.Type) (TypeOverride, bool) {
