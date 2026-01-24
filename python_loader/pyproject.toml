@@ -3,13 +3,13 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "virtuous-loader"
-version = "0.0.3"
+name = "virtuous"
+version = "0.0.6"
 description = "Runtime loader for Virtuous Python clients"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = {text = "MIT"}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["virtuous_loader"]
+include = ["virtuous"]

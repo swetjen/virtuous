@@ -1,12 +1,12 @@
 # Changelog
 
-## 0.0.2
+## 0.0.6
 
-- Add Python client generation using dataclasses and urllib.
-- Add TypeScript client file output and syntax validation hooks in tests.
-- Add example admin user routes and output generation tests.
-- Mark pointer fields as nullable in OpenAPI output.
-- Add OpenAPI tests for nullable vs required fields.
+- Ensure the Python publish workflow installs build dependencies in the venv.
+
+## 0.0.5
+
+- Add Makefile targets and venv-based tooling for publishing the Python loader.
 
 ## 0.0.4
 
@@ -19,6 +19,12 @@
 - Document client hash endpoints and loader usage.
 
 ## 0.0.2
+
+- Add Python client generation using dataclasses and urllib.
+- Add TypeScript client file output and syntax validation hooks in tests.
+- Add example admin user routes and output generation tests.
+- Mark pointer fields as nullable in OpenAPI output.
+- Add OpenAPI tests for nullable vs required fields.
 
 ## 0.0.1
 

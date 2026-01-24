@@ -29,6 +29,7 @@ These instructions describe how to understand and work with this repository.
 - Add `doc:"..."` tags to improve schema and client docs.
 - Update `CHANGELOG.md` with a new version entry whenever adding functionality, fixing bugs, or changing behavior.
 - For Python, do not use `from __future__ import annotations`.
+- When changing release details or publishing workflows, bump `VERSION`, `python_loader/pyproject.toml`, and add a changelog entry.
 
 ## Extension Points
 - Router-level type overrides via `SetTypeOverrides`.
