@@ -81,39 +81,18 @@ func RunServer() error {
 		}),
 	)
     
-
-    // save client generated files to local disk
-	if err := router.WriteOpenAPIFile("openapi.json"); err != nil {
-		return err
-	}
-	if err := router.WriteClientJSFile("client.gen.js"); err != nil {
-		return err
-	}
-	if err := router.WriteClientTSFile("client.gen.ts"); err != nil {
-		return err
-	}
-	if err := router.WriteClientPYFile("client.gen.py"); err != nil {
-		return err
-	}
-	if err := virtuous.WriteDocsHTMLFile("docs.html", "/openapi.json"); err != nil {
-		return err
-	}
-
 	mux := http.NewServeMux()
 	mux.Handle("/", router)
 
     // serve OpenApi docs
-	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/docs/", http.StatusMovedPermanently)
-	})
-	mux.HandleFunc("GET /docs/", func(w http.ResponseWriter, r *http.Request) {
+    mux.HandleFunc("GET /docs/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "docs.html")
 	})
 	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "openapi.json")
 	})
 
-    // service client generated files over network
+    // serve client generated files over network
 	mux.HandleFunc("GET /client.gen.js", router.ServeClientJS)
 	mux.HandleFunc("GET /client.gen.py", router.ServeClientPY)
 

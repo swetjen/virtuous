@@ -50,5 +50,6 @@ python-clean:
 
 python-publish:
 	$(MAKE) python-deps
+	$(MAKE) python-clean
 	cd $(PYTHON_LOADER_DIR) && $(PYTHON) -m build --no-isolation
 	cd $(PYTHON_LOADER_DIR) && $(TWINE) upload dist/*
