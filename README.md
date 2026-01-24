@@ -201,10 +201,6 @@ _ = router.WriteClientTS(ts)
 - Client outputs include a `Virtuous client hash` header comment.
 - Hash endpoints can be served via `router.ServeClientJSHash`, `router.ServeClientTSHash`, and `router.ServeClientPYHash`.
 
-## Testing
-
-Run `make test` to execute Go tests plus optional JS/Python/TS syntax checks (skips missing runtimes).
-
 ## Guards (auth middleware)
 
 Implement `Guard` to attach auth metadata and middleware:
@@ -316,14 +312,6 @@ module = load_module("http://localhost:8000/client.gen.py")
 client = module.create_client("http://localhost:8000")
 states = client.States.getMany()
 ```
-
-Maintainers can publish the package with:
-
-```bash
-make python-publish
-```
-
-Publishing uses `.venv` and your `~/.pypirc` credentials.
 
 ## Using Virtuous in JavaScript
 
