@@ -54,6 +54,9 @@ func RunServer() error {
 	if err := router.WriteClientJSFile("client.gen.js"); err != nil {
 		return err
 	}
+	if err := router.WriteClientTSFile("client.gen.ts"); err != nil {
+		return err
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/", router)
@@ -77,6 +80,7 @@ func RunServer() error {
 		return server.ListenAndServe()
 	}
 	fmt.Println("generated client.gen.js")
+	fmt.Println("generated client.gen.ts")
 	return nil
 }
 
