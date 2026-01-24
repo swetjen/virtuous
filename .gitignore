@@ -1,2 +1,4 @@
 PROMPT_BASE.md
 __pycache__/
+dist/
+*.egg-info/
