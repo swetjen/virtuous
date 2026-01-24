@@ -256,11 +256,19 @@ See `python_loader/` for a stdlib-only loader that fetches a Virtuous Python cli
 Example:
 
 ```python
-from virtuous_loader import load_module
+from virtuous import load_module
 
 module = load_module("https://api.example.com/client.gen.py")
 client = module.create_client("https://api.example.com")
 ```
+
+Maintainers can publish the package with:
+
+```bash
+make python-publish
+```
+
+Publishing uses `.venv` and your `~/.pypirc` credentials.
 
 ## Testing
 

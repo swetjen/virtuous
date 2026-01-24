@@ -1,6 +1,6 @@
-"""Basic import smoke test for virtuous_loader."""
+"""Basic import smoke test for virtuous."""
 
-from virtuous_loader import get_remote_hash, hash_url, load_module, load_module_to_disk
+from virtuous import get_remote_hash, hash_url, load_module, load_module_to_disk
 
 
 def main() -> None:

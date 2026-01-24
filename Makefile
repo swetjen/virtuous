@@ -1,4 +1,4 @@
-.PHONY: test test-go test-js test-python test-ts test-example
+.PHONY: test test-go test-js test-python test-ts test-example python-build python-publish python-clean
 
 test: test-go test-example test-js test-python test-ts
 
@@ -19,3 +19,36 @@ test-python:
 test-ts:
 	@command -v tsc >/dev/null 2>&1 && echo "tsc present" || { echo "tsc not found; skipping"; exit 0; }
 	cd virtuous && go test ./... -run TestGeneratedClientsAreValid -count=1
+
+ROOT_DIR := $(abspath .)
+PYTHON_LOADER_DIR := $(ROOT_DIR)/python_loader
+VENV_BIN := $(ROOT_DIR)/.venv/bin
+PYTHON := $(VENV_BIN)/python
+TWINE := $(VENV_BIN)/twine
+UV := uv
+PYTHON_DEPS := build twine setuptools wheel
+
+.PHONY: python-venv
+.PHONY: python-deps
+
+python-venv:
+	@if [ ! -x "$(PYTHON)" ]; then \
+		echo "Creating .venv with uv..."; \
+		$(UV) venv $(ROOT_DIR)/.venv; \
+	fi
+
+python-deps:
+	$(MAKE) python-venv
+	$(UV) pip install $(PYTHON_DEPS)
+
+python-build:
+	$(MAKE) python-deps
+	cd $(PYTHON_LOADER_DIR) && $(PYTHON) -m build --no-isolation
+
+python-clean:
+	rm -rf $(PYTHON_LOADER_DIR)/dist $(PYTHON_LOADER_DIR)/build $(PYTHON_LOADER_DIR)/*.egg-info
+
+python-publish:
+	$(MAKE) python-deps
+	cd $(PYTHON_LOADER_DIR) && $(PYTHON) -m build --no-isolation
+	cd $(PYTHON_LOADER_DIR) && $(TWINE) upload dist/*
