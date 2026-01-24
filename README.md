@@ -76,7 +76,9 @@ func RunServer() error {
 			Tags:    []string{"states"},
 		}),
 	)
+    
 
+    // save client generated files to local disk
 	if err := writeOpenAPI(router, "openapi.json"); err != nil {
 		return err
 	}
@@ -95,6 +97,8 @@ func RunServer() error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", router)
+
+    // serve OpenApi docs
 	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/docs/", http.StatusMovedPermanently)
 	})
@@ -104,6 +108,8 @@ func RunServer() error {
 	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "openapi.json")
 	})
+
+    // service client generated files over network
 	mux.HandleFunc("GET /client.gen.js", router.ServeClientJS)
 	mux.HandleFunc("GET /client.gen.py", router.ServeClientPY)
 
