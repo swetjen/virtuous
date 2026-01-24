@@ -2,6 +2,16 @@
 
 Virtuous is an agent-first, batteries-included JSON API framework. It provides a typed router that generates OpenAPI and client code at runtime from your handlers.
 
+## Why Virtuous
+
+- Runtime-first API framework: no CLI, no build step; routes define everything at runtime.
+- Typed handlers: request/response types drive OpenAPI + client output automatically.
+- Native SDK codegen support for Python, JavaScript, and TypeScript.
+- Guards as auth middleware with self-describing metadata for docs/clients.
+- Reflection-based type registry: shared source of truth for schema + clients.
+- Minimal dependencies and Go 1.22+ standard library focus.
+- RPC-style, simple APIs that help agents generate working code without wrestling with complex OpenAPI schemas.
+
 ## Requirements
 - Go 1.22+ (for method-prefixed route patterns like `GET /path`)
 
@@ -28,7 +38,6 @@ Create `main.go`:
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -114,7 +123,7 @@ func StatesGetMany(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	Encode(w, r, http.StatusOK, response)
+	virtuous.Encode(w, r, http.StatusOK, response)
 }
 
 func StateByCode(w http.ResponseWriter, r *http.Request) {
@@ -122,26 +131,20 @@ func StateByCode(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	if code == "" {
 		response.Error = "code is required"
-		Encode(w, r, http.StatusBadRequest, response)
+		virtuous.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
 
 	for _, state := range mockData {
 		if state.Code == code {
 			response.State = state
-			Encode(w, r, http.StatusOK, response)
+			virtuous.Encode(w, r, http.StatusOK, response)
 			return
 		}
 	}
 
 	response.Error = "code not found"
-	Encode(w, r, http.StatusBadRequest, response)
-}
-
-func Encode(w http.ResponseWriter, _ *http.Request, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	virtuous.Encode(w, r, http.StatusBadRequest, response)
 }
 
 var mockData = []State{
