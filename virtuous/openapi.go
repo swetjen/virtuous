@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -100,6 +101,15 @@ func (r *Router) OpenAPI() ([]byte, error) {
 	}
 
 	return json.MarshalIndent(doc, "", "  ")
+}
+
+// WriteOpenAPIFile writes the OpenAPI JSON output to the file at path.
+func (r *Router) WriteOpenAPIFile(path string) error {
+	data, err := r.OpenAPI()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 func responseSchema(gen *schemaGen, t reflect.Type) (string, *openAPISchema) {

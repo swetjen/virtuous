@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/swetjen/virtuous"
 )
@@ -18,7 +17,7 @@ func main() {
 func RunServer() error {
 	router := buildRouter()
 
-	if err := writeOpenAPI(router, "openapi.json"); err != nil {
+	if err := router.WriteOpenAPIFile("openapi.json"); err != nil {
 		return err
 	}
 	if err := router.WriteClientJSFile("client.gen.js"); err != nil {
@@ -28,6 +27,9 @@ func RunServer() error {
 		return err
 	}
 	if err := router.WriteClientPYFile("client.gen.py"); err != nil {
+		return err
+	}
+	if err := virtuous.WriteDocsHTMLFile("docs.html", "/openapi.json"); err != nil {
 		return err
 	}
 
@@ -123,12 +125,4 @@ func buildRouter() *virtuous.Router {
 	)
 
 	return router
-}
-
-func writeOpenAPI(router *virtuous.Router, path string) error {
-	data, err := router.OpenAPI()
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0644)
 }

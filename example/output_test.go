@@ -12,7 +12,7 @@ func TestExampleOutputs(t *testing.T) {
 	outDir := t.TempDir()
 
 	openAPIPath := filepath.Join(outDir, "openapi.json")
-	if err := writeOpenAPI(router, openAPIPath); err != nil {
+	if err := router.WriteOpenAPIFile(openAPIPath); err != nil {
 		t.Fatalf("openapi: %v", err)
 	}
 	if err := router.WriteClientJSFile(filepath.Join(outDir, "client.gen.js")); err != nil {

@@ -13,13 +13,18 @@ go get github.com/swetjen/virtuous@latest
 
 ## Quick start (cut, paste, run)
 
+Create a new project:
+
 ```bash
 mkdir virtuous-demo
 cd virtuous-demo
 go mod init virtuous-demo
 go get github.com/swetjen/virtuous@latest
+```
 
-cat > main.go <<'EOF'
+Create `main.go`:
+
+```go
 package main
 
 import (
@@ -27,7 +32,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/swetjen/virtuous"
 )
@@ -79,7 +83,7 @@ func RunServer() error {
     
 
     // save client generated files to local disk
-	if err := writeOpenAPI(router, "openapi.json"); err != nil {
+	if err := router.WriteOpenAPIFile("openapi.json"); err != nil {
 		return err
 	}
 	if err := router.WriteClientJSFile("client.gen.js"); err != nil {
@@ -91,7 +95,7 @@ func RunServer() error {
 	if err := router.WriteClientPYFile("client.gen.py"); err != nil {
 		return err
 	}
-	if err := os.WriteFile("docs.html", []byte(docsHTML), 0644); err != nil {
+	if err := virtuous.WriteDocsHTMLFile("docs.html", "/openapi.json"); err != nil {
 		return err
 	}
 
@@ -174,42 +178,11 @@ var mockData = []State{
 	},
 }
 
-func writeOpenAPI(router *virtuous.Router, path string) error {
-	data, err := router.OpenAPI()
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0644)
-}
+```
 
-const docsHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8" />
-	<title>Virtuous API Docs</title>
-	<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
-	<style>
-		body {
-			margin: 0;
-			background: #f7f7f7;
-		}
-	</style>
-</head>
-<body>
-	<div id="swagger-ui"></div>
-	<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-	<script>
-		window.onload = function () {
-			window.ui = SwaggerUIBundle({
-				url: "/openapi.json",
-				dom_id: "#swagger-ui",
-			})
-		}
-	</script>
-</body>
-</html>`
-EOF
+Run it:
 
+```bash
 go run .
 ```
 
@@ -248,27 +221,6 @@ _ = router.WriteClientTS(ts)
 - Pointer fields are emitted as `nullable` in OpenAPI.
 - Client outputs include a `Virtuous client hash` header comment.
 - Hash endpoints can be served via `router.ServeClientJSHash`, `router.ServeClientTSHash`, and `router.ServeClientPYHash`.
-
-## Python loader
-
-See `python_loader/` for a stdlib-only loader that fetches a Virtuous Python client from a URL and returns a module ready for `create_client`.
-
-Example:
-
-```python
-from virtuous import load_module
-
-module = load_module("https://api.example.com/client.gen.py")
-client = module.create_client("https://api.example.com")
-```
-
-Maintainers can publish the package with:
-
-```bash
-make python-publish
-```
-
-Publishing uses `.venv` and your `~/.pypirc` credentials.
 
 ## Testing
 
@@ -365,7 +317,7 @@ router.HandleTyped(
 )
 ```
 
-## Reference app
+## Larger example app
 See `example/` for a working example with:
 - `/openapi.json`
 - `/client.gen.js`
@@ -374,6 +326,44 @@ See `example/` for a working example with:
 ## Spec
 See `SPEC.md` for the detailed runtime specification.
 
+## Using Virtuous in Python
+
+See `python_loader/` for a zero-dependency loader that fetches a Virtuous Python client from a URL and returns a module ready for `create_client`.
+
+```python
+from virtuous import load_module
+
+module = load_module("http://localhost:8000/client.gen.py")
+client = module.create_client("http://localhost:8000")
+states = client.States.getMany()
+```
+
+Maintainers can publish the package with:
+
+```bash
+make python-publish
+```
+
+Publishing uses `.venv` and your `~/.pypirc` credentials.
+
+## Using Virtuous in JavaScript
+
+```js
+import { createClient } from "./client.gen.js"
+
+const client = createClient("http://localhost:8000")
+const states = await client.States.getMany()
+```
+
+## Using Virtuous in TypeScript
+
+```ts
+import { createClient } from "./client.gen"
+
+const client = createClient("http://localhost:8000")
+const states = await client.States.getMany()
+```
+
 ## Attribution
 
-Virtuous is informed by prior art from Pace.dev and the Oto project by Matt Ryer.
+Virtuous is inspired by Pace.dev and the Oto project by Matt Ryer.

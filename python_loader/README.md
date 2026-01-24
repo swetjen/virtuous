@@ -1,6 +1,6 @@
-# Virtuous Loader
+# Using Virtuous in Python
 
-Stdlib-only loader for Virtuous runtime-generated Python clients.
+Zero-dependency loader for Virtuous runtime-generated Python clients.
 
 ## Install
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.7
+
+- Move OpenAPI file writing and docs HTML helpers into the runtime package.
+- Update documentation for language-specific client usage and loader examples.
+
 ## 0.0.6
 
 - Ensure the Python publish workflow installs build dependencies in the venv.

@@ -45,6 +45,7 @@
 - Request bodies emit JSON schemas when request types are provided.
 - Responses use sentinel types to emit 200/204/500 with or without bodies.
 - Schemas include numeric formats and field descriptions from `doc` tags.
+- `WriteOpenAPIFile` persists OpenAPI output, and docs HTML helpers live in `virtuous/docs.go`.
 
 ## Example App
 - Demonstrates typed routes, guard usage, OpenAPI JSON emission, and JS client generation.
