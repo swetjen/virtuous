@@ -5,9 +5,6 @@
 - Add Python client generation using dataclasses and urllib.
 - Add TypeScript client file output and syntax validation hooks in tests.
 - Add example admin user routes and output generation tests.
-
-## 0.0.2
-
 - Mark pointer fields as nullable in OpenAPI output.
 - Add OpenAPI tests for nullable vs required fields.
 
