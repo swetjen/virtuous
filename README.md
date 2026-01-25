@@ -9,9 +9,8 @@ It provides a **typed router** as a thin, zero-dependency wrapper around Go’s 
 - **Typed handlers** - request/response types generate OpenAPI and clients automatically.
 - **Typed guards** - auth as composable middleware with self-describing metadata.
 - **Native SDKs** - simple, correct clients for Python, JavaScript, and TypeScript.
-- **Inlined** - no CLI, no codegen step, no YAML; routes and types define everything.
-- **Zero dependencies** - Go 1.22+, standard library only. 
 - **Agent-friendly** - patterns optimized for reliable code generation.
+- **Zero dependencies** - Go 1.22+, standard library only.  no CLI, no codegen step, no YAML; routes and types define everything.
 
 ## Quick start (cut, paste, run)
 
