@@ -56,7 +56,7 @@ func StateByCode(w http.ResponseWriter, r *http.Request) {
 
 func StateCreate(w http.ResponseWriter, r *http.Request) {
 	response := StateResponse{}
-	req, err := Decode[CreateStateRequest](r)
+	req, err := virtuous.Decode[CreateStateRequest](r)
 	if err != nil {
 		response.Error = "invalid request"
 		virtuous.Encode(w, r, http.StatusBadRequest, response)
