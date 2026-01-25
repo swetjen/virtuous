@@ -8,22 +8,12 @@ If an API can be called, it can be documented and consumed—by both humans *and
 
 ## Why Virtuous
 
-- **Runtime-first** - no CLI, no codegen step, no YAML; routes and types define everything at runtime.
+- **Runtime-first** - no CLI, no codegen step, no YAML; routes and types define everything.
 - **Typed handlers as truth** - request/response types generate OpenAPI and clients automatically.
 - **Typed guards** - auth as composable middleware with self-describing metadata.
 - **Native SDKs** - simple, correct clients for Python, JavaScript, and TypeScript.
 - **Zero dependencies** - Go 1.22+, standard library only. 
 - **Agent-friendly** - practical patterns optimized for reliable code generation.
-
-## Requirements
-
-- Go 1.22+ (for method-prefixed route patterns like `GET /path`)
-
-## Install
-
-```bash
-go get github.com/swetjen/virtuous@latest
-```
 
 ## Quick start (cut, paste, run)
 
@@ -165,6 +155,16 @@ go run .
 ```
 
 Open `http://localhost:8000/docs/` to view the Swagger UI.
+
+## Requirements
+
+- Go 1.22+ (for method-prefixed route patterns like `GET /path`)
+
+## Install
+
+```bash
+go get github.com/swetjen/virtuous@latest
+```
 
 ## Router wiring 
 
