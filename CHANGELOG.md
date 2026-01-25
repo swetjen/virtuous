@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.14
+
+- Add query param support via `query` struct tags for migration use cases.
+
 ## 0.0.13
 
 - Add schema name prefixing for top-level request/response types.

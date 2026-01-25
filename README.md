@@ -180,6 +180,25 @@ http.Server
 - `Summary` and `Description` show up in OpenAPI and JS JSDoc.
 - `Tags` are emitted as OpenAPI tags.
 
+## Query params (legacy)
+
+Virtuous supports query params for migration use cases, but they are not recommended for new APIs.
+
+Mark fields on the request struct with `query:"name"` to emit query parameters instead of JSON body fields:
+
+```go
+type SearchRequest struct {
+	Query string `query:"q"`               // always included
+	Limit int    `query:"limit,omitempty"` // optional
+}
+```
+
+Rules:
+- `query:"name"` always includes the key; `query:"name,omitempty"` omits empty values.
+- Query params are treated as strings and URL-escaped.
+- Nested structs/maps are not allowed.
+- Fields with `query` tags cannot also use `json` tags.
+
 ## Runtime outputs
 
 Virtuous can emit OpenAPI schemas and client SDKs directly at runtime:

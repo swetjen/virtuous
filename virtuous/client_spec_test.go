@@ -30,7 +30,10 @@ func TestClientSpecUsesServicePrefix(t *testing.T) {
 	router := NewRouter()
 	router.HandleTyped("GET /spec", specHandler{})
 
-	spec := buildClientSpec(router.Routes(), nil)
+	spec, err := buildClientSpec(router.Routes(), nil)
+	if err != nil {
+		t.Fatalf("build spec: %v", err)
+	}
 	if !containsObject(spec.Objects, "LookupSpecRequest") {
 		t.Fatalf("missing prefixed request type")
 	}

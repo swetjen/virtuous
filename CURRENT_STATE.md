@@ -19,6 +19,7 @@
 - `WrapFunc` adapts a handler function without manual `http.HandlerFunc` wrapping.
 - `TypedHandlerFunc` wraps handler functions with request/response metadata.
 - Typed handlers drive OpenAPI and client emission.
+- Request fields tagged with `query:"name"` emit query parameters for migration-only support.
 
 ## Type Registry + Overrides
 - `typeRegistry` reflects struct types, field names, `omitempty` optionality, pointer nullability, and `doc` tags.

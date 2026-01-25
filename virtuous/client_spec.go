@@ -22,6 +22,8 @@ type clientMethod struct {
 	Path         string
 	PathParams   []string
 	HasBody      bool
+	HasQuery     bool
+	QueryParams  []clientQueryParam
 	HasAuth      bool
 	Auth         GuardSpec
 	AuthParam    string
@@ -42,13 +44,20 @@ type clientField struct {
 	Doc      string
 }
 
-func buildClientSpec(routes []Route, overrides map[string]TypeOverride) clientSpec {
+type clientQueryParam struct {
+	Name     string
+	Optional bool
+	IsArray  bool
+	Doc      string
+}
+
+func buildClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
 	return buildClientSpecWith(routes, overrides, func(registry *typeRegistry) func(reflect.Type) string {
 		return registry.jsType
 	})
 }
 
-func buildPythonClientSpec(routes []Route, overrides map[string]TypeOverride) clientSpec {
+func buildPythonClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
 	return buildClientSpecWith(routes, overrides, func(registry *typeRegistry) func(reflect.Type) string {
 		return registry.pyType
 	})
@@ -58,7 +67,7 @@ func buildClientSpecWith(
 	routes []Route,
 	overrides map[string]TypeOverride,
 	typeFnFactory func(*typeRegistry) func(reflect.Type) string,
-) clientSpec {
+) (clientSpec, error) {
 	serviceMap := make(map[string]*clientService)
 	registry := newTypeRegistry(overrides)
 	typeFn := typeFnFactory(registry)
@@ -79,6 +88,8 @@ func buildClientSpecWith(
 		reqType := route.Handler.RequestType()
 		respType := route.Handler.ResponseType()
 		hasBody := reqType != nil
+		hasQuery := false
+		var queryParams []clientQueryParam
 		requestType := ""
 		responseType := ""
 		if reqType != nil {
@@ -86,8 +97,27 @@ func buildClientSpecWith(
 			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
 				registry.preferName(derefType(reqReflect), preferred)
 			}
-			registry.addType(reqReflect)
-			requestType = typeFn(reqReflect)
+			queryInfo, err := queryParamsFor(reqReflect)
+			if err != nil {
+				return clientSpec{}, err
+			}
+			if len(queryInfo.Params) > 0 {
+				hasQuery = true
+				queryParams = make([]clientQueryParam, 0, len(queryInfo.Params))
+				for _, param := range queryInfo.Params {
+					queryParams = append(queryParams, clientQueryParam{
+						Name:     param.Name,
+						Optional: param.Optional,
+						IsArray:  param.IsArray,
+						Doc:      param.Doc,
+					})
+				}
+			}
+			hasBody = queryInfo.BodyFields > 0
+			if hasBody {
+				registry.addType(reqReflect)
+				requestType = typeFn(reqReflect)
+			}
 		}
 		if respType != nil {
 			respReflect := reflect.TypeOf(respType)
@@ -108,6 +138,8 @@ func buildClientSpecWith(
 			Path:         route.Path,
 			PathParams:   route.PathParams,
 			HasBody:      hasBody,
+			HasQuery:     hasQuery,
+			QueryParams:  queryParams,
 			RequestType:  requestType,
 			ResponseType: responseType,
 		}
@@ -133,7 +165,7 @@ func buildClientSpecWith(
 	return clientSpec{
 		Services: services,
 		Objects:  registry.objectsList(typeFn),
-	}
+	}, nil
 }
 
 func authParamName(name string) string {
