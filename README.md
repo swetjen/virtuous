@@ -2,18 +2,16 @@
 
 Virtuous is an **agent-first API framework for Go** with **self-generating documentation and clients**.
 
-It’s a thin, zero-dependency wrapper around Go’s `net/http` that provides a **typed router**. Your handlers define everything at runtime—routes, schemas, auth, docs, and client SDKs—without a CLI, config files, or build step.
-
-If an API can be called, it can be documented and consumed—by both humans *and* agents.
+It provides a **typed router** as a thin, zero-dependency wrapper around Go’s `net/http` package.  Your handlers define everything--routes, schemas, auth, docs, and client SDKs.
 
 ## Why Virtuous
 
-- **Runtime-first** - no CLI, no codegen step, no YAML; routes and types define everything.
-- **Typed handlers as truth** - request/response types generate OpenAPI and clients automatically.
+- **Typed handlers** - request/response types generate OpenAPI and clients automatically.
 - **Typed guards** - auth as composable middleware with self-describing metadata.
 - **Native SDKs** - simple, correct clients for Python, JavaScript, and TypeScript.
+- **Inlined** - no CLI, no codegen step, no YAML; routes and types define everything.
 - **Zero dependencies** - Go 1.22+, standard library only. 
-- **Agent-friendly** - practical patterns optimized for reliable code generation.
+- **Agent-friendly** - patterns optimized for reliable code generation.
 
 ## Quick start (cut, paste, run)
 
