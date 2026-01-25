@@ -28,14 +28,97 @@ func DefaultDocsHTML(openAPIPath string) string {
 	<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
 	<script>
 		window.onload = function () {
-			window.ui = SwaggerUIBundle({
-				url: %q,
-				dom_id: "#swagger-ui",
-			})
+			const VIRTUOUS_DEBUG_AUTH = false
+			const OPENAPI_URL = %q
+			function buildPrefixMap(spec) {
+				const map = {}
+				if (!spec || !spec.components || !spec.components.securitySchemes) {
+					return map
+				}
+				const schemes = spec.components.securitySchemes
+				Object.keys(schemes).forEach(function (key) {
+					const scheme = schemes[key]
+					if (!scheme) {
+						return
+					}
+					const location = scheme.in
+					const headerName = scheme.name
+					const prefix = scheme["x-virtuousauth-prefix"]
+					if (location !== "header" || !headerName || !prefix) {
+						return
+					}
+					map[String(headerName).toLowerCase()] = String(prefix)
+				})
+				return map
+			}
+			function applyAuthPrefix(req, prefixMap) {
+				try {
+					if (!prefixMap || !req || !req.headers) {
+						return req
+					}
+					function findHeaderName(headers, target) {
+						if (!headers || !target) {
+							return ""
+						}
+						const targetLower = target.toLowerCase()
+						const keys = Object.keys(headers)
+						for (let i = 0; i < keys.length; i++) {
+							const key = keys[i]
+							if (key.toLowerCase() === targetLower) {
+								return key
+							}
+						}
+						return ""
+					}
+					Object.keys(prefixMap).forEach(function (headerName) {
+						const prefix = prefixMap[headerName]
+						const headerKey = findHeaderName(req.headers, headerName)
+						const current = headerKey ? req.headers[headerKey] : req.headers[headerName]
+						if (!current) {
+							return
+						}
+						const expected = prefix + " "
+						if (typeof current === "string" && !current.startsWith(expected)) {
+							if (headerKey) {
+								req.headers[headerKey] = expected + current
+							} else {
+								req.headers[headerName] = expected + current
+							}
+							if (VIRTUOUS_DEBUG_AUTH && typeof console !== "undefined") {
+								console.log("virtuous docs auth prefix applied", headerName)
+							}
+						}
+					})
+				} catch (e) {
+					return req
+				}
+				return req
+			}
+			function initUI(prefixMap) {
+				let ui
+				ui = SwaggerUIBundle({
+					url: OPENAPI_URL,
+					dom_id: "#swagger-ui",
+					requestInterceptor: function (req) {
+						return applyAuthPrefix(req, prefixMap)
+					},
+				})
+				window.ui = ui
+			}
+			fetch(OPENAPI_URL)
+				.then(function (resp) {
+					return resp.json()
+				})
+				.then(function (spec) {
+					initUI(buildPrefixMap(spec))
+				})
+				.catch(function () {
+					initUI({})
+				})
 		}
 	</script>
 </body>
-</html>`, openAPIPath)
+</html>`, openAPIPath, openAPIPath)
 }
 
 // WriteDocsHTMLFile writes the default docs HTML to the path provided.

@@ -191,6 +191,7 @@ _ = router.WriteClientTS(ts)
 - `router.WriteClientTS` writes a TS client at startup.
 - `router.WriteClientPY` writes a Python client at startup.
 - Pointer fields are emitted as `nullable` in OpenAPI.
+- Swagger UI auto-prepends `GuardSpec.Prefix` for header schemes using `x-virtuousauth-prefix`.
 - Client outputs include a `Virtuous client hash` header comment.
 - Hash endpoints can be served via `router.ServeClientJSHash`, `router.ServeClientTSHash`, and `router.ServeClientPYHash`.
 
