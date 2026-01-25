@@ -5,9 +5,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/swetjen/virtuous/example/template/api"
-	"github.com/swetjen/virtuous/example/template/api/config"
-	"github.com/swetjen/virtuous/example/template/api/db"
+	api "github.com/swetjen/virtuous/example/template"
+	"github.com/swetjen/virtuous/example/template/config"
+	"github.com/swetjen/virtuous/example/template/db"
 )
 
 func main() {

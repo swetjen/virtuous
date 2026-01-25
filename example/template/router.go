@@ -1,15 +1,15 @@
-package api
+package template
 
 import (
 	"net/http"
 
 	"github.com/swetjen/virtuous"
-	"github.com/swetjen/virtuous/example/template/api/config"
-	"github.com/swetjen/virtuous/example/template/api/db"
-	"github.com/swetjen/virtuous/example/template/api/deps"
-	"github.com/swetjen/virtuous/example/template/api/handlers"
-	"github.com/swetjen/virtuous/example/template/api/handlers/admin"
-	"github.com/swetjen/virtuous/example/template/api/middleware"
+	"github.com/swetjen/virtuous/example/template/config"
+	"github.com/swetjen/virtuous/example/template/db"
+	"github.com/swetjen/virtuous/example/template/deps"
+	"github.com/swetjen/virtuous/example/template/handlers"
+	"github.com/swetjen/virtuous/example/template/handlers/admin"
+	"github.com/swetjen/virtuous/example/template/middleware"
 )
 
 func NewRouter(cfg config.Config, store *db.Store) http.Handler {

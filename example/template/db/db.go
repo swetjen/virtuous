@@ -18,6 +18,7 @@ type Store struct {
 	nextID int64
 }
 
+// replace with your preffered database
 func New() *Store {
 	return &Store{
 		users: []User{

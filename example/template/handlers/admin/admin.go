@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/swetjen/virtuous"
-	"github.com/swetjen/virtuous/example/template/api/deps"
-	"github.com/swetjen/virtuous/example/template/api/db"
+	"github.com/swetjen/virtuous/example/template/db"
+	"github.com/swetjen/virtuous/example/template/deps"
 )
 
 type AdminHandlers struct {

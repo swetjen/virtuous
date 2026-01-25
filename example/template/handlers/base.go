@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"github.com/swetjen/virtuous/example/template/api/deps"
-	"github.com/swetjen/virtuous/example/template/api/handlers/admin"
+	"github.com/swetjen/virtuous/example/template/deps"
+	"github.com/swetjen/virtuous/example/template/handlers/admin"
 )
 
 type Handlers struct {
