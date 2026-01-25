@@ -58,4 +58,5 @@
 
 ## Examples
 - `example/basic/` shows list/get/create state routes and client generation.
+- `example/template/` demonstrates admin routes, CORS, and a static landing page.
 - `example/` is the larger reference app with guarded admin routes.

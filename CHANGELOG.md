@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.10
+
+- Add CORS middleware helper and template example scaffold.
+
 ## 0.0.9
 
 - Add `ServeAllDocs` to wire docs and client routes in one call.

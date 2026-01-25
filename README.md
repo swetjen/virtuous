@@ -289,6 +289,11 @@ Basic example (`example/basic/`):
 - List/get/create state routes.
 - Generates OpenAPI + JS/TS/PY clients.
 
+Template example (`example/template/`):
+- Admin user routes with guard middleware.
+- CORS applied at the router boundary.
+- Static landing page with docs links.
+
 Larger example app (`example/`):
 - Adds guarded routes and admin workflows.
 - Generates OpenAPI + JS/TS/PY clients.
