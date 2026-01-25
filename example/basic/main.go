@@ -23,7 +23,7 @@ func RunServer() error {
 			Service: "States",
 			Method:  "GetMany",
 			Summary: "List all states",
-			Tags:    []string{"states"},
+			Tags:    []string{"States"},
 		}),
 	)
 
@@ -33,7 +33,7 @@ func RunServer() error {
 			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",
-			Tags:    []string{"states"},
+			Tags:    []string{"States"},
 		}),
 	)
 
@@ -43,29 +43,14 @@ func RunServer() error {
 			Service: "States",
 			Method:  "Create",
 			Summary: "Create a new state",
-			Tags:    []string{"states"},
+			Tags:    []string{"States"},
 		}),
 	)
 
-	if err := router.WriteOpenAPIFile("openapi.json"); err != nil {
-		return err
-	}
-	if err := router.WriteClientJSFile("client.gen.js"); err != nil {
-		return err
-	}
-	if err := router.WriteClientTSFile("client.gen.ts"); err != nil {
-		return err
-	}
-	if err := router.WriteClientPYFile("client.gen.py"); err != nil {
-		return err
-	}
-	if err := virtuous.WriteDocsHTMLFile("docs.html", "/openapi.json"); err != nil {
-		return err
-	}
-
-	router.Handle("GET /client.gen.js", http.HandlerFunc(router.ServeClientJS))
-	router.Handle("GET /client.gen.py", http.HandlerFunc(router.ServeClientPY))
-	router.HandleDocs(nil)
+	router.ServeDocs()
+	router.HandleFunc("GET /client.gen.js", router.ServeClientJS)
+	router.HandleFunc("GET /client.gen.py", router.ServeClientPY)
+	router.HandleFunc("GET /client.gen.ts", router.ServeClientTS)
 
 	server := &http.Server{
 		Addr:    ":8000",

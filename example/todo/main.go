@@ -29,7 +29,7 @@ func RunServer() error {
 	if err := router.WriteClientPYFile("client.gen.py"); err != nil {
 		return err
 	}
-	if err := virtuous.WriteDocsHTMLFile("docs.html", "/openapi.json"); err != nil {
+	if err := router.WriteDocsHTMLFile("docs.html", "/openapi.json"); err != nil {
 		return err
 	}
 
