@@ -148,6 +148,8 @@ go run .
 
 Open `http://localhost:8000/docs/` to view the Swagger UI.
 
+![Example docs](example.png)
+
 ## Requirements
 
 - Go 1.22+ (for method-prefixed route patterns like `GET /path`)

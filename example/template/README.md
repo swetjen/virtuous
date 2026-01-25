@@ -5,8 +5,20 @@ A more complete Virtuous example with admin routes, CORS middleware, and a stati
 ## Run
 
 ```bash
-go run ./api/cmd/api
+go run ./cmd/api/main.go
 ```
+
+Or with the Makefile:
+
+```bash
+make run
+```
+
+## Makefile
+
+- `make run` starts the dev server with `reflex` for hot reloads.
+- `make test` runs tests.
+- `make deps` installs local tooling dependencies.
 
 ## Environment
 
