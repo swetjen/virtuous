@@ -48,6 +48,7 @@
 - `WriteOpenAPIFile` persists OpenAPI output, and docs HTML helpers live in `virtuous/docs.go`.
 - `ServeDocs` registers `/docs` and `/openapi.json` routes with optional overrides.
 - `ServeAllDocs` wires docs/OpenAPI and client routes in one call.
+- `SetOpenAPIOptions` customizes top-level OpenAPI metadata.
 
 ## Example App
 - Demonstrates typed routes, guard usage, OpenAPI JSON emission, and JS client generation.

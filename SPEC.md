@@ -77,6 +77,7 @@ func (r *Router) HandleTyped(pattern string, h TypedHandler, guards ...Guard)
 // Introspection / outputs:
 func (r *Router) Routes() []Route
 func (r *Router) OpenAPI() ([]byte, error)
+func (r *Router) SetOpenAPIOptions(opts OpenAPIOptions)
 
 // Runtime client output:
 func (r *Router) WriteClientJS(w io.Writer) error

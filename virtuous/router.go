@@ -54,6 +54,7 @@ type Router struct {
 	routes        []Route
 	logger        *slog.Logger
 	typeOverrides map[string]TypeOverride
+	openAPIOptions *OpenAPIOptions
 }
 
 // NewRouter returns a new Router.
@@ -75,6 +76,30 @@ func (r *Router) SetTypeOverrides(overrides map[string]TypeOverride) {
 		copyOverrides[key] = value
 	}
 	r.typeOverrides = copyOverrides
+}
+
+// SetOpenAPIOptions replaces the OpenAPI document settings.
+func (r *Router) SetOpenAPIOptions(opts OpenAPIOptions) {
+	copyOpts := opts
+	if opts.Servers != nil {
+		copyOpts.Servers = append([]OpenAPIServer(nil), opts.Servers...)
+	}
+	if opts.Tags != nil {
+		copyOpts.Tags = append([]OpenAPITag(nil), opts.Tags...)
+	}
+	if opts.Contact != nil {
+		contact := *opts.Contact
+		copyOpts.Contact = &contact
+	}
+	if opts.License != nil {
+		license := *opts.License
+		copyOpts.License = &license
+	}
+	if opts.ExternalDocs != nil {
+		external := *opts.ExternalDocs
+		copyOpts.ExternalDocs = &external
+	}
+	r.openAPIOptions = &copyOpts
 }
 
 // SetLogger overrides the logger used for warnings.

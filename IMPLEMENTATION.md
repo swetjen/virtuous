@@ -85,6 +85,7 @@ router.SetTypeOverrides(map[string]virtuous.TypeOverride{
 - `TypedHandlerFunc` wraps handler functions with request/response metadata.
 - `WrapFunc` avoids boilerplate for `http.HandlerFunc` wrapping.
 - `Cors` provides a configurable middleware for cross-origin requests.
+- `SetOpenAPIOptions` customizes top-level OpenAPI metadata fields.
 
 ## Notes from core router patterns
 

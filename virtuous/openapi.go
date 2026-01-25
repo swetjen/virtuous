@@ -87,17 +87,27 @@ func (r *Router) OpenAPI() ([]byte, error) {
 		paths[route.Path][strings.ToLower(route.Method)] = op
 	}
 
+	opts := openAPIDefaults
+	if r.openAPIOptions != nil {
+		opts = *r.openAPIOptions
+	}
 	doc := openAPIDoc{
 		OpenAPI: "3.0.3",
 		Info: openAPIInfo{
-			Title:   "Virtuous API",
-			Version: "0.0.1",
+			Title:       defaultString(opts.Title, "Virtuous API"),
+			Version:     defaultString(opts.Version, "0.0.1"),
+			Description: opts.Description,
+			Contact:     opts.Contact,
+			License:     opts.License,
 		},
 		Paths: paths,
 		Components: openAPIComponents{
 			Schemas:         gen.components,
 			SecuritySchemes: securitySchemes,
 		},
+		Tags:         openAPITags(opts.Tags),
+		Servers:      openAPIServers(opts.Servers),
+		ExternalDocs: opts.ExternalDocs,
 	}
 
 	return json.MarshalIndent(doc, "", "  ")
@@ -153,17 +163,37 @@ type openAPIDoc struct {
 	Info       openAPIInfo                             `json:"info"`
 	Paths      map[string]map[string]*openAPIOperation `json:"paths"`
 	Components openAPIComponents                       `json:"components,omitempty"`
+	Tags         []openAPITag           `json:"tags,omitempty"`
+	Servers      []openAPIServer        `json:"servers,omitempty"`
+	ExternalDocs *openAPIExternalDocs   `json:"externalDocs,omitempty"`
 }
 
 type openAPIInfo struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
 	Version     string `json:"version"`
+	Contact     *OpenAPIContact `json:"contact,omitempty"`
+	License     *OpenAPILicense `json:"license,omitempty"`
 }
 
 type openAPIComponents struct {
 	Schemas         map[string]openAPISchema         `json:"schemas,omitempty"`
 	SecuritySchemes map[string]openAPISecurityScheme `json:"securitySchemes,omitempty"`
+}
+
+type openAPITag struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+type openAPIServer struct {
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
+}
+
+type openAPIExternalDocs struct {
+	Description string `json:"description,omitempty"`
+	URL         string `json:"url"`
 }
 
 type openAPISecurityScheme struct {
@@ -215,6 +245,86 @@ type openAPISchema struct {
 	AdditionalProperties *openAPISchema            `json:"additionalProperties,omitempty"`
 	Required             []string                  `json:"required,omitempty"`
 	AllOf                []*openAPISchema          `json:"allOf,omitempty"`
+}
+
+// OpenAPIOptions controls top-level OpenAPI document metadata.
+type OpenAPIOptions struct {
+	Title        string
+	Version      string
+	Description  string
+	Servers      []OpenAPIServer
+	Tags         []OpenAPITag
+	Contact      *OpenAPIContact
+	License      *OpenAPILicense
+	ExternalDocs *OpenAPIExternalDocs
+}
+
+// OpenAPIServer describes a server entry in the OpenAPI document.
+type OpenAPIServer struct {
+	URL         string
+	Description string
+}
+
+// OpenAPITag describes a top-level OpenAPI tag.
+type OpenAPITag struct {
+	Name        string
+	Description string
+}
+
+// OpenAPIContact provides contact info for the API.
+type OpenAPIContact struct {
+	Name  string
+	URL   string
+	Email string
+}
+
+// OpenAPILicense provides license info for the API.
+type OpenAPILicense struct {
+	Name string
+	URL  string
+}
+
+// OpenAPIExternalDocs provides a link to external documentation.
+type OpenAPIExternalDocs struct {
+	Description string
+	URL         string
+}
+
+var openAPIDefaults OpenAPIOptions
+
+func openAPITags(tags []OpenAPITag) []openAPITag {
+	if len(tags) == 0 {
+		return nil
+	}
+	out := make([]openAPITag, 0, len(tags))
+	for _, tag := range tags {
+		if tag.Name == "" {
+			continue
+		}
+		out = append(out, openAPITag{Name: tag.Name, Description: tag.Description})
+	}
+	return out
+}
+
+func openAPIServers(servers []OpenAPIServer) []openAPIServer {
+	if len(servers) == 0 {
+		return nil
+	}
+	out := make([]openAPIServer, 0, len(servers))
+	for _, server := range servers {
+		if server.URL == "" {
+			continue
+		}
+		out = append(out, openAPIServer{URL: server.URL, Description: server.Description})
+	}
+	return out
+}
+
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 type schemaGen struct {

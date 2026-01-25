@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.12
+
+- Add configurable OpenAPI metadata via `SetOpenAPIOptions`.
+
 ## 0.0.11
 
 - Add `TypedHandlerFunc` for handler-function ergonomics.
