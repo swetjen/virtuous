@@ -27,6 +27,14 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 	}
 }
 
+// WrapFunc creates a TypedHandler from a handler function and metadata.
+func WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta HandlerMeta) TypedHandler {
+	if handler == nil {
+		return Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), req, resp, meta)
+	}
+	return Wrap(http.HandlerFunc(handler), req, resp, meta)
+}
+
 func (t *typedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	t.handler.ServeHTTP(w, r)
 }
