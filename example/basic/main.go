@@ -16,6 +16,14 @@ func main() {
 
 func RunServer() error {
 	router := virtuous.NewRouter()
+	router.SetOpenAPIOptions(virtuous.OpenAPIOptions{
+		Title:       "Virtuous Basic API",
+		Version:     "0.0.1",
+		Description: "Basic example with list/get/create state routes.",
+		Servers: []virtuous.OpenAPIServer{
+			{URL: "http://localhost:8000"},
+		},
+	})
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/",
