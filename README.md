@@ -90,10 +90,7 @@ func RunServer() error {
 		}),
 	)
 
-	// serve client generated files over network
-	router.Handle("GET /client.gen.js", http.HandlerFunc(router.ServeClientJS))
-	router.Handle("GET /client.gen.py", http.HandlerFunc(router.ServeClientPY))
-	router.HandleDocs(nil)
+	router.ServeAllDocs()
 
 	server := &http.Server{
 		Addr:    ":8000",

@@ -47,10 +47,7 @@ func RunServer() error {
 		}),
 	)
 
-	router.ServeDocs()
-	router.HandleFunc("GET /client.gen.js", router.ServeClientJS)
-	router.HandleFunc("GET /client.gen.py", router.ServeClientPY)
-	router.HandleFunc("GET /client.gen.ts", router.ServeClientTS)
+	router.ServeAllDocs()
 
 	server := &http.Server{
 		Addr:    ":8000",

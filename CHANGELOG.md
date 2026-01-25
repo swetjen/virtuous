@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.9
+
+- Add `ServeAllDocs` to wire docs and client routes in one call.
+
 ## 0.0.8
 
 - Add `HandleDocs` for default docs and OpenAPI routes with overrides.

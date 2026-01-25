@@ -47,6 +47,7 @@
 - Schemas include numeric formats and field descriptions from `doc` tags.
 - `WriteOpenAPIFile` persists OpenAPI output, and docs HTML helpers live in `virtuous/docs.go`.
 - `HandleDocs` registers `/docs` and `/openapi.json` routes with optional overrides.
+- `ServeAllDocs` wires docs/OpenAPI and client routes in one call.
 
 ## Example App
 - Demonstrates typed routes, guard usage, OpenAPI JSON emission, and JS client generation.
