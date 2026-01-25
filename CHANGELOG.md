@@ -1,9 +1,15 @@
 # Changelog
 
+## 0.0.8
+
+- Add `HandleDocs` for default docs and OpenAPI routes with overrides.
+- Move basic example routing to the router itself.
+
 ## 0.0.7
 
 - Move OpenAPI file writing and docs HTML helpers into the runtime package.
 - Update documentation for language-specific client usage and loader examples.
+- Add basic example documentation under `example/basic/`.
 
 ## 0.0.6
 

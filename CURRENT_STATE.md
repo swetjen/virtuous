@@ -46,6 +46,7 @@
 - Responses use sentinel types to emit 200/204/500 with or without bodies.
 - Schemas include numeric formats and field descriptions from `doc` tags.
 - `WriteOpenAPIFile` persists OpenAPI output, and docs HTML helpers live in `virtuous/docs.go`.
+- `HandleDocs` registers `/docs` and `/openapi.json` routes with optional overrides.
 
 ## Example App
 - Demonstrates typed routes, guard usage, OpenAPI JSON emission, and JS client generation.
@@ -53,3 +54,7 @@
 
 ## Python Loader
 - `python_loader/` provides a stdlib-only loader that fetches a Virtuous Python client and loads it as a module.
+
+## Examples
+- `example/basic/` shows list/get/create state routes and client generation.
+- `example/` is the larger reference app with guarded admin routes.

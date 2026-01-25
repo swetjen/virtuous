@@ -89,25 +89,15 @@ func RunServer() error {
 			Tags:    []string{"states"},
 		}),
 	)
-    
-	mux := http.NewServeMux()
-	mux.Handle("/", router)
 
-    // serve OpenApi docs
-    mux.HandleFunc("GET /docs/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "docs.html")
-	})
-	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "openapi.json")
-	})
-
-    // serve client generated files over network
-	mux.HandleFunc("GET /client.gen.js", router.ServeClientJS)
-	mux.HandleFunc("GET /client.gen.py", router.ServeClientPY)
+	// serve client generated files over network
+	router.Handle("GET /client.gen.js", http.HandlerFunc(router.ServeClientJS))
+	router.Handle("GET /client.gen.py", http.HandlerFunc(router.ServeClientPY))
+	router.HandleDocs(nil)
 
 	server := &http.Server{
 		Addr:    ":8000",
-		Handler: mux,
+		Handler: router,
 	}
 	fmt.Println("Listening on :8000")
 	return server.ListenAndServe()
@@ -295,11 +285,15 @@ router.HandleTyped(
 )
 ```
 
-## Larger example app
-See `example/` for a working example with:
-- `/openapi.json`
-- `/client.gen.js`
-- `/docs/`
+## Examples
+
+Basic example (`example/basic/`):
+- List/get/create state routes.
+- Generates OpenAPI + JS/TS/PY clients.
+
+Larger example app (`example/`):
+- Adds guarded routes and admin workflows.
+- Generates OpenAPI + JS/TS/PY clients.
 
 ## Spec
 See `SPEC.md` for the detailed runtime specification.
