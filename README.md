@@ -1,15 +1,30 @@
 # Virtuous
 
-Virtuous is an agent-first API framework with self-generating docs. It's a thin wrapper around Go's http package that provides a typed router that generates client code at from your handlers.
+Virtuous is an **agent-first API framework for Go** with **self-generating documentation and clients**.
+
+It’s a thin, zero-dependency wrapper around Go’s `net/http` that provides a **typed router**. Your handlers define everything at runtime—routes, schemas, auth, docs, and client SDKs—without a CLI, config files, or build step.
+
+If an API can be called, it can be documented and consumed—by both humans *and* agents.
 
 ## Why Virtuous
 
-- Runtime-first API framework: no CLI, no build step; routes define everything at runtime.
-- Typed handlers: request/response types implement OpenAPI + clients automatically.
-- Native SDK codegen support for Python, JavaScript, and TypeScript, with an emphasis on correctness and simplicity.
-- Guards as auth middleware with self-describing metadata for docs/clients.
-- Zero dependencies and Go 1.22+ standard library focus.
-- RPC-style, simple APIs that help agents generate working code without without complex OpenAPI schemas.
+- **Runtime-first API framework**  
+  No CLI, no codegen step, no YAML. Routes and types define everything at runtime.
+
+- **Typed handlers are the source of truth**  
+  Request/response types automatically produce OpenAPI schemas and client SDKs—no drift, no duplication.
+
+- **Native SDKs for agents and humans**  
+  First-class client generation for **Python**, **JavaScript**, and **TypeScript**, with an emphasis on correctness, minimal surface area, and predictable behavior.
+
+- **Guards, not glue code**  
+  Auth and authorization are expressed as composable guards with self-describing metadata that flows naturally into docs and clients.
+
+- **Zero dependencies, standard library core**  
+  Built on Go 1.22+ with a strict standard-library focus.
+
+- **APIs agents don’t break**  
+  Virtuous favors simple, explicit, RPC-style APIs over complicated REST patterns and over-engineered OpenAPI schemas—so agents can generate *working code on the first try*.
 
 ## Requirements
 
@@ -162,12 +177,18 @@ go run .
 
 Open `http://localhost:8000/docs/` to view the Swagger UI.
 
-## Router wiring (no mux)
+## Router wiring 
 
-Virtuous is router-first. Use the Virtuous router directly as the server handler and let it serve docs/clients:
+Virtuous is router-first.
 
+Use the Virtuous router directly as your server handler and let it serve APIs, docs, and clients from a single runtime:
 ```text
-http.Server -> Virtuous Router -> /api routes | /docs | /openapi.json | /client.gen.*
+http.Server
+  -> Virtuous Router
+     -> /api routes
+     -> /docs
+     -> /openapi.json
+     -> /client.gen.*
 ```
 
 ## Handler metadata
@@ -179,6 +200,8 @@ http.Server -> Virtuous Router -> /api routes | /docs | /openapi.json | /client.
 - `Tags` are emitted as OpenAPI tags.
 
 ## Runtime outputs
+
+Virtuous can emit OpenAPI schemas and client SDKs directly at runtime:
 
 ```go
 openapiJSON, err := router.OpenAPI()
@@ -197,17 +220,24 @@ ts, _ := os.Create("client.gen.ts")
 _ = router.WriteClientTS(ts)
 ```
 
-- `/openapi.json` can be served for Swagger UI or similar tools.
-- `router.WriteClientTS` writes a TS client at startup.
-- `router.WriteClientPY` writes a Python client at startup.
-- Pointer fields are emitted as `nullable` in OpenAPI.
-- Swagger UI auto-prepends `GuardSpec.Prefix` for header schemes using `x-virtuousauth-prefix`.
-- Client outputs include a `Virtuous client hash` header comment.
-- Hash endpoints can be served via `router.ServeClientJSHash`, `router.ServeClientTSHash`, and `router.ServeClientPYHash`.
+Notes:
+- `/openapi.json` can be served directly for Swagger UI or similar tools.
+- Client SDKs can be written at startup or served dynamically.
+- Pointer fields are emitted as nullable in OpenAPI.
+- Swagger UI auto-prepends GuardSpec.Prefix for header-based auth schemes.
+- Client outputs include a Virtuous client hash for versioning and drift detection.
+- Hash endpoints can be served via:
+  - `router.ServeClientJSHash`
+  - `router.ServeClientTSHash`
+  - `router.ServeClientPYHash`
 
 ## Guards (auth middleware)
 
-Implement `Guard` to attach auth metadata and middleware:
+Guards combine middleware with explicit auth metadata:
+
+Guards serve two purposes:
+- Enforce authentication at runtime
+- Describe auth requirements to docs and generated clients
 
 ```go
 type bearerGuard struct{}
@@ -245,71 +275,20 @@ router.HandleTyped(
 )
 ```
 
-Guarded route example (drop into the quick-start server above; add `strings` to imports):
+### Guard Examples
 
-```go
-const demoBearerToken = "demo-token"
+Basic example (`example/basic/`)
+- List/get/create state routes
+- Generates OpenAPI + JS/TS/PY clients
 
-type bearerGuard struct{}
+Template example (`example/template/`)
+- Admin routes with guard middleware
+- CORS applied at the router boundary
+- Static landing page with docs links
 
-func (bearerGuard) Spec() virtuous.GuardSpec {
-	return virtuous.GuardSpec{
-		Name:   "BearerAuth",
-		In:     "header",
-		Param:  "Authorization",
-		Prefix: "Bearer",
-	}
-}
-
-func (bearerGuard) Middleware() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
-			if header == "" {
-				http.Error(w, "missing auth token", http.StatusUnauthorized)
-				return
-			}
-			const prefix = "Bearer "
-			if !strings.HasPrefix(header, prefix) {
-				http.Error(w, "invalid auth token", http.StatusUnauthorized)
-				return
-			}
-			token := strings.TrimPrefix(header, prefix)
-			if token != demoBearerToken {
-				http.Error(w, "invalid auth token", http.StatusUnauthorized)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-router.HandleTyped(
-	"GET /api/v1/secure/states/{code}",
-	virtuous.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, virtuous.HandlerMeta{
-		Service: "States",
-		Method:  "GetByCodeSecure",
-		Summary: "Get state by code (bearer token required)",
-		Tags:    []string{"states"},
-	}),
-	bearerGuard{},
-)
-```
-
-## Examples
-
-Basic example (`example/basic/`):
-- List/get/create state routes.
-- Generates OpenAPI + JS/TS/PY clients.
-
-Template example (`example/template/`):
-- Admin user routes with guard middleware.
-- CORS applied at the router boundary.
-- Static landing page with docs links.
-
-Larger example app (`example/`):
-- Adds guarded routes and admin workflows.
-- Generates OpenAPI + JS/TS/PY clients.
+Larger example app with React embedded (`example/`)
+- Guarded routes and admin workflows
+- OpenAPI + JS/TS/PY client generation
 
 ## Troubleshooting
 
@@ -325,7 +304,7 @@ See `docs/agent_quickstart.md` for a focused guide for agents building services.
 
 ## Using Virtuous in Python
 
-See `python_loader/` for a zero-dependency loader that fetches a Virtuous Python client from a URL and returns a module ready for `create_client`.
+Virtuous includes a zero-dependency Python loader that fetches a client from a URL and returns a ready-to-use module.
 
 Install the loader:
 
