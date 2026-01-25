@@ -4,7 +4,7 @@
 
 - Provide an agent-first RPC/API SDK that speeds up service development by agents or in collaboration with agents.
 - Simplify support functionality and the spec to cover the most common use cases.
-- Keep generation in the runtime so services can emit client SDKs and OpenAPI from live routes.
+- Keep generation in process so services can emit client SDKs and OpenAPI from live routes.
 - Build a reusable type registry so multiple language emitters can share the same model.
 - Enable predictable type mapping via overrides that align with JSON serialization.
 

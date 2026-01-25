@@ -2,7 +2,7 @@
 
 Virtuous is an **agent-first API framework for Go** with **self-generating documentation and clients**.
 
-It provides a **typed router** as a thin, zero-dependency wrapper around Go’s `net/http` package.  Your handlers define everything--routes, schemas, auth, docs, and client SDKs.
+It provides a **typed router** as a thin, zero-dependency wrapper around Go’s `net/http` package. Your handlers define everything--routes, schemas, auth, docs, and client SDKs.
 
 ## Why Virtuous
 
@@ -164,7 +164,7 @@ go get github.com/swetjen/virtuous@latest
 
 Virtuous is router-first.
 
-Use the Virtuous router directly as your server handler and let it serve APIs, docs, and clients from a single runtime:
+Use the Virtuous router directly as your server handler and let it serve APIs, docs, and clients from a single server:
 ```text
 http.Server
   -> Virtuous Router
@@ -182,9 +182,9 @@ http.Server
 - `Summary` and `Description` show up in OpenAPI and JS JSDoc.
 - `Tags` are emitted as OpenAPI tags.
 
-## Runtime outputs
+## Output generation
 
-Virtuous can emit OpenAPI schemas and client SDKs directly at runtime:
+Virtuous can emit OpenAPI schemas and client SDKs directly to disk:
 
 ```go
 openapiJSON, err := router.OpenAPI()
@@ -219,7 +219,7 @@ Notes:
 Guards combine middleware with explicit auth metadata:
 
 Guards serve two purposes:
-- Enforce authentication at runtime
+- Enforce authentication in handlers
 - Describe auth requirements to docs and generated clients
 
 ```go
@@ -280,7 +280,7 @@ Larger example app with React embedded (`example/`)
 - Auth header missing prefix in Swagger UI: set `GuardSpec.Prefix`.
 
 ## Spec
-See `SPEC.md` for the detailed runtime specification.
+See `SPEC.md` for the detailed specification.
 
 ## Agent quickstart
 See `docs/agent_quickstart.md` for a focused guide for agents building services.

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "virtuous"
 version = "0.0.13"
-description = "Runtime loader for Virtuous Python clients"
+description = "Loader for Virtuous Python clients"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}

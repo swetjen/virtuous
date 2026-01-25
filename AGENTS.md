@@ -3,8 +3,8 @@
 These instructions describe how to understand and work with this repository.
 
 ## Project Summary
-- Virtuous is a runtime JSON API framework with typed handlers that emit OpenAPI and JS/TS clients.
-- Route registration is runtime-only; there is no CLI.
+- Virtuous is an in-process JSON API framework with typed handlers that emit OpenAPI and JS/TS clients.
+- Route registration is dynamic; there is no CLI.
 
 ## Key Files
 - `virtuous/router.go`: route registration, guards, metadata inference.

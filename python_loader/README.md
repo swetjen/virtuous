@@ -1,6 +1,6 @@
 # Using Virtuous in Python
 
-Zero-dependency loader for Virtuous runtime-generated Python clients.
+Zero-dependency loader for Virtuous generated Python clients.
 
 ## Install
 

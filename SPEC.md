@@ -1,7 +1,7 @@
-# Virtuous Runtime Spec (Draft v0.0.1)
+# Virtuous Spec (Draft v0.0.1)
 
 ## Core goals
-- No CLI. All metadata is discovered at runtime via reflection.
+- No CLI. All metadata is discovered via reflection at startup.
 - Standard middleware: `func(http.Handler) http.Handler`.
 - Guards are self-describing so OpenAPI and client codegen stay in sync.
 - Response type is explicit; no-body responses use built-in sentinel types.
@@ -79,7 +79,7 @@ func (r *Router) Routes() []Route
 func (r *Router) OpenAPI() ([]byte, error)
 func (r *Router) SetOpenAPIOptions(opts OpenAPIOptions)
 
-// Runtime client output:
+// Client output:
 func (r *Router) WriteClientJS(w io.Writer) error
 func (r *Router) WriteClientTS(w io.Writer) error
 func (r *Router) WriteClientPY(w io.Writer) error
@@ -138,12 +138,12 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 - Schemas derived from reflected types.
 - Endpoints produced from route `pattern` plus `HandlerMeta`.
 - `HandlerMeta` is optional; the router infers `Service`/`Method` when possible.
-- `WriteOpenAPIFile` writes the OpenAPI JSON to disk; docs HTML helpers are available in the runtime.
+- `WriteOpenAPIFile` writes the OpenAPI JSON to disk; docs HTML helpers are available in process.
 - `ServeDocs` can register default docs and OpenAPI routes with optional overrides.
 - `ServeAllDocs` registers docs/OpenAPI plus JS/TS/PY client routes.
 - `query` tags emit `in: query` parameters; nested structs/maps are not supported.
 
-## Runtime client output
+## Client output
 - At startup:
   - `router.WriteClientJS(os.Create("client.gen.js"))`
 - `router.WriteClientTS(...)`

@@ -1,7 +1,7 @@
 # Current State
 
 ## Overview
-- Virtuous is a runtime JSON API framework with typed handlers, OpenAPI emission, and JS/TS/PY client generation.
+- Virtuous is an in-process JSON API framework with typed handlers, OpenAPI emission, and JS/TS/PY client generation.
 - Routes are registered on a router that captures metadata and produces docs/clients without a CLI.
 - Reflection drives a type registry shared by OpenAPI and client emitters.
 
@@ -40,7 +40,7 @@
 - JSDoc typedefs are emitted from the type registry with optional/nullable markers.
 
 ## TS Client Generation
-- Similar runtime client with typed `pathParams` and `AuthOptions`.
+- Similar client with typed `pathParams` and `AuthOptions`.
 - Request and response bodies are currently typed as `any`.
 - Client outputs include a `Virtuous client hash` header comment, with helpers to serve hashes.
 

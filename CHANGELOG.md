@@ -34,7 +34,7 @@
 
 ## 0.0.7
 
-- Move OpenAPI file writing and docs HTML helpers into the runtime package.
+- Move OpenAPI file writing and docs HTML helpers into the core package.
 - Update documentation for language-specific client usage and loader examples.
 - Add basic example documentation under `example/basic/`.
 
@@ -66,7 +66,7 @@
 
 ## 0.0.1
 
-- Add runtime type registry powering richer JS JSDoc output.
+- Add type registry powering richer JS JSDoc output.
 - Support type overrides for JS and OpenAPI formats.
 - Emit OpenAPI field descriptions from `doc` tags and add numeric formats.
 - Add router helpers to write/serve generated JS clients.

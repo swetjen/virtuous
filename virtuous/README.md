@@ -1,6 +1,6 @@
 # Virtuous
 
-Virtuous is an agent-first, batteries-included JSON API framework. It provides a typed router that generates OpenAPI and client code at runtime from your handlers.
+Virtuous is an agent-first, batteries-included JSON API framework. It provides a typed router that generates OpenAPI and client code from your handlers.
 
 ## Requirements
 - Go 1.22+ (for method-prefixed route patterns like `GET /path`)
@@ -26,7 +26,7 @@ Use the root README for the full cut-and-paste example with docs and client gene
 - `Summary` and `Description` show up in OpenAPI and JS JSDoc.
 - `Tags` are emitted as OpenAPI tags.
 
-## Runtime outputs
+## Output generation
 
 ```go
 openapiJSON, err := router.OpenAPI()

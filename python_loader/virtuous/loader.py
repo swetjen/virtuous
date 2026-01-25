@@ -1,4 +1,4 @@
-"""Runtime loader for Virtuous Python clients."""
+"""Loader for Virtuous Python clients."""
 
 from importlib import machinery, util
 import sys
