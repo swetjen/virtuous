@@ -15,14 +15,22 @@ func main() {
 }
 
 func RunServer() error {
+	router := buildRouter()
+
+	server := &http.Server{
+		Addr:    ":8000",
+		Handler: router,
+	}
+	fmt.Println("Listening on :8000")
+	return server.ListenAndServe()
+}
+
+func buildRouter() *virtuous.Router {
 	router := virtuous.NewRouter()
 	router.SetOpenAPIOptions(virtuous.OpenAPIOptions{
 		Title:       "Virtuous Basic API",
 		Version:     "0.0.1",
 		Description: "Basic example with list/get/create state routes.",
-		Servers: []virtuous.OpenAPIServer{
-			{URL: "http://localhost:8000"},
-		},
 	})
 
 	router.HandleTyped(
@@ -68,10 +76,5 @@ func RunServer() error {
 
 	router.ServeAllDocs()
 
-	server := &http.Server{
-		Addr:    ":8000",
-		Handler: router,
-	}
-	fmt.Println("Listening on :8000")
-	return server.ListenAndServe()
+	return router
 }

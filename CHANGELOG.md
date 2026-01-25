@@ -1,8 +1,14 @@
 # Changelog
 
+## 0.0.13
+
+- Add schema name prefixing for top-level request/response types.
+- Add basic/template example output tests and CORS/handler test coverage.
+
 ## 0.0.12
 
 - Add configurable OpenAPI metadata via `SetOpenAPIOptions`.
+- Prefix top-level request/response schema names with `HandlerMeta.Service`.
 
 ## 0.0.11
 

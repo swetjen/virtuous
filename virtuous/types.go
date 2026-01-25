@@ -19,6 +19,7 @@ type typeRegistry struct {
 	objects    map[reflect.Type]*objectDef
 	nameByType map[reflect.Type]string
 	typeByName map[string]reflect.Type
+	preferred  map[reflect.Type]string
 }
 
 type objectDef struct {
@@ -40,6 +41,7 @@ func newTypeRegistry(overrides map[string]TypeOverride) *typeRegistry {
 		objects:    map[reflect.Type]*objectDef{},
 		nameByType: map[reflect.Type]string{},
 		typeByName: map[string]reflect.Type{},
+		preferred:  map[reflect.Type]string{},
 	}
 }
 
@@ -113,16 +115,31 @@ func (r *typeRegistry) objectName(t reflect.Type) string {
 	if name, ok := r.nameByType[t]; ok {
 		return name
 	}
+	if preferred, ok := r.preferred[t]; ok {
+		if other, ok := r.typeByName[preferred]; ok && other != t {
+			panic("virtuous: schema name collision for " + preferred)
+		}
+		r.nameByType[t] = preferred
+		r.typeByName[preferred] = t
+		return preferred
+	}
 	name := t.Name()
 	if name == "" {
 		name = schemaName(t)
 	}
 	if other, ok := r.typeByName[name]; ok && other != t {
-		name = schemaName(t)
+		panic("virtuous: schema name collision for " + name)
 	}
 	r.nameByType[t] = name
 	r.typeByName[name] = t
 	return name
+}
+
+func (r *typeRegistry) preferName(t reflect.Type, name string) {
+	if t == nil || name == "" {
+		return
+	}
+	r.preferred[t] = name
 }
 
 func (r *typeRegistry) objectsList(typeFn func(reflect.Type) string) []clientObject {
@@ -271,6 +288,17 @@ func derefType(t reflect.Type) reflect.Type {
 		t = t.Elem()
 	}
 	return t
+}
+
+func preferredSchemaName(meta HandlerMeta, t reflect.Type) string {
+	if meta.Service == "" || meta.Service == "API" {
+		return ""
+	}
+	base := derefType(t)
+	if base == nil || base.Name() == "" {
+		return ""
+	}
+	return meta.Service + base.Name()
 }
 
 func isOptionalType(t reflect.Type) bool {

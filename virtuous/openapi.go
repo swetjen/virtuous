@@ -44,7 +44,11 @@ func (r *Router) OpenAPI() ([]byte, error) {
 
 		reqType := route.Handler.RequestType()
 		if reqType != nil {
-			schema := gen.schemaFor(reflect.TypeOf(reqType))
+			reqReflect := reflect.TypeOf(reqType)
+			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
+				gen.preferName(derefType(reqReflect), preferred)
+			}
+			schema := gen.schemaFor(reqReflect)
 			if schema != nil {
 				op.RequestBody = &openAPIRequestBody{
 					Required: true,
@@ -59,7 +63,11 @@ func (r *Router) OpenAPI() ([]byte, error) {
 		if respType == nil {
 			return nil, errors.New("response type is required for " + route.Pattern)
 		}
-		status, schema := responseSchema(gen, reflect.TypeOf(respType))
+		respReflect := reflect.TypeOf(respType)
+		if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" {
+			gen.preferName(derefType(respReflect), preferred)
+		}
+		status, schema := responseSchema(gen, respReflect)
 		op.Responses[status] = openAPIResponse{
 			Description: http.StatusText(parseStatus(status)),
 			Content: map[string]openAPIMedia{
@@ -159,19 +167,19 @@ func isNoResponse(t, target reflect.Type) bool {
 }
 
 type openAPIDoc struct {
-	OpenAPI    string                                  `json:"openapi"`
-	Info       openAPIInfo                             `json:"info"`
-	Paths      map[string]map[string]*openAPIOperation `json:"paths"`
-	Components openAPIComponents                       `json:"components,omitempty"`
-	Tags         []openAPITag        `json:"tags,omitempty"`
-	Servers      []openAPIServer     `json:"servers,omitempty"`
-	ExternalDocs *OpenAPIExternalDocs `json:"externalDocs,omitempty"`
+	OpenAPI      string                                  `json:"openapi"`
+	Info         openAPIInfo                             `json:"info"`
+	Paths        map[string]map[string]*openAPIOperation `json:"paths"`
+	Components   openAPIComponents                       `json:"components,omitempty"`
+	Tags         []openAPITag                            `json:"tags,omitempty"`
+	Servers      []openAPIServer                         `json:"servers,omitempty"`
+	ExternalDocs *OpenAPIExternalDocs                    `json:"externalDocs,omitempty"`
 }
 
 type openAPIInfo struct {
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Version     string `json:"version"`
+	Title       string          `json:"title"`
+	Description string          `json:"description,omitempty"`
+	Version     string          `json:"version"`
 	Contact     *OpenAPIContact `json:"contact,omitempty"`
 	License     *OpenAPILicense `json:"license,omitempty"`
 }
@@ -326,6 +334,8 @@ type schemaGen struct {
 	overrides  map[string]TypeOverride
 	components map[string]openAPISchema
 	seen       map[reflect.Type]string
+	seenNames  map[string]reflect.Type
+	preferred  map[reflect.Type]string
 }
 
 func newSchemaGen(overrides map[string]TypeOverride) *schemaGen {
@@ -333,6 +343,8 @@ func newSchemaGen(overrides map[string]TypeOverride) *schemaGen {
 		overrides:  mergeTypeOverrides(overrides),
 		components: map[string]openAPISchema{},
 		seen:       map[reflect.Type]string{},
+		seenNames:  map[string]reflect.Type{},
+		preferred:  map[reflect.Type]string{},
 	}
 }
 
@@ -371,7 +383,7 @@ func (g *schemaGen) schemaFor(t reflect.Type) *openAPISchema {
 		return schema
 	}
 	if t.Kind() == reflect.Struct && t.Name() != "" {
-		name := schemaName(t)
+		name := g.schemaNameFor(t)
 		g.seen[t] = name
 		g.components[name] = openAPISchema{}
 		schema := g.structSchema(t)
@@ -516,4 +528,34 @@ func schemaName(t reflect.Type) string {
 	name := strings.ReplaceAll(t.PkgPath(), "/", "_") + "_" + t.Name()
 	name = strings.ReplaceAll(name, ".", "_")
 	return name
+}
+
+func schemaNameOrPanic(seen map[string]reflect.Type, t reflect.Type) string {
+	name := t.Name()
+	if name == "" {
+		name = schemaName(t)
+	}
+	if other, ok := seen[name]; ok && other != t {
+		panic("virtuous: schema name collision for " + name)
+	}
+	seen[name] = t
+	return name
+}
+
+func (g *schemaGen) preferName(t reflect.Type, name string) {
+	if t == nil || name == "" {
+		return
+	}
+	g.preferred[t] = name
+}
+
+func (g *schemaGen) schemaNameFor(t reflect.Type) string {
+	if preferred, ok := g.preferred[t]; ok {
+		if other, ok := g.seenNames[preferred]; ok && other != t {
+			panic("virtuous: schema name collision for " + preferred)
+		}
+		g.seenNames[preferred] = t
+		return preferred
+	}
+	return schemaNameOrPanic(g.seenNames, t)
 }

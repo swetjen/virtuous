@@ -27,8 +27,7 @@ handling). The same registry is intended to support additional language emitters
   and emits request/response type names for client emitters.
 - `virtuous/client_js_gen.go`: Emits typedef blocks and method docs with
   accurate JSDoc types, optional fields, and nullable pointers for JavaScript.
-- `virtuous/openapi.go`: Enriches schema formats and surfaces `doc:"..."`
-  tags as property descriptions (using `allOf` when a `$ref` is present).
+- `virtuous/openapi.go`: OpenAPI generation with configurable metadata.
 - `virtuous/router.go`: Adds `SetTypeOverrides` so callers can control
   type mappings without changing generator code.
 - `virtuous/docs.go`: Convenience helpers for serving docs and OpenAPI
@@ -36,34 +35,14 @@ handling). The same registry is intended to support additional language emitters
 - `virtuous/serve_all.go`: Bundles docs/OpenAPI and client route registration
   into a single call for quick-start servers.
 - `virtuous/encode.go`: Shared JSON encode/decode helpers for handlers.
-
-## Developer ergonomics updates
-
-- `Router.HandleFunc` provides a shortcut for handler functions without
-  wrapping `http.HandlerFunc`.
-- `Router.ServeDocs` registers docs and OpenAPI routes in one call, using
-  option-style overrides (`WithDocsPath`, `WithOpenAPIPath`, etc).
-- `Router.ServeAllDocs` wires docs/OpenAPI and client endpoints with defaults,
-  keeping quick-start wiring to a single line.
-- The docs handler renders Swagger UI and OpenAPI JSON directly from
-  the runtime output, keeping setup in a single place.
-- JSON helpers (`Encode`, `Decode`) live in the package so example apps
-  stay focused on route logic.
-
-## Future patterns to consider
-
-- Return an error from `ServeDocs` instead of `log.Fatal` so callers can
-  decide how to handle OpenAPI generation failures.
-- Add lightweight helpers for serving generated JS/TS/PY clients with
-  optional caching headers.
-- Provide a small `Router.ServeAllDocs` helper that wires docs, OpenAPI, and
-  client outputs together for quick starts.
+- `virtuous/cors.go`: Configurable CORS middleware.
 
 ## Usage notes
 
 - Add field docs via struct tags, e.g. `doc:"User ID"`.
 - Optionality uses `omitempty`; pointer fields are treated as nullable.
 - Type overrides can be set per router using `SetTypeOverrides`.
+- Top-level request/response schemas are prefixed with `HandlerMeta.Service`.
 
 ## Example override
 
@@ -76,16 +55,10 @@ router.SetTypeOverrides(map[string]virtuous.TypeOverride{
 
 ## Developer ergonomics
 
-- `Router.HandleFunc` provides a shortcut for handler functions.
-- `Router.ServeDocs` registers docs and OpenAPI routes in one call with
-  option-style overrides.
-- `Router.ServeAllDocs` wires docs/OpenAPI plus JS/TS/PY client routes.
-- JSON helpers (`Encode`, `Decode`) live in the package so example apps
-  focus on route logic.
-- `TypedHandlerFunc` wraps handler functions with request/response metadata.
-- `WrapFunc` avoids boilerplate for `http.HandlerFunc` wrapping.
-- `Cors` provides a configurable middleware for cross-origin requests.
-- `SetOpenAPIOptions` customizes top-level OpenAPI metadata fields.
+- `HandleFunc`, `WrapFunc`, and `TypedHandlerFunc` reduce handler boilerplate.
+- `ServeDocs` and `ServeAllDocs` keep setup router-first (no outer mux).
+- `SetOpenAPIOptions` controls top-level OpenAPI metadata.
+- `Cors` is intended to wrap the router at the edge.
 
 ## Notes from core router patterns
 
@@ -102,7 +75,7 @@ router.SetTypeOverrides(map[string]virtuous.TypeOverride{
   - `api/handlers/` for domain handlers
   - `api/config/` for env/config loading
   - `api/db/` for DB interfaces + stub implementation
-  - `api/app/` for dependency container
+  - `api/deps/` for dependency container
   - `frontend-web/` for static app assets
 - Keep the example realistic but compact: grouped routes, auth guards,
   CORS middleware, docs/OpenAPI, and static UI hosting.

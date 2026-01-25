@@ -1,7 +1,7 @@
 # Current State
 
 ## Overview
-- Virtuous is a runtime JSON API framework with typed handlers, OpenAPI emission, and JS/TS client generation.
+- Virtuous is a runtime JSON API framework with typed handlers, OpenAPI emission, and JS/TS/PY client generation.
 - Routes are registered on a router that captures metadata and produces docs/clients without a CLI.
 - Reflection drives a type registry shared by OpenAPI and client emitters.
 
@@ -9,12 +9,15 @@
 - `NewRouter` wraps an `http.ServeMux` and stores route metadata for docs/clients.
 - `Handle` registers any handler; typed routes are only captured if the handler implements `TypedHandler`.
 - `HandleTyped` registers a typed handler directly.
+- `HandleFunc` registers a handler function directly.
 - Patterns must be method-prefixed (e.g. `GET /path`). Invalid patterns still register on the mux but are excluded from docs/clients and emit a warning.
 - Guards wrap handlers in registration order and contribute auth metadata for docs/clients.
 - `HandlerMeta` is optional; missing `Service`/`Method` is inferred from `/virtuous/Service.Method` or falls back to defaults.
 
 ## Typed Handlers
 - `Wrap` adapts a standard `http.Handler` into `TypedHandler` by attaching request/response types and metadata.
+- `WrapFunc` adapts a handler function without manual `http.HandlerFunc` wrapping.
+- `TypedHandlerFunc` wraps handler functions with request/response metadata.
 - Typed handlers drive OpenAPI and client emission.
 
 ## Type Registry + Overrides
@@ -22,6 +25,7 @@
 - Named structs become shared object definitions; unnamed structs are inlined as `object`.
 - Default override: `time.Time` maps to `string`/`date-time`.
 - Router-level overrides can customize JS/OpenAPI types per Go type.
+- Top-level request/response schemas are prefixed with `HandlerMeta.Service` (nested types remain unprefixed).
 
 ## Client Spec Builder
 - `buildClientSpec` groups routes by `HandlerMeta.Service` and constructs method entries.
@@ -49,6 +53,7 @@
 - `ServeDocs` registers `/docs` and `/openapi.json` routes with optional overrides.
 - `ServeAllDocs` wires docs/OpenAPI and client routes in one call.
 - `SetOpenAPIOptions` customizes top-level OpenAPI metadata.
+- `Cors` provides configurable CORS middleware for router usage.
 
 ## Example App
 - Demonstrates typed routes, guard usage, OpenAPI JSON emission, and JS client generation.
@@ -60,4 +65,3 @@
 ## Examples
 - `example/basic/` shows list/get/create state routes and client generation.
 - `example/template/` demonstrates admin routes, CORS, and a static landing page.
-- `example/` is the larger reference app with guarded admin routes.

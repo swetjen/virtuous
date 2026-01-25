@@ -82,14 +82,21 @@ func buildClientSpecWith(
 		requestType := ""
 		responseType := ""
 		if reqType != nil {
-			registry.addType(reflect.TypeOf(reqType))
-			requestType = typeFn(reflect.TypeOf(reqType))
+			reqReflect := reflect.TypeOf(reqType)
+			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
+				registry.preferName(derefType(reqReflect), preferred)
+			}
+			registry.addType(reqReflect)
+			requestType = typeFn(reqReflect)
 		}
 		if respType != nil {
 			respReflect := reflect.TypeOf(respType)
 			if !isNoResponse(respReflect, reflect.TypeOf(NoResponse200{})) &&
 				!isNoResponse(respReflect, reflect.TypeOf(NoResponse204{})) &&
 				!isNoResponse(respReflect, reflect.TypeOf(NoResponse500{})) {
+				if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" {
+					registry.preferName(derefType(respReflect), preferred)
+				}
 				registry.addType(respReflect)
 				responseType = typeFn(respReflect)
 			}
