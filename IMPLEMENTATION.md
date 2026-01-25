@@ -73,3 +73,39 @@ router.SetTypeOverrides(map[string]virtuous.TypeOverride{
     "time.Duration": {JSType: "number", OpenAPIType: "number"},
 })
 ```
+
+## Developer ergonomics
+
+- `Router.HandleFunc` provides a shortcut for handler functions.
+- `Router.ServeDocs` registers docs and OpenAPI routes in one call with
+  option-style overrides.
+- `Router.ServeAllDocs` wires docs/OpenAPI plus JS/TS/PY client routes.
+- JSON helpers (`Encode`, `Decode`) live in the package so example apps
+  focus on route logic.
+
+## Notes from core router patterns
+
+- Group route blocks by domain (auth, orgs, reports) to keep large routers navigable.
+- Wrap middleware per route for explicit auth/scoping.
+- Serve docs and static assets from the same router when useful.
+- Apply CORS at the top-level handler to cover both API + static assets.
+- Centralize config (host/port, swagger host, schemes) early in boot.
+
+## Template example direction
+
+- `example/template/` layout proposal:
+  - `cmd/api/main.go` for server boot and wiring
+  - `internal/handlers/` for domain handlers
+  - `internal/config/` for env/config loading
+  - `internal/db/` for DB interfaces + stub implementation
+  - `internal/app/` for dependency container
+  - `web/` for static app assets
+- Keep the example realistic but compact: grouped routes, auth guards,
+  CORS middleware, docs/OpenAPI, and static UI hosting.
+
+## Future patterns to consider
+
+- Return an error from `ServeDocs` instead of `log.Fatal` so callers can
+  decide how to handle OpenAPI generation failures.
+- Add lightweight helpers for serving generated JS/TS/PY clients with
+  optional caching headers.
