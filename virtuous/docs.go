@@ -118,7 +118,7 @@ func DefaultDocsHTML(openAPIPath string) string {
 		}
 	</script>
 </body>
-</html>`, openAPIPath, openAPIPath)
+</html>`, openAPIPath)
 }
 
 // WriteDocsHTMLFile writes the default docs HTML to the path provided.

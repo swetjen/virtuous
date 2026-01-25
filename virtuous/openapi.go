@@ -163,9 +163,9 @@ type openAPIDoc struct {
 	Info       openAPIInfo                             `json:"info"`
 	Paths      map[string]map[string]*openAPIOperation `json:"paths"`
 	Components openAPIComponents                       `json:"components,omitempty"`
-	Tags         []openAPITag           `json:"tags,omitempty"`
-	Servers      []openAPIServer        `json:"servers,omitempty"`
-	ExternalDocs *openAPIExternalDocs   `json:"externalDocs,omitempty"`
+	Tags         []openAPITag        `json:"tags,omitempty"`
+	Servers      []openAPIServer     `json:"servers,omitempty"`
+	ExternalDocs *OpenAPIExternalDocs `json:"externalDocs,omitempty"`
 }
 
 type openAPIInfo struct {
@@ -189,11 +189,6 @@ type openAPITag struct {
 type openAPIServer struct {
 	URL         string `json:"url"`
 	Description string `json:"description,omitempty"`
-}
-
-type openAPIExternalDocs struct {
-	Description string `json:"description,omitempty"`
-	URL         string `json:"url"`
 }
 
 type openAPISecurityScheme struct {
@@ -286,8 +281,8 @@ type OpenAPILicense struct {
 
 // OpenAPIExternalDocs provides a link to external documentation.
 type OpenAPIExternalDocs struct {
-	Description string
-	URL         string
+	Description string `json:"description,omitempty"`
+	URL         string `json:"url"`
 }
 
 var openAPIDefaults OpenAPIOptions
