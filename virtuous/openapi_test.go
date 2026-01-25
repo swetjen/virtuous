@@ -38,8 +38,11 @@ func TestOpenAPINullablePointerFields(t *testing.T) {
 
 	components := getMap(t, doc, "components")
 	schemas := getMap(t, components, "schemas")
-	schemaName := schemaName(reflect.TypeOf(nullableResponse{}))
-	schema := getMap(t, schemas, schemaName)
+	name := reflect.TypeOf(nullableResponse{}).Name()
+	if name == "" {
+		name = schemaName(reflect.TypeOf(nullableResponse{}))
+	}
+	schema := getMap(t, schemas, name)
 	properties := getMap(t, schema, "properties")
 
 	noteProp := getMap(t, properties, "note")

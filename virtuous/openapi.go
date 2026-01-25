@@ -326,6 +326,7 @@ type schemaGen struct {
 	overrides  map[string]TypeOverride
 	components map[string]openAPISchema
 	seen       map[reflect.Type]string
+	seenNames  map[string]reflect.Type
 }
 
 func newSchemaGen(overrides map[string]TypeOverride) *schemaGen {
@@ -333,6 +334,7 @@ func newSchemaGen(overrides map[string]TypeOverride) *schemaGen {
 		overrides:  mergeTypeOverrides(overrides),
 		components: map[string]openAPISchema{},
 		seen:       map[reflect.Type]string{},
+		seenNames:  map[string]reflect.Type{},
 	}
 }
 
@@ -371,7 +373,7 @@ func (g *schemaGen) schemaFor(t reflect.Type) *openAPISchema {
 		return schema
 	}
 	if t.Kind() == reflect.Struct && t.Name() != "" {
-		name := schemaName(t)
+		name := schemaNameOrPanic(g.seenNames, t)
 		g.seen[t] = name
 		g.components[name] = openAPISchema{}
 		schema := g.structSchema(t)
@@ -515,5 +517,17 @@ func schemaName(t reflect.Type) string {
 	}
 	name := strings.ReplaceAll(t.PkgPath(), "/", "_") + "_" + t.Name()
 	name = strings.ReplaceAll(name, ".", "_")
+	return name
+}
+
+func schemaNameOrPanic(seen map[string]reflect.Type, t reflect.Type) string {
+	name := t.Name()
+	if name == "" {
+		name = schemaName(t)
+	}
+	if other, ok := seen[name]; ok && other != t {
+		panic("virtuous: schema name collision for " + name)
+	}
+	seen[name] = t
 	return name
 }

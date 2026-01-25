@@ -118,7 +118,7 @@ func (r *typeRegistry) objectName(t reflect.Type) string {
 		name = schemaName(t)
 	}
 	if other, ok := r.typeByName[name]; ok && other != t {
-		name = schemaName(t)
+		panic("virtuous: schema name collision for " + name)
 	}
 	r.nameByType[t] = name
 	r.typeByName[name] = t
