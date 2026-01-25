@@ -82,6 +82,7 @@ router.SetTypeOverrides(map[string]virtuous.TypeOverride{
 - `Router.ServeAllDocs` wires docs/OpenAPI plus JS/TS/PY client routes.
 - JSON helpers (`Encode`, `Decode`) live in the package so example apps
   focus on route logic.
+- `Cors` provides a configurable middleware for cross-origin requests.
 
 ## Notes from core router patterns
 
@@ -93,13 +94,13 @@ router.SetTypeOverrides(map[string]virtuous.TypeOverride{
 
 ## Template example direction
 
-- `example/template/` layout proposal:
-  - `cmd/api/main.go` for server boot and wiring
-  - `internal/handlers/` for domain handlers
-  - `internal/config/` for env/config loading
-  - `internal/db/` for DB interfaces + stub implementation
-  - `internal/app/` for dependency container
-  - `web/` for static app assets
+- `example/template/` layout aligns with the core-style split:
+  - `api/cmd/api/main.go` for server boot and wiring
+  - `api/handlers/` for domain handlers
+  - `api/config/` for env/config loading
+  - `api/db/` for DB interfaces + stub implementation
+  - `api/app/` for dependency container
+  - `frontend-web/` for static app assets
 - Keep the example realistic but compact: grouped routes, auth guards,
   CORS middleware, docs/OpenAPI, and static UI hosting.
 

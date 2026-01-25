@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Virtuous Template</title>
+  <style>
+    body {
+      font-family: "Georgia", serif;
+      margin: 48px;
+      color: #1b1b1b;
+      background: #f7f4ee;
+    }
+    h1 {
+      margin-bottom: 8px;
+      font-size: 36px;
+    }
+    p {
+      margin: 8px 0;
+      max-width: 640px;
+      line-height: 1.5;
+    }
+    a {
+      color: #1b1b1b;
+    }
+    .links {
+      margin-top: 16px;
+    }
+    pre {
+      background: #fff7e6;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid #e5d8b8;
+      overflow-x: auto;
+      max-width: 720px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Hello from Virtuous</h1>
+  <p>This template shows a grouped admin API with OpenAPI + client output built at runtime.</p>
+  <div class="links">
+    <p><a href="/docs/">Swagger UI</a> | <a href="/openapi.json">OpenAPI JSON</a></p>
+    <p><a href="https://github.com/swetjen/virtuous">Repository</a></p>
+  </div>
+  <pre><code>curl -H "Authorization: Bearer dev-admin-token" \
+  http://localhost:8000/api/v1/admin/users/</code></pre>
+</body>
+</html>

@@ -75,6 +75,11 @@ func (r *Router) WriteClientTS(w io.Writer) error
 func (r *Router) WriteClientPY(w io.Writer) error
 ```
 
+### Middleware helpers
+```
+func Cors(opts ...CORSOption) func(http.Handler) http.Handler
+```
+
 ### Route metadata
 ```
 type Route struct {
