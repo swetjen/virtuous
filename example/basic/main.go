@@ -27,7 +27,7 @@ func RunServer() error {
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/",
-		virtuous.Wrap(http.HandlerFunc(StatesGetMany), nil, StatesResponse{}, virtuous.HandlerMeta{
+		virtuous.WrapFunc(StatesGetMany, nil, StatesResponse{}, virtuous.HandlerMeta{
 			Service: "States",
 			Method:  "GetMany",
 			Summary: "List all states",
@@ -37,7 +37,7 @@ func RunServer() error {
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
-		virtuous.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, virtuous.HandlerMeta{
+		virtuous.WrapFunc(StateByCode, nil, StateResponse{}, virtuous.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",
@@ -47,7 +47,7 @@ func RunServer() error {
 
 	router.HandleTyped(
 		"GET /api/v1/secure/states/{code}",
-		virtuous.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, virtuous.HandlerMeta{
+		virtuous.WrapFunc(StateByCode, nil, StateResponse{}, virtuous.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCodeSecure",
 			Summary: "Get state by code (bearer token required)",
@@ -58,7 +58,7 @@ func RunServer() error {
 
 	router.HandleTyped(
 		"POST /api/v1/lookup/states",
-		virtuous.Wrap(http.HandlerFunc(StateCreate), CreateStateRequest{}, StateResponse{}, virtuous.HandlerMeta{
+		virtuous.WrapFunc(StateCreate, CreateStateRequest{}, StateResponse{}, virtuous.HandlerMeta{
 			Service: "States",
 			Method:  "Create",
 			Summary: "Create a new state",

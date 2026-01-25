@@ -21,7 +21,7 @@ func NewRouter(cfg config.Config, store *db.Store) http.Handler {
 
 	router.HandleTyped(
 		"GET /api/v1/admin/users/",
-		virtuous.Wrap(http.HandlerFunc(handlerSet.Admin.UsersGetMany), nil, admin.AdminUsersResponse{}, virtuous.HandlerMeta{
+		virtuous.WrapFunc(handlerSet.Admin.UsersGetMany, nil, admin.AdminUsersResponse{}, virtuous.HandlerMeta{
 			Service: "Admin",
 			Method:  "UsersGetMany",
 			Summary: "List admin users",
@@ -32,7 +32,7 @@ func NewRouter(cfg config.Config, store *db.Store) http.Handler {
 
 	router.HandleTyped(
 		"GET /api/v1/admin/users/{id}",
-		virtuous.Wrap(http.HandlerFunc(handlerSet.Admin.UserByID), nil, admin.AdminUserResponse{}, virtuous.HandlerMeta{
+		virtuous.WrapFunc(handlerSet.Admin.UserByID, nil, admin.AdminUserResponse{}, virtuous.HandlerMeta{
 			Service: "Admin",
 			Method:  "UserByID",
 			Summary: "Get admin user",
@@ -43,7 +43,7 @@ func NewRouter(cfg config.Config, store *db.Store) http.Handler {
 
 	router.HandleTyped(
 		"POST /api/v1/admin/users/",
-		virtuous.Wrap(http.HandlerFunc(handlerSet.Admin.UserCreate), admin.CreateAdminUserRequest{}, admin.AdminUserResponse{}, virtuous.HandlerMeta{
+		virtuous.WrapFunc(handlerSet.Admin.UserCreate, admin.CreateAdminUserRequest{}, admin.AdminUserResponse{}, virtuous.HandlerMeta{
 			Service: "Admin",
 			Method:  "UserCreate",
 			Summary: "Create admin user",
