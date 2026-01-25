@@ -1,18 +1,18 @@
 # Virtuous
 
-Virtuous is an agent-first, batteries-included JSON API framework. It provides a typed router that generates OpenAPI and client code at runtime from your handlers.
+Virtuous is an agent-first API framework with self-generating docs. It's a thin wrapper around Go's http package that provides a typed router that generates client code at from your handlers.
 
 ## Why Virtuous
 
 - Runtime-first API framework: no CLI, no build step; routes define everything at runtime.
-- Typed handlers: request/response types drive OpenAPI + clients automatically.
-- Native SDK codegen support for Python, JavaScript, and TypeScript.
+- Typed handlers: request/response types implement OpenAPI + clients automatically.
+- Native SDK codegen support for Python, JavaScript, and TypeScript, with an emphasis on correctness and simplicity.
 - Guards as auth middleware with self-describing metadata for docs/clients.
-- Reflection-based type registry: shared source of truth for schema + clients.
 - Zero dependencies and Go 1.22+ standard library focus.
-- RPC-style, simple APIs that help agents generate working code without wrestling with complex OpenAPI schemas.
+- RPC-style, simple APIs that help agents generate working code without without complex OpenAPI schemas.
 
 ## Requirements
+
 - Go 1.22+ (for method-prefixed route patterns like `GET /path`)
 
 ## Install
@@ -70,20 +70,20 @@ func main() {
 func RunServer() error {
 	router := virtuous.NewRouter()
 
-router.HandleTyped(
-	"GET /api/v1/lookup/states/",
-	virtuous.TypedHandlerFunc{
-		Handler: StatesGetMany,
-		Req:     nil,
-		Resp:    StatesResponse{},
-		Meta: virtuous.HandlerMeta{
-			Service: "States",
-			Method:  "GetMany",
-			Summary: "List all states",
-			Tags:    []string{"states"},
+	router.HandleTyped(
+		"GET /api/v1/lookup/states/",
+		virtuous.TypedHandlerFunc{
+			Handler: StatesGetMany,
+			Req:     nil,
+			Resp:    StatesResponse{},
+			Meta: virtuous.HandlerMeta{
+				Service: "States",
+				Method:  "GetMany",
+				Summary: "List all states",
+				Tags:    []string{"states"},
+			},
 		},
-	},
-)
+	)
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
@@ -166,7 +166,7 @@ Open `http://localhost:8000/docs/` to view the Swagger UI.
 
 Virtuous is router-first. Use the Virtuous router directly as the server handler and let it serve docs/clients:
 
-```
+```text
 http.Server -> Virtuous Router -> /api routes | /docs | /openapi.json | /client.gen.*
 ```
 
@@ -359,6 +359,6 @@ const client = createClient("http://localhost:8000")
 const states = await client.States.getMany()
 ```
 
-## Attribution
+## Acknowledgements
 
-Virtuous is inspired by Pace.dev and the Oto project by Matt Ryer.
+Virtuous is inspired by the Oto project from Pace.dev and Matt Ryer.
