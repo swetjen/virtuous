@@ -72,22 +72,17 @@ func RunServer() error {
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/",
-		virtuous.TypedHandlerFunc{
-			Handler: StatesGetMany,
-			Req:     nil,
-			Resp:    StatesResponse{},
-			Meta: virtuous.HandlerMeta{
-				Service: "States",
-				Method:  "GetMany",
-				Summary: "List all states",
-				Tags:    []string{"states"},
-			},
-		},
+		virtuous.WrapFunc(StatesGetMany, nil, StatesResponse{}, virtuous.HandlerMeta{
+			Service: "States",
+			Method:  "GetMany",
+			Summary: "List all states",
+			Tags:    []string{"states"},
+		}),
 	)
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
-		virtuous.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, virtuous.HandlerMeta{
+		virtuous.WrapFunc(StateByCode, nil, StateResponse{}, virtuous.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",

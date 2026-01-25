@@ -3,6 +3,7 @@
 ## 0.0.11
 
 - Add `TypedHandlerFunc` for handler-function ergonomics.
+- Add `WrapFunc` for typed handler functions without manual `http.HandlerFunc` wrapping.
 
 ## 0.0.10
 
