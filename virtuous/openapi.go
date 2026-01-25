@@ -48,13 +48,28 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
 				gen.preferName(derefType(reqReflect), preferred)
 			}
-			schema := gen.schemaFor(reqReflect)
-			if schema != nil {
-				op.RequestBody = &openAPIRequestBody{
-					Required: true,
-					Content: map[string]openAPIMedia{
-						"application/json": {Schema: schema},
-					},
+			queryInfo, err := queryParamsFor(reqReflect)
+			if err != nil {
+				return nil, err
+			}
+			for _, param := range queryInfo.Params {
+				op.Parameters = append(op.Parameters, openAPIParameter{
+					Name:        param.Name,
+					In:          "query",
+					Description: param.Doc,
+					Required:    !param.Optional,
+					Schema:      openAPISchema{Type: "string"},
+				})
+			}
+			if queryInfo.BodyFields > 0 {
+				schema := gen.schemaForRequest(reqReflect, queryInfo.QueryFieldSet)
+				if schema != nil {
+					op.RequestBody = &openAPIRequestBody{
+						Required: true,
+						Content: map[string]openAPIMedia{
+							"application/json": {Schema: schema},
+						},
+					}
 				}
 			}
 		}
@@ -231,10 +246,11 @@ type openAPIMedia struct {
 }
 
 type openAPIParameter struct {
-	Name     string        `json:"name"`
-	In       string        `json:"in"`
-	Required bool          `json:"required"`
-	Schema   openAPISchema `json:"schema"`
+	Name        string        `json:"name"`
+	In          string        `json:"in"`
+	Description string        `json:"description,omitempty"`
+	Required    bool          `json:"required"`
+	Schema      openAPISchema `json:"schema"`
 }
 
 type openAPISchema struct {
@@ -474,6 +490,70 @@ func (g *schemaGen) structSchema(t reflect.Type) *openAPISchema {
 		Properties: props,
 		Required:   required,
 	}
+}
+
+func (g *schemaGen) structSchemaWithSkip(t reflect.Type, skip map[string]struct{}) *openAPISchema {
+	props := map[string]*openAPISchema{}
+	var required []string
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.PkgPath != "" {
+			continue
+		}
+		if _, ok := skip[field.Name]; ok {
+			continue
+		}
+		name, omit := jsonFieldName(field)
+		if name == "" {
+			continue
+		}
+		schema := g.schemaFor(field.Type)
+		if schema == nil {
+			continue
+		}
+		doc := fieldDoc(field)
+		nullable := schema.Nullable
+		if doc != "" {
+			if schema.Ref != "" {
+				schema = &openAPISchema{
+					AllOf:       []*openAPISchema{{Ref: schema.Ref}},
+					Description: doc,
+					Nullable:    nullable,
+				}
+			} else {
+				schema.Description = doc
+			}
+		}
+		if nullable {
+			schema.Nullable = true
+		}
+		props[name] = schema
+		if !omit && field.Type.Kind() != reflect.Ptr {
+			required = append(required, name)
+		}
+	}
+	sort.Strings(required)
+	return &openAPISchema{
+		Type:       "object",
+		Properties: props,
+		Required:   required,
+	}
+}
+
+func (g *schemaGen) schemaForRequest(t reflect.Type, skip map[string]struct{}) *openAPISchema {
+	if t == nil {
+		return nil
+	}
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t == nil {
+		return nil
+	}
+	if len(skip) == 0 || t.Kind() != reflect.Struct {
+		return g.schemaFor(t)
+	}
+	return g.structSchemaWithSkip(t, skip)
 }
 
 func (g *schemaGen) inlineSchema(t reflect.Type) *openAPISchema {

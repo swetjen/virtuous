@@ -45,10 +45,16 @@ export function createClient(basepath = "/") {
 {{- if $method.HasBody }}
 			 * @param { {{- if $method.RequestType }}{{ $method.RequestType }}{{ else }}any{{ end }} } [request]
 {{- end }}
+{{- if $method.HasQuery }}
+			 * @param {Object} [query]
+{{- range $param := $method.QueryParams }}
+			 * @param { {{- if $param.IsArray }}string[]{{ else }}string{{ end }} }{{ if $param.Optional }} [{{ printf "query.%s" $param.Name }}]{{ else }} {{ printf "query.%s" $param.Name }}{{ end }}{{ if $param.Doc }} - {{ $param.Doc }}{{ end }}
+{{- end }}
+{{- end }}
 			 * @param {AuthOptions} [options]
 			 * @returns {Promise<{{- if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}any{{ end }}>}
 			 */
-			async {{ $method.Name }}({{ if $method.PathParams }}pathParams, {{ end }}{{ if $method.HasBody }}request, {{ end }}options) {
+			async {{ $method.Name }}({{ if $method.PathParams }}pathParams, {{ end }}{{ if $method.HasBody }}request, {{ end }}{{ if $method.HasQuery }}query, {{ end }}options) {
 				const headers = {
 					"Accept": "application/json",
 					"Content-Type": "application/json",
@@ -61,6 +67,45 @@ export function createClient(basepath = "/") {
 {{- range $param := $method.PathParams }}
 				url = url.replace("{{ printf "{%s}" $param }}", encodeURIComponent(String(pathParams.{{ $param }})))
 {{- end }}
+{{- end }}
+{{- if $method.HasQuery }}
+				const queryParts = []
+				const appendQuery = (key, value, optional) => {
+					if (value === undefined || value === null) {
+						if (optional) {
+							return
+						}
+						queryParts.push(encodeURIComponent(key) + "=")
+						return
+					}
+					if (Array.isArray(value)) {
+						if (value.length === 0) {
+							if (!optional) {
+								queryParts.push(encodeURIComponent(key) + "=")
+							}
+							return
+						}
+						for (const item of value) {
+							if (optional && (item === "" || item === 0 || item === false || item === null || item === undefined)) {
+								continue
+							}
+							const encoded = item === null || item === undefined ? "" : String(item)
+							queryParts.push(encodeURIComponent(key) + "=" + encodeURIComponent(encoded))
+						}
+						return
+					}
+					if (optional && (value === "" || value === 0 || value === false)) {
+						return
+					}
+					queryParts.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(value)))
+				}
+{{- range $param := $method.QueryParams }}
+				appendQuery("{{ $param.Name }}", query && query.{{ $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }})
+{{- end }}
+				if (queryParts.length > 0) {
+					const sep = url.includes("?") ? "&" : "?"
+					url = url + sep + queryParts.join("&")
+				}
 {{- end }}
 {{- if $method.HasAuth }}
 				const authValue = options && options.auth
@@ -167,7 +212,10 @@ func (r *Router) ServeClientJSHash(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (r *Router) clientJSBody() ([]byte, error) {
-	spec := buildClientSpec(r.Routes(), r.typeOverrides)
+	spec, err := buildClientSpec(r.Routes(), r.typeOverrides)
+	if err != nil {
+		return nil, err
+	}
 	return renderClientTemplate(clientJSTemplate, spec)
 }
 

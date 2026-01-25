@@ -63,6 +63,23 @@ func (bearerGuard) Middleware() func(http.Handler) http.Handler {
 
 Swagger UI auto-prepends `GuardSpec.Prefix` for header schemes using `x-virtuousauth-prefix`.
 
+## Query params (legacy)
+
+Query params are supported for migrations but not recommended for new APIs. Prefer typed bodies and path params. If you must use query params, use `query` tags on request fields:
+
+```go
+type SearchRequest struct {
+	Query string `query:"q"`
+	Limit int    `query:"limit,omitempty"`
+}
+```
+
+Rules:
+- `query:"name"` always includes the key; `query:"name,omitempty"` omits empty values.
+- Query params are serialized as strings and URL-escaped.
+- Nested structs/maps are not supported.
+- Fields with `query` tags cannot also use `json` tags.
+
 ## Troubleshooting
 
 - Missing OpenAPI/client output: ensure routes are method-prefixed and typed (`HandleTyped` or `Wrap`).

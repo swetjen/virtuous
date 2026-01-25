@@ -110,6 +110,7 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 - Struct tags:
   - `json:"-"` excludes a field.
   - `omitempty` respected.
+  - `query:"name"` marks fields as query parameters (migration-only; not recommended for new APIs).
 - Pointers: optional and `nullable` in OpenAPI.
 - Slices/maps: mapped to array/object schemas.
 - Known scalar aliases (e.g., `type UUID string`) treated as string.
@@ -140,6 +141,7 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 - `WriteOpenAPIFile` writes the OpenAPI JSON to disk; docs HTML helpers are available in the runtime.
 - `ServeDocs` can register default docs and OpenAPI routes with optional overrides.
 - `ServeAllDocs` registers docs/OpenAPI plus JS/TS/PY client routes.
+- `query` tags emit `in: query` parameters; nested structs/maps are not supported.
 
 ## Runtime client output
 - At startup:

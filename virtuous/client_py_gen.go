@@ -16,7 +16,7 @@ from datetime import datetime
 import http
 import json
 import types
-from typing import Any, Union, get_args, get_origin, get_type_hints
+from typing import Any, Optional, Union, get_args, get_origin, get_type_hints
 from urllib import error, parse, request
 
 # Type definitions
@@ -31,7 +31,7 @@ class {{ $object.Name }}:
 {{- if $field.Doc }}
     # {{ $field.Doc }}
 {{- end }}
-    {{ $field.Name }}: {{ $field.Type }}{{ if or $field.Optional $field.Nullable }} | None = None{{ end }}
+    {{ $field.Name }}: {{- if or $field.Optional $field.Nullable }} Optional[{{ $field.Type }}] = None{{ else }} {{ $field.Type }}{{ end }}
 {{- end }}
 {{- end }}
 
@@ -43,7 +43,7 @@ class _{{ $service.Name }}Service:
         self._basepath = basepath
 
 {{- range $method := $service.Methods }}
-    def {{ $method.Name }}(self{{- if $method.PathParams }}{{- range $param := $method.PathParams }}, {{ $param }}: str{{- end }}{{- end }}{{- if $method.HasBody }}, body: {{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }} | None = None{{- end }}{{- if $method.HasAuth }}, {{ $method.AuthParam }}: str | None = None{{- end }}) -> {{- if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}None{{- end }}:
+    def {{ $method.Name }}(self{{- if $method.PathParams }}{{- range $param := $method.PathParams }}, {{ $param }}: str{{- end }}{{- end }}{{- if $method.HasBody }}, body: Optional[{{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}] = None{{- end }}{{- if $method.HasQuery }}, query: Optional[dict[str, Any]] = None{{- end }}{{- if $method.HasAuth }}, {{ $method.AuthParam }}: Optional[str] = None{{- end }}) -> {{- if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}None{{- end }}:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -52,6 +52,32 @@ class _{{ $service.Name }}Service:
 {{- if $method.PathParams }}
 {{- range $param := $method.PathParams }}
         url = url.replace("{{ printf "{%s}" $param }}", parse.quote(str({{ $param }})))
+{{- end }}
+{{- end }}
+{{- if $method.HasQuery }}
+        query_values = query or {}
+        def append_query_param(key: str, value: Any, optional: bool) -> None:
+            nonlocal url
+            if value is None:
+                if optional:
+                    return
+                url = _append_query(url, key, "")
+                return
+            if isinstance(value, list):
+                if len(value) == 0:
+                    if not optional:
+                        url = _append_query(url, key, "")
+                    return
+                for item in value:
+                    if optional and item in ("", 0, False, None):
+                        continue
+                    url = _append_query(url, key, "" if item is None else str(item))
+                return
+            if optional and value in ("", 0, False):
+                return
+            url = _append_query(url, key, str(value))
+{{- range $param := $method.QueryParams }}
+        append_query_param("{{ $param.Name }}", query_values.get("{{ $param.Name }}"), {{ if $param.Optional }}True{{ else }}False{{ end }})
 {{- end }}
 {{- end }}
 {{- if $method.HasAuth }}
@@ -234,7 +260,10 @@ func (r *Router) ServeClientPYHash(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (r *Router) clientPYBody() ([]byte, error) {
-	spec := buildPythonClientSpec(r.Routes(), r.typeOverrides)
+	spec, err := buildPythonClientSpec(r.Routes(), r.typeOverrides)
+	if err != nil {
+		return nil, err
+	}
 	return renderClientTemplate(clientPyTemplate, spec)
 }
 

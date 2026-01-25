@@ -106,6 +106,104 @@ func TestOpenAPINullablePointerFields(t *testing.T) {
 	}
 }
 
+type queryRequestOnly struct {
+	Query string `query:"q"`
+}
+
+type queryRequestMixed struct {
+	Query string `query:"q,omitempty"`
+	Name  string `json:"name"`
+}
+
+type queryHandlerOnly struct{}
+
+func (queryHandlerOnly) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (queryHandlerOnly) RequestType() any                                 { return queryRequestOnly{} }
+func (queryHandlerOnly) ResponseType() any                                { return nullableResponse{} }
+func (queryHandlerOnly) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Test", Method: "QueryOnly"}
+}
+
+type queryHandlerMixed struct{}
+
+func (queryHandlerMixed) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (queryHandlerMixed) RequestType() any                                 { return queryRequestMixed{} }
+func (queryHandlerMixed) ResponseType() any                                { return nullableResponse{} }
+func (queryHandlerMixed) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Test", Method: "QueryMixed"}
+}
+
+func TestOpenAPIQueryParamsOnly(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /query", queryHandlerOnly{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	paths := getMap(t, doc, "paths")
+	queryPath := getMap(t, paths, "/query")
+	getOp := getMap(t, queryPath, "get")
+	if _, ok := getOp["requestBody"]; ok {
+		t.Fatalf("expected no request body for query-only request")
+	}
+	params := getList(t, getOp, "parameters")
+	if len(params) != 1 {
+		t.Fatalf("expected 1 query param, got %d", len(params))
+	}
+	param := getMapFromList(t, params, 0)
+	if param["in"] != "query" || param["name"] != "q" {
+		t.Fatalf("unexpected query param")
+	}
+	if param["required"] != true {
+		t.Fatalf("query param should be required")
+	}
+}
+
+func TestOpenAPIQueryParamsMixed(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("POST /query", queryHandlerMixed{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	paths := getMap(t, doc, "paths")
+	queryPath := getMap(t, paths, "/query")
+	postOp := getMap(t, queryPath, "post")
+	if _, ok := postOp["requestBody"]; !ok {
+		t.Fatalf("expected request body for mixed query/body request")
+	}
+	params := getList(t, postOp, "parameters")
+	if len(params) != 1 {
+		t.Fatalf("expected 1 query param, got %d", len(params))
+	}
+	param := getMapFromList(t, params, 0)
+	if param["required"] != false {
+		t.Fatalf("query param should be optional")
+	}
+}
+
+func getMapFromList(t *testing.T, list []any, idx int) map[string]any {
+	t.Helper()
+	if idx < 0 || idx >= len(list) {
+		t.Fatalf("index out of range")
+	}
+	out, ok := list[idx].(map[string]any)
+	if !ok {
+		t.Fatalf("list item not a map")
+	}
+	return out
+}
+
 func TestOpenAPISchemaServicePrefix(t *testing.T) {
 	router := NewRouter()
 	router.HandleTyped("GET /prefixed", prefixedHandler{})

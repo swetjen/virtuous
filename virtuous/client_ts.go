@@ -24,7 +24,7 @@ export function createClient(basepath: string = "/") {
 {{- range $service := .Services }}
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
-			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: { {{- range $param := $method.PathParams }}{{ $param }}: string; {{- end }} }, {{ end }}{{ if $method.HasBody }}request: {{ $method.RequestType }}, {{ end }}options?: AuthOptions): Promise<{{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}void{{ end }}> {
+			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: { {{- range $param := $method.PathParams }}{{ $param }}: string; {{- end }} }, {{ end }}{{ if $method.HasBody }}request: {{ $method.RequestType }}, {{ end }}{{ if $method.HasQuery }}query?: { {{- range $param := $method.QueryParams }}{{ $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ if $param.IsArray }}string[]{{ else }}string{{ end }}; {{- end }} }, {{ end }}options?: AuthOptions): Promise<{{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}void{{ end }}> {
 				const headers: Record<string, string> = {
 					"Accept": "application/json",
 					"Content-Type": "application/json",
@@ -37,6 +37,45 @@ export function createClient(basepath: string = "/") {
 {{- range $param := $method.PathParams }}
 				url = url.replace("{{ printf "{%s}" $param }}", encodeURIComponent(String(pathParams.{{ $param }})))
 {{- end }}
+{{- end }}
+{{- if $method.HasQuery }}
+				const queryParts: string[] = []
+				const appendQuery = (key: string, value: unknown, optional: boolean) => {
+					if (value === undefined || value === null) {
+						if (optional) {
+							return
+						}
+						queryParts.push(encodeURIComponent(key) + "=")
+						return
+					}
+					if (Array.isArray(value)) {
+						if (value.length === 0) {
+							if (!optional) {
+								queryParts.push(encodeURIComponent(key) + "=")
+							}
+							return
+						}
+						for (const item of value) {
+							if (optional && (item === "" || item === 0 || item === false || item === null || item === undefined)) {
+								continue
+							}
+							const encoded = item === null || item === undefined ? "" : String(item)
+							queryParts.push(encodeURIComponent(key) + "=" + encodeURIComponent(encoded))
+						}
+						return
+					}
+					if (optional && (value === "" || value === 0 || value === false)) {
+						return
+					}
+					queryParts.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(value)))
+				}
+{{- range $param := $method.QueryParams }}
+				appendQuery("{{ $param.Name }}", query && query.{{ $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }})
+{{- end }}
+				if (queryParts.length > 0) {
+					const sep = url.includes("?") ? "&" : "?"
+					url = url + sep + queryParts.join("&")
+				}
 {{- end }}
 {{- if $method.HasAuth }}
 				const authValue = options && options.auth
@@ -144,7 +183,10 @@ func (r *Router) ServeClientTSHash(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (r *Router) clientTSBody() ([]byte, error) {
-	spec := buildClientSpec(r.Routes(), r.typeOverrides)
+	spec, err := buildClientSpec(r.Routes(), r.typeOverrides)
+	if err != nil {
+		return nil, err
+	}
 	return renderClientTemplate(clientTSTemplate, spec)
 }
 

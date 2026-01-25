@@ -23,10 +23,16 @@ type testResponse struct {
 	Error string    `json:"error,omitempty"`
 }
 
+type testQueryRequest struct {
+	Query string   `query:"q,omitempty"`
+	IDs   []string `query:"id"`
+	Name  string   `json:"name"`
+}
+
 type testHandler struct{}
 
 func (testHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
-func (testHandler) RequestType() any                                 { return nil }
+func (testHandler) RequestType() any                                 { return testQueryRequest{} }
 func (testHandler) ResponseType() any                                { return testResponse{} }
 func (testHandler) Metadata() HandlerMeta {
 	return HandlerMeta{Service: "States", Method: "GetByCode"}
@@ -61,6 +67,25 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	}
 	if err := runCommand("python3", "-c", pythonImportSnippet(pyPath)); err != nil {
 		t.Fatalf("python import failed: %v", err)
+	}
+
+	jsText := string(js)
+	if !strings.Contains(jsText, "queryParts") || !strings.Contains(jsText, "appendQuery") {
+		t.Fatalf("js client missing query serialization")
+	}
+	if !strings.Contains(jsText, "async getByCode(pathParams, request, query") {
+		t.Fatalf("js client missing query argument")
+	}
+	tsText := string(ts)
+	if !strings.Contains(tsText, "query?: {") || !strings.Contains(tsText, "q?: string") || !strings.Contains(tsText, "id: string[]") {
+		t.Fatalf("ts client missing query type")
+	}
+	if !strings.Contains(tsText, "appendQuery(\"q\"") || !strings.Contains(tsText, "appendQuery(\"id\"") {
+		t.Fatalf("ts client missing query serialization")
+	}
+	pyText := string(py)
+	if !strings.Contains(pyText, "def getByCode") || !strings.Contains(pyText, "query: Optional[dict[str, Any]]") {
+		t.Fatalf("py client missing query argument")
 	}
 }
 
