@@ -8,7 +8,6 @@ If an API can be called, it can be documented and consumed—by both humans *and
 
 ## Why Virtuous
 
-
 - **Runtime-first** - no CLI, no codegen step, no YAML; routes and types define everything at runtime.
 - **Typed handlers as truth** - request/response types generate OpenAPI and clients automatically.
 - **Typed guards** - auth as composable middleware with self-describing metadata.
@@ -265,7 +264,7 @@ router.HandleTyped(
 )
 ```
 
-### Guard Examples
+## Examples
 
 Basic example (`example/basic/`)
 - List/get/create state routes
