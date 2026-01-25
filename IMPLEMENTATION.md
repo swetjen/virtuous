@@ -83,6 +83,7 @@ router.SetTypeOverrides(map[string]virtuous.TypeOverride{
 - JSON helpers (`Encode`, `Decode`) live in the package so example apps
   focus on route logic.
 - `TypedHandlerFunc` wraps handler functions with request/response metadata.
+- `WrapFunc` avoids boilerplate for `http.HandlerFunc` wrapping.
 - `Cors` provides a configurable middleware for cross-origin requests.
 
 ## Notes from core router patterns

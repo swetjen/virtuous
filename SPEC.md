@@ -39,6 +39,8 @@ type TypedHandlerFunc struct {
 	Resp    any
 	Meta    HandlerMeta
 }
+
+func WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta HandlerMeta) TypedHandler
 ```
 
 ```
