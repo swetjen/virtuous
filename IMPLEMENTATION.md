@@ -31,6 +31,33 @@ handling). The same registry is intended to support additional language emitters
   tags as property descriptions (using `allOf` when a `$ref` is present).
 - `virtuous/router.go`: Adds `SetTypeOverrides` so callers can control
   type mappings without changing generator code.
+- `virtuous/docs.go`: Convenience helpers for serving docs and OpenAPI
+  directly from the router without external mux wiring.
+- `virtuous/serve_all.go`: Bundles docs/OpenAPI and client route registration
+  into a single call for quick-start servers.
+- `virtuous/encode.go`: Shared JSON encode/decode helpers for handlers.
+
+## Developer ergonomics updates
+
+- `Router.HandleFunc` provides a shortcut for handler functions without
+  wrapping `http.HandlerFunc`.
+- `Router.ServeDocs` registers docs and OpenAPI routes in one call, using
+  option-style overrides (`WithDocsPath`, `WithOpenAPIPath`, etc).
+- `Router.ServeAllDocs` wires docs/OpenAPI and client endpoints with defaults,
+  keeping quick-start wiring to a single line.
+- The docs handler renders Swagger UI and OpenAPI JSON directly from
+  the runtime output, keeping setup in a single place.
+- JSON helpers (`Encode`, `Decode`) live in the package so example apps
+  stay focused on route logic.
+
+## Future patterns to consider
+
+- Return an error from `ServeDocs` instead of `log.Fatal` so callers can
+  decide how to handle OpenAPI generation failures.
+- Add lightweight helpers for serving generated JS/TS/PY clients with
+  optional caching headers.
+- Provide a small `Router.ServeAllDocs` helper that wires docs, OpenAPI, and
+  client outputs together for quick starts.
 
 ## Usage notes
 

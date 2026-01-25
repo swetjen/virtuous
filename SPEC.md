@@ -124,6 +124,7 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 - `HandlerMeta` is optional; the router infers `Service`/`Method` when possible.
 - `WriteOpenAPIFile` writes the OpenAPI JSON to disk; docs HTML helpers are available in the runtime.
 - `HandleDocs` can register default docs and OpenAPI routes with optional overrides.
+- `ServeAllDocs` registers docs/OpenAPI plus JS/TS/PY client routes.
 
 ## Runtime client output
 - At startup:
