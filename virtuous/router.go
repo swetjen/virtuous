@@ -94,6 +94,10 @@ func (r *Router) Handle(pattern string, h http.Handler, guards ...Guard) {
 	r.handle(pattern, h, typed, guards...)
 }
 
+func (r *Router) HandleFunc(pattern string, fn func(http.ResponseWriter, *http.Request)) {
+	r.Handle(pattern, http.HandlerFunc(fn))
+}
+
 // HandleTyped registers a typed handler for the pattern.
 func (r *Router) HandleTyped(pattern string, h TypedHandler, guards ...Guard) {
 	r.handle(pattern, h, h, guards...)
