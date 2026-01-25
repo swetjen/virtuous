@@ -38,6 +38,17 @@ func RunServer() error {
 	)
 
 	router.HandleTyped(
+		"GET /api/v1/secure/states/{code}",
+		virtuous.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, virtuous.HandlerMeta{
+			Service: "States",
+			Method:  "GetByCodeSecure",
+			Summary: "Get state by code (bearer token required)",
+			Tags:    []string{"States"},
+		}),
+		bearerGuard{},
+	)
+
+	router.HandleTyped(
 		"POST /api/v1/lookup/states",
 		virtuous.Wrap(http.HandlerFunc(StateCreate), CreateStateRequest{}, StateResponse{}, virtuous.HandlerMeta{
 			Service: "States",

@@ -19,6 +19,11 @@ curl http://localhost:8000/api/v1/lookup/states/mn
 ```
 
 ```bash
+curl http://localhost:8000/api/v1/secure/states/mn \
+  -H 'Authorization: Bearer demo-token'
+```
+
+```bash
 curl -X POST http://localhost:8000/api/v1/lookup/states \
   -H 'Content-Type: application/json' \
   -d '{"code":"ca","name":"California"}'
