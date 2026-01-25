@@ -13,24 +13,10 @@ go get github.com/swetjen/virtuous@latest
 
 ## Quick start
 
-```go
-router := virtuous.NewRouter()
+Use the root README for the full cut-and-paste example with docs and client generation:
 
-router.HandleTyped(
-	"GET /api/v1/lookup/states/",
-	virtuous.Wrap(http.HandlerFunc(StatesGetMany), nil, StatesResponse{}, virtuous.HandlerMeta{
-		Service: "States",
-		Method:  "GetMany",
-		Summary: "List all states",
-		Tags:    []string{"states"},
-	}),
-)
-
-mux := http.NewServeMux()
-mux.Handle("/", router)
-
-http.ListenAndServe(":8000", mux)
-```
+- `README.md`
+- `docs/agent_quickstart.md`
 
 ## Handler metadata
 
@@ -63,7 +49,7 @@ Client outputs include a `Virtuous client hash` header comment. Hash endpoints c
 
 For dynamic Python loading, see `python_loader/` in the repo for a stdlib-only module loader.
 
-See the root README and `reference/` for a complete example.
+See the root README and `example/` for complete examples.
 
 ## Attribution
 

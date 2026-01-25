@@ -46,7 +46,7 @@
 - Responses use sentinel types to emit 200/204/500 with or without bodies.
 - Schemas include numeric formats and field descriptions from `doc` tags.
 - `WriteOpenAPIFile` persists OpenAPI output, and docs HTML helpers live in `virtuous/docs.go`.
-- `HandleDocs` registers `/docs` and `/openapi.json` routes with optional overrides.
+- `ServeDocs` registers `/docs` and `/openapi.json` routes with optional overrides.
 - `ServeAllDocs` wires docs/OpenAPI and client routes in one call.
 
 ## Example App

@@ -5,11 +5,11 @@ Virtuous is an agent-first, batteries-included JSON API framework. It provides a
 ## Why Virtuous
 
 - Runtime-first API framework: no CLI, no build step; routes define everything at runtime.
-- Typed handlers: request/response types drive OpenAPI + client output automatically.
+- Typed handlers: request/response types drive OpenAPI + clients automatically.
 - Native SDK codegen support for Python, JavaScript, and TypeScript.
 - Guards as auth middleware with self-describing metadata for docs/clients.
 - Reflection-based type registry: shared source of truth for schema + clients.
-- Minimal dependencies and Go 1.22+ standard library focus.
+- Zero dependencies and Go 1.22+ standard library focus.
 - RPC-style, simple APIs that help agents generate working code without wrestling with complex OpenAPI schemas.
 
 ## Requirements
@@ -157,6 +157,14 @@ go run .
 
 Open `http://localhost:8000/docs/` to view the Swagger UI.
 
+## Router wiring (no mux)
+
+Virtuous is router-first. Use the Virtuous router directly as the server handler and let it serve docs/clients:
+
+```
+http.Server -> Virtuous Router -> /api routes | /docs | /openapi.json | /client.gen.*
+```
+
 ## Handler metadata
 
 `HandlerMeta` describes how a typed route appears in generated clients and OpenAPI:
@@ -293,8 +301,17 @@ Larger example app (`example/`):
 - Adds guarded routes and admin workflows.
 - Generates OpenAPI + JS/TS/PY clients.
 
+## Troubleshooting
+
+- Missing OpenAPI/client output: ensure routes are method-prefixed and typed (`HandleTyped` or `Wrap`).
+- Missing client method names: ensure `HandlerMeta.Service` and `HandlerMeta.Method` are set.
+- Auth header missing prefix in Swagger UI: set `GuardSpec.Prefix`.
+
 ## Spec
 See `SPEC.md` for the detailed runtime specification.
+
+## Agent quickstart
+See `docs/agent_quickstart.md` for a focused guide for agents building services.
 
 ## Using Virtuous in Python
 
