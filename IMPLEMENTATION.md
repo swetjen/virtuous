@@ -82,6 +82,7 @@ router.SetTypeOverrides(map[string]virtuous.TypeOverride{
 - `Router.ServeAllDocs` wires docs/OpenAPI plus JS/TS/PY client routes.
 - JSON helpers (`Encode`, `Decode`) live in the package so example apps
   focus on route logic.
+- `TypedHandlerFunc` wraps handler functions with request/response metadata.
 - `Cors` provides a configurable middleware for cross-origin requests.
 
 ## Notes from core router patterns

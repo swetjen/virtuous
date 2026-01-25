@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.11
+
+- Add `TypedHandlerFunc` for handler-function ergonomics.
+
 ## 0.0.10
 
 - Add CORS middleware helper and template example scaffold.

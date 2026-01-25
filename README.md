@@ -70,15 +70,20 @@ func main() {
 func RunServer() error {
 	router := virtuous.NewRouter()
 
-	router.HandleTyped(
-		"GET /api/v1/lookup/states/",
-		virtuous.Wrap(http.HandlerFunc(StatesGetMany), nil, StatesResponse{}, virtuous.HandlerMeta{
+router.HandleTyped(
+	"GET /api/v1/lookup/states/",
+	virtuous.TypedHandlerFunc{
+		Handler: StatesGetMany,
+		Req:     nil,
+		Resp:    StatesResponse{},
+		Meta: virtuous.HandlerMeta{
 			Service: "States",
 			Method:  "GetMany",
 			Summary: "List all states",
 			Tags:    []string{"states"},
-		}),
-	)
+		},
+	},
+)
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
@@ -321,6 +326,12 @@ See `docs/agent_quickstart.md` for a focused guide for agents building services.
 ## Using Virtuous in Python
 
 See `python_loader/` for a zero-dependency loader that fetches a Virtuous Python client from a URL and returns a module ready for `create_client`.
+
+Install the loader:
+
+```bash
+pip install virtuous
+```
 
 ```python
 from virtuous import load_module

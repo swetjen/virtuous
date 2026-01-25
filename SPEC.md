@@ -32,6 +32,13 @@ type TypedHandler interface {
 	ResponseType() any
 	Metadata() HandlerMeta
 }
+
+type TypedHandlerFunc struct {
+	Handler func(http.ResponseWriter, *http.Request)
+	Req     any
+	Resp    any
+	Meta    HandlerMeta
+}
 ```
 
 ```
