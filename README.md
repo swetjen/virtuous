@@ -8,23 +8,13 @@ If an API can be called, it can be documented and consumed—by both humans *and
 
 ## Why Virtuous
 
-- **Runtime-first API framework**  
-  No CLI, no codegen step, no YAML. Routes and types define everything at runtime.
 
-- **Typed handlers are the source of truth**  
-  Request/response types automatically produce OpenAPI schemas and client SDKs—no drift, no duplication.
-
-- **Native SDKs for agents and humans**  
-  First-class client generation for **Python**, **JavaScript**, and **TypeScript**, with an emphasis on correctness, minimal surface area, and predictable behavior.
-
-- **Guards, not glue code**  
-  Auth and authorization are expressed as composable guards with self-describing metadata that flows naturally into docs and clients.
-
-- **Zero dependencies, standard library core**  
-  Built on Go 1.22+ with a strict standard-library focus.
-
-- **APIs agents don’t break**  
-  Virtuous favors simple, explicit, RPC-style APIs over complicated REST patterns and over-engineered OpenAPI schemas—so agents can generate *working code on the first try*.
+- **Runtime-first** - no CLI, no codegen step, no YAML; routes and types define everything at runtime.
+- **Typed handlers as truth** - request/response types generate OpenAPI and clients automatically.
+- **Typed guards** - auth as composable middleware with self-describing metadata.
+- **Native SDKs** - simple, correct clients for Python, JavaScript, and TypeScript.
+- **Zero dependencies** - Go 1.22+, standard library only. 
+- **Agent-friendly** - practical patterns optimized for reliable code generation.
 
 ## Requirements
 
