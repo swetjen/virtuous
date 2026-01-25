@@ -44,7 +44,11 @@ func (r *Router) OpenAPI() ([]byte, error) {
 
 		reqType := route.Handler.RequestType()
 		if reqType != nil {
-			schema := gen.schemaFor(reflect.TypeOf(reqType))
+			reqReflect := reflect.TypeOf(reqType)
+			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
+				gen.preferName(derefType(reqReflect), preferred)
+			}
+			schema := gen.schemaFor(reqReflect)
 			if schema != nil {
 				op.RequestBody = &openAPIRequestBody{
 					Required: true,
@@ -59,7 +63,11 @@ func (r *Router) OpenAPI() ([]byte, error) {
 		if respType == nil {
 			return nil, errors.New("response type is required for " + route.Pattern)
 		}
-		status, schema := responseSchema(gen, reflect.TypeOf(respType))
+		respReflect := reflect.TypeOf(respType)
+		if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" {
+			gen.preferName(derefType(respReflect), preferred)
+		}
+		status, schema := responseSchema(gen, respReflect)
 		op.Responses[status] = openAPIResponse{
 			Description: http.StatusText(parseStatus(status)),
 			Content: map[string]openAPIMedia{
@@ -327,6 +335,7 @@ type schemaGen struct {
 	components map[string]openAPISchema
 	seen       map[reflect.Type]string
 	seenNames  map[string]reflect.Type
+	preferred  map[reflect.Type]string
 }
 
 func newSchemaGen(overrides map[string]TypeOverride) *schemaGen {
@@ -335,6 +344,7 @@ func newSchemaGen(overrides map[string]TypeOverride) *schemaGen {
 		components: map[string]openAPISchema{},
 		seen:       map[reflect.Type]string{},
 		seenNames:  map[string]reflect.Type{},
+		preferred:  map[reflect.Type]string{},
 	}
 }
 
@@ -373,7 +383,7 @@ func (g *schemaGen) schemaFor(t reflect.Type) *openAPISchema {
 		return schema
 	}
 	if t.Kind() == reflect.Struct && t.Name() != "" {
-		name := schemaNameOrPanic(g.seenNames, t)
+		name := g.schemaNameFor(t)
 		g.seen[t] = name
 		g.components[name] = openAPISchema{}
 		schema := g.structSchema(t)
@@ -530,4 +540,22 @@ func schemaNameOrPanic(seen map[string]reflect.Type, t reflect.Type) string {
 	}
 	seen[name] = t
 	return name
+}
+
+func (g *schemaGen) preferName(t reflect.Type, name string) {
+	if t == nil || name == "" {
+		return
+	}
+	g.preferred[t] = name
+}
+
+func (g *schemaGen) schemaNameFor(t reflect.Type) string {
+	if preferred, ok := g.preferred[t]; ok {
+		if other, ok := g.seenNames[preferred]; ok && other != t {
+			panic("virtuous: schema name collision for " + preferred)
+		}
+		g.seenNames[preferred] = t
+		return preferred
+	}
+	return schemaNameOrPanic(g.seenNames, t)
 }

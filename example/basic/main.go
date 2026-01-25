@@ -15,6 +15,17 @@ func main() {
 }
 
 func RunServer() error {
+	router := buildRouter()
+
+	server := &http.Server{
+		Addr:    ":8000",
+		Handler: router,
+	}
+	fmt.Println("Listening on :8000")
+	return server.ListenAndServe()
+}
+
+func buildRouter() *virtuous.Router {
 	router := virtuous.NewRouter()
 	router.SetOpenAPIOptions(virtuous.OpenAPIOptions{
 		Title:       "Virtuous Basic API",
@@ -25,7 +36,7 @@ func RunServer() error {
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/",
 		virtuous.WrapFunc(StatesGetMany, nil, StatesResponse{}, virtuous.HandlerMeta{
-			Service: "Lookup",
+			Service: "States",
 			Method:  "GetMany",
 			Summary: "List all states",
 			Tags:    []string{"States"},
@@ -35,7 +46,7 @@ func RunServer() error {
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
 		virtuous.WrapFunc(StateByCode, nil, StateResponse{}, virtuous.HandlerMeta{
-			Service: "Lookup",
+			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",
 			Tags:    []string{"States"},
@@ -45,7 +56,7 @@ func RunServer() error {
 	router.HandleTyped(
 		"GET /api/v1/secure/states/{code}",
 		virtuous.WrapFunc(StateByCode, nil, StateResponse{}, virtuous.HandlerMeta{
-			Service: "Lookup",
+			Service: "States",
 			Method:  "GetByCodeSecure",
 			Summary: "Get state by code (bearer token required)",
 			Tags:    []string{"States"},
@@ -56,7 +67,7 @@ func RunServer() error {
 	router.HandleTyped(
 		"POST /api/v1/lookup/states",
 		virtuous.WrapFunc(StateCreate, CreateStateRequest{}, StateResponse{}, virtuous.HandlerMeta{
-			Service: "Lookup",
+			Service: "States",
 			Method:  "Create",
 			Summary: "Create a new state",
 			Tags:    []string{"States"},
@@ -65,10 +76,5 @@ func RunServer() error {
 
 	router.ServeAllDocs()
 
-	server := &http.Server{
-		Addr:    ":8000",
-		Handler: router,
-	}
-	fmt.Println("Basic Example: Listening on :8000")
-	return server.ListenAndServe()
+	return router
 }

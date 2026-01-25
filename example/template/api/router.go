@@ -13,6 +13,13 @@ import (
 )
 
 func NewRouter(cfg config.Config, store *db.Store) http.Handler {
+	router := buildRouter(cfg, store)
+	return virtuous.Cors(
+		virtuous.WithAllowedOrigins(cfg.AllowedOrigins...),
+	)(router)
+}
+
+func buildRouter(cfg config.Config, store *db.Store) *virtuous.Router {
 	application := deps.New(cfg, store)
 	handlerSet := handlers.New(application)
 	adminGuard := middleware.AdminBearerGuard{Token: cfg.AdminBearerToken}
@@ -58,9 +65,5 @@ func NewRouter(cfg config.Config, store *db.Store) http.Handler {
 
 	router.ServeAllDocs()
 
-	cors := virtuous.Cors(
-		virtuous.WithAllowedOrigins(cfg.AllowedOrigins...),
-	)
-
-	return cors(router)
+	return router
 }
