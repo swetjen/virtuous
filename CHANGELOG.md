@@ -2,7 +2,7 @@
 
 ## 0.0.14
 
-- Add query param support via `query` struct tags for migration use cases.
+- Add legacy query param support via `query` struct tags for migration use cases.
 
 ## 0.0.13
 

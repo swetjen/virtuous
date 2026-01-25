@@ -65,7 +65,7 @@ Swagger UI auto-prepends `GuardSpec.Prefix` for header schemes using `x-virtuous
 
 ## Query params (legacy)
 
-Query params are supported for migrations but not recommended for new APIs. Use `query` tags on request fields:
+Query params are supported for migrations but not recommended for new APIs. Prefer typed bodies and path params. If you must use query params, use `query` tags on request fields:
 
 ```go
 type SearchRequest struct {
