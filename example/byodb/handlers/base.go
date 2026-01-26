@@ -9,7 +9,7 @@ type Handlers struct {
 	Admin *admin.AdminHandlers
 }
 
-func New(app *deps.App) *Handlers {
+func New(app *deps.Deps) *Handlers {
 	return &Handlers{
 		Admin: admin.New(app),
 	}

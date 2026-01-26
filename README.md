@@ -184,7 +184,7 @@ http.Server
 
 ## Output generation
 
-Virtuous can emit OpenAPI schemas and client SDKs directly to disk:
+Virtuous can emit OpenAPI schemas and client SDKs directly to disk for easy integration with larger build systems.
 
 ```go
 openapiJSON, err := router.OpenAPI()
@@ -205,10 +205,9 @@ _ = router.WriteClientTS(ts)
 
 Notes:
 - `/openapi.json` can be served directly for Swagger UI or similar tools.
-- Client SDKs can be written at startup or served dynamically.
-- Pointer fields are emitted as nullable in OpenAPI.
+- Client SDKs can be written to disk or served dynamically.
 - Swagger UI auto-prepends GuardSpec.Prefix for header-based auth schemes.
-- Client outputs include a Virtuous client hash for versioning and drift detection.
+- Client outputs include a hash for versioning and change detection.
 - Hash endpoints can be served via:
   - `router.ServeClientJSHash`
   - `router.ServeClientTSHash`
@@ -264,12 +263,12 @@ Basic example (`example/basic/`)
 - List/get/create state routes
 - Generates OpenAPI + JS/TS/PY clients
 
-Template example (`example/template/`)
+Template example (`example/byodb/`)
 - Admin routes with guard middleware
 - CORS applied at the router boundary
-- Static landing page with docs links
+- Static landing page mocking up serving an SPA
 
-Larger example app with React embedded (`example/`)
+Larger example app with React embedded (`example/full-stack-with-react`) *coming soon*
 - Guarded routes and admin workflows
 - OpenAPI + JS/TS/PY client generation
 

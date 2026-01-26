@@ -10,10 +10,10 @@ import (
 )
 
 type AdminHandlers struct {
-	app *deps.App
+	app *deps.Deps
 }
 
-func New(app *deps.App) *AdminHandlers {
+func New(app *deps.Deps) *AdminHandlers {
 	return &AdminHandlers{app: app}
 }
 

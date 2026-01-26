@@ -1,4 +1,4 @@
-package template_test
+package byodb_test
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 func TestGeneratedOutputs(t *testing.T) {
 	cfg := config.Load()
 	store := db.New()
-	router := template.BuildRouter(cfg, store)
+	router := byodb.BuildRouter(cfg, store)
 
 	outDir := t.TempDir()
 

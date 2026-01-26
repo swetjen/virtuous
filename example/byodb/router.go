@@ -1,4 +1,4 @@
-package template
+package byodb
 
 import (
 	"net/http"
