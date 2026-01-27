@@ -158,8 +158,8 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 ## Simple RPC handlers
 
 ```go
-handler := virtuous.RPC[Req, Resp, ErrorMeta](func(ctx context.Context, req Req) (Resp, error) {
-	return Resp{}, nil
+handler := virtuous.RPC[Req, Resp, ErrorMeta](func(ctx context.Context, req Req) virtuous.RPCResponse[Resp, ErrorMeta] {
+	return virtuous.OK(Resp{})
 }, virtuous.HandlerMeta{
 	Service: "Service",
 	Method:  "Call",
@@ -168,8 +168,9 @@ handler := virtuous.RPC[Req, Resp, ErrorMeta](func(ctx context.Context, req Req)
 router.HandleTyped("POST /api/v1/call", handler)
 ```
 
-- Decode failures return 422 with `ErrorResponse[ErrorMeta]`.
-- Errors map to 401/422/500 via `Unauthorized`, `Invalid`, or `Internal`.
+- Decode failures return 422 with the `invalid` envelope.
+- Errors map to 422/500 via `Invalid` or `Err`.
+- Responses are wrapped in `{ ok, invalid, err }` over the wire.
 
 ## Client output
 - At startup:

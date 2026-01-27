@@ -147,6 +147,9 @@ export function createClient(basepath = "/") {
 					}
 				}
 				if (!response.ok) {
+{{- if $method.IsRPC }}
+					return json || {}
+{{- end }}
 					if (json && json.error) {
 						throw new Error(json.error)
 					}

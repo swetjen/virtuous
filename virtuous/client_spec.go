@@ -24,6 +24,7 @@ type clientMethod struct {
 	HasBody      bool
 	HasQuery     bool
 	QueryParams  []clientQueryParam
+	IsRPC        bool
 	HasAuth      bool
 	Auth         GuardSpec
 	AuthParam    string
@@ -49,6 +50,10 @@ type clientQueryParam struct {
 	Optional bool
 	IsArray  bool
 	Doc      string
+}
+
+type rpcMarker interface {
+	IsRPC() bool
 }
 
 func buildClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
@@ -142,6 +147,9 @@ func buildClientSpecWith(
 			QueryParams:  queryParams,
 			RequestType:  requestType,
 			ResponseType: responseType,
+		}
+		if marker, ok := route.Handler.(rpcMarker); ok && marker.IsRPC() {
+			method.IsRPC = true
 		}
 		if len(route.Guards) > 0 {
 			method.HasAuth = true

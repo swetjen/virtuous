@@ -2,7 +2,7 @@
 
 ## 0.0.15
 
-- Add response specs for multi-status OpenAPI output and simple RPC helpers.
+- Add response specs for multi-status OpenAPI output and simple RPC responses.
 
 ## 0.0.14
 

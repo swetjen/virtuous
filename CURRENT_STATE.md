@@ -21,7 +21,7 @@
 - Typed handlers drive OpenAPI and client emission.
 - Request fields tagged with `query:"name"` emit query parameters for migration-only support.
 - `WrapResponses` provides explicit status-to-type response specs for OpenAPI.
-- `RPC` adapts `(context.Context, req) (resp, error)` handlers into typed handlers with fixed error responses.
+- `RPC` adapts `(context.Context, req) RPCResponse[resp, err]` handlers into typed handlers with fixed status responses.
 
 ## Type Registry + Overrides
 - `typeRegistry` reflects struct types, field names, `omitempty` optionality, pointer nullability, and `doc` tags.

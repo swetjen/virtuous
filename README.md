@@ -52,6 +52,10 @@ type StateResponse struct {
 	State State `json:"state"`
 }
 
+type StateError struct {
+	Err string `json:"err"`
+}
+
 func main() {
 	if err := RunServer(); err != nil {
 		log.Fatal(err)
@@ -63,7 +67,7 @@ func RunServer() error {
 
 	router.HandleTyped(
 		"POST /api/v1/lookup/states/by-code",
-		virtuous.RPC[StateRequest, StateResponse, struct{}](StateByCode, virtuous.HandlerMeta{
+		virtuous.RPC[StateRequest, StateResponse, StateError](StateByCode, virtuous.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",
@@ -81,19 +85,19 @@ func RunServer() error {
 	return server.ListenAndServe()
 }
 
-func StateByCode(_ context.Context, req StateRequest) (StateResponse, error) {
+func StateByCode(_ context.Context, req StateRequest) virtuous.RPCResponse[StateResponse, StateError] {
 	code := strings.TrimSpace(req.Code)
 	if code == "" {
-		return StateResponse{}, virtuous.Invalid("code is required", struct{}{})
+		return virtuous.Invalid(StateError{Err: "code is required"})
 	}
 
 	for _, state := range mockData {
 		if state.Code == code {
-			return StateResponse{State: state}, nil
+			return virtuous.OK(StateResponse{State: state})
 		}
 	}
 
-	return StateResponse{}, virtuous.Invalid("code not found", struct{}{})
+	return virtuous.Invalid(StateError{Err: "code not found"})
 }
 
 var mockData = []State{

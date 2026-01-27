@@ -120,9 +120,11 @@ class _{{ $service.Name }}Service:
                     raise RuntimeError(f"{status} {_status_text(status)}") from err
                 raise
         if status >= 400:
+{{- if not $method.IsRPC }}
             if isinstance(body, dict) and "error" in body:
                 raise RuntimeError(str(body["error"]))
             raise RuntimeError(f"{status} {_status_text(status)}")
+{{- end }}
 {{- if $method.ResponseType }}
         return _decode_value({{ $method.ResponseType }}, body)
 {{- else }}

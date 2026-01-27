@@ -117,6 +117,9 @@ export function createClient(basepath: string = "/") {
 					}
 				}
 				if (!response.ok) {
+{{- if $method.IsRPC }}
+					return json as {{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}Record<string, unknown>{{ end }}
+{{- end }}
 					const errorBody = json as { error?: string } | null
 					if (errorBody && errorBody.error) {
 						throw new Error(errorBody.error)

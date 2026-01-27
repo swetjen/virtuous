@@ -3,9 +3,10 @@ package virtuous
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
+	"reflect"
+	"strings"
 )
 
 // ErrorResponse is the standard error envelope for RPC handlers.
@@ -14,142 +15,91 @@ type ErrorResponse[T any] struct {
 	Meta  T      `json:"meta,omitempty"`
 }
 
-// ErrorKind maps to the fixed RPC status codes.
-type ErrorKind int
-
-const (
-	ErrorUnauthorized ErrorKind = iota + 1
-	ErrorInvalid
-	ErrorInternal
-)
-
-type rpcError struct {
-	kind ErrorKind
-	msg  string
-	meta any
-}
-
-func (e rpcError) Error() string { return e.msg }
-func (e rpcError) Kind() ErrorKind {
-	return e.kind
-}
-func (e rpcError) Meta() any { return e.meta }
-
-// Unauthorized returns an error mapped to HTTP 401.
-func Unauthorized[T any](msg string, meta T) error {
-	return rpcError{kind: ErrorUnauthorized, msg: msg, meta: meta}
-}
-
-// Invalid returns an error mapped to HTTP 422.
-func Invalid[T any](msg string, meta T) error {
-	return rpcError{kind: ErrorInvalid, msg: msg, meta: meta}
-}
-
-// Internal returns an error mapped to HTTP 500.
-func Internal[T any](msg string, meta T) error {
-	return rpcError{kind: ErrorInternal, msg: msg, meta: meta}
-}
-
-type rpcErrorKind interface {
-	Kind() ErrorKind
-	Meta() any
-	error
+// RPCResponse is the envelope for RPC handlers.
+type RPCResponse[Ok any, Err any] struct {
+	Ok      *Ok  `json:"ok,omitempty"`
+	Invalid *Err `json:"invalid,omitempty"`
+	Err     *Err `json:"err,omitempty"`
 }
 
 // RPCHandler is the simple RPC handler signature.
-type RPCHandler[Req any, Resp any] func(ctx context.Context, req Req) (Resp, error)
+type RPCHandler[Req any, Ok any, Err any] func(ctx context.Context, req Req) RPCResponse[Ok, Err]
 
 // RPC wraps a simple RPC handler into a TypedHandler for registration.
-func RPC[Req any, Resp any, Meta any](handler RPCHandler[Req, Resp], meta HandlerMeta) TypedHandler {
+func RPC[Req any, Ok any, Err any](handler RPCHandler[Req, Ok, Err], meta HandlerMeta) TypedHandler {
 	if handler == nil {
-		return Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), *new(Req), *new(Resp), meta)
+		return Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), *new(Req), *new(Ok), meta)
 	}
-	return &rpcHandler[Req, Resp, Meta]{
+	return &rpcHandler[Req, Ok, Err]{
 		handler: handler,
 		meta:    meta,
 	}
 }
 
-type rpcHandler[Req any, Resp any, Meta any] struct {
-	handler RPCHandler[Req, Resp]
+type rpcHandler[Req any, Ok any, Err any] struct {
+	handler RPCHandler[Req, Ok, Err]
 	meta    HandlerMeta
 }
 
-func (h *rpcHandler[Req, Resp, Meta]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *rpcHandler[Req, Ok, Err]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req Req
 	if err := decodeBody(r, &req); err != nil {
-		h.writeError(w, r, ErrorInvalid, err.Error(), nil)
+		h.writeResponse(w, r, Invalid[Ok, Err](buildErrPayload[Err](err.Error())))
 		return
 	}
-	resp, err := h.handler(r.Context(), req)
-	if err != nil {
-		h.writeError(w, r, errorKind(err), err.Error(), errorMeta(err))
+	resp := h.handler(r.Context(), req)
+	h.writeResponse(w, r, resp)
+}
+
+func (h *rpcHandler[Req, Ok, Err]) RequestType() any  { return *new(Req) }
+func (h *rpcHandler[Req, Ok, Err]) ResponseType() any { return *new(Ok) }
+func (h *rpcHandler[Req, Ok, Err]) Metadata() HandlerMeta {
+	return h.meta
+}
+func (h *rpcHandler[Req, Ok, Err]) Responses() []ResponseSpec {
+	return []ResponseSpec{
+		{Status: http.StatusOK, Type: rpcOK[Ok]{}},
+		{Status: http.StatusUnprocessableEntity, Type: rpcInvalid[Err]{}},
+		{Status: http.StatusInternalServerError, Type: rpcErr[Err]{}},
+	}
+}
+
+type rpcOK[Ok any] struct {
+	Ok Ok `json:"ok"`
+}
+
+type rpcInvalid[Err any] struct {
+	Invalid Err `json:"invalid"`
+}
+
+type rpcErr[Err any] struct {
+	Err Err `json:"err"`
+}
+
+func (h *rpcHandler[Req, Ok, Err]) IsRPC() bool { return true }
+
+func (h *rpcHandler[Req, Ok, Err]) writeResponse(w http.ResponseWriter, r *http.Request, resp RPCResponse[Ok, Err]) {
+	if resp.Err != nil {
+		Encode(w, r, http.StatusInternalServerError, resp)
+		return
+	}
+	if resp.Invalid != nil {
+		Encode(w, r, http.StatusUnprocessableEntity, resp)
+		return
+	}
+	if resp.Ok == nil {
+		Encode(w, r, http.StatusInternalServerError, resp)
+		return
+	}
+	if isNoResponse(reflect.TypeOf(*resp.Ok), reflect.TypeOf(NoResponse204{})) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if isNoResponse(reflect.TypeOf(*resp.Ok), reflect.TypeOf(NoResponse200{})) {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	Encode(w, r, http.StatusOK, resp)
-}
-
-func (h *rpcHandler[Req, Resp, Meta]) RequestType() any  { return *new(Req) }
-func (h *rpcHandler[Req, Resp, Meta]) ResponseType() any { return *new(Resp) }
-func (h *rpcHandler[Req, Resp, Meta]) Metadata() HandlerMeta {
-	return h.meta
-}
-func (h *rpcHandler[Req, Resp, Meta]) Responses() []ResponseSpec {
-	return []ResponseSpec{
-		{Status: http.StatusOK, Type: *new(Resp)},
-		{Status: http.StatusUnauthorized, Type: ErrorResponse[Meta]{}},
-		{Status: http.StatusUnprocessableEntity, Type: ErrorResponse[Meta]{}},
-		{Status: http.StatusInternalServerError, Type: ErrorResponse[Meta]{}},
-	}
-}
-
-func (h *rpcHandler[Req, Resp, Meta]) writeError(w http.ResponseWriter, r *http.Request, kind ErrorKind, msg string, meta any) {
-	status := http.StatusInternalServerError
-	switch kind {
-	case ErrorUnauthorized:
-		status = http.StatusUnauthorized
-	case ErrorInvalid:
-		status = http.StatusUnprocessableEntity
-	case ErrorInternal:
-		status = http.StatusInternalServerError
-	default:
-		status = http.StatusInternalServerError
-	}
-	body := ErrorResponse[Meta]{Error: msg}
-	if meta != nil {
-		if cast, ok := meta.(Meta); ok {
-			body.Meta = cast
-		}
-	}
-	Encode(w, r, status, body)
-}
-
-func errorKind(err error) ErrorKind {
-	if err == nil {
-		return ErrorInternal
-	}
-	var typed rpcErrorKind
-	if errors.As(err, &typed) {
-		switch typed.Kind() {
-		case ErrorUnauthorized:
-			return ErrorUnauthorized
-		case ErrorInvalid:
-			return ErrorInvalid
-		case ErrorInternal:
-			return ErrorInternal
-		default:
-			return ErrorInternal
-		}
-	}
-	return ErrorInternal
-}
-
-func errorMeta(err error) any {
-	var typed rpcErrorKind
-	if errors.As(err, &typed) {
-		return typed.Meta()
-	}
-	return nil
 }
 
 func decodeBody(r *http.Request, out any) error {
@@ -179,4 +129,70 @@ func bytesTrimSpace(b []byte) []byte {
 		end--
 	}
 	return b[start:end]
+}
+
+// OK builds a successful RPC response.
+func OK[Ok any, Err any](value Ok) RPCResponse[Ok, Err] {
+	return RPCResponse[Ok, Err]{Ok: &value}
+}
+
+// Invalid builds a 422 RPC response.
+func Invalid[Ok any, Err any](value Err) RPCResponse[Ok, Err] {
+	return RPCResponse[Ok, Err]{Invalid: &value}
+}
+
+// Err builds a 500 RPC response.
+func Err[Ok any, Err any](value Err) RPCResponse[Ok, Err] {
+	return RPCResponse[Ok, Err]{Err: &value}
+}
+
+// NoContent builds a 204 RPC response.
+func NoContent[Err any]() RPCResponse[NoResponse204, Err] {
+	empty := NoResponse204{}
+	return RPCResponse[NoResponse204, Err]{Ok: &empty}
+}
+
+func buildErrPayload[Err any](msg string) Err {
+	var out Err
+	val := reflect.ValueOf(&out).Elem()
+	if !val.IsValid() {
+		return out
+	}
+	if val.Kind() == reflect.String {
+		val.SetString(msg)
+		return out
+	}
+	if val.Kind() == reflect.Map && val.Type().Key().Kind() == reflect.String {
+		if val.IsNil() {
+			val.Set(reflect.MakeMap(val.Type()))
+		}
+		val.SetMapIndex(reflect.ValueOf("error"), reflect.ValueOf(msg))
+		return out
+	}
+	if val.Kind() == reflect.Struct {
+		if setStructStringField(val, "Error", msg) || setStructStringField(val, "Err", msg) {
+			return out
+		}
+		for i := 0; i < val.NumField(); i++ {
+			field := val.Field(i)
+			if !field.CanSet() || field.Kind() != reflect.String {
+				continue
+			}
+			name := val.Type().Field(i).Name
+			if strings.EqualFold(name, "error") || strings.EqualFold(name, "err") {
+				field.SetString(msg)
+				return out
+			}
+		}
+	}
+	return out
+}
+
+func setStructStringField(target reflect.Value, name string, value string) bool {
+	field := target.FieldByName(name)
+	if !field.IsValid() || !field.CanSet() || field.Kind() != reflect.String {
+		return false
+	}
+	field.SetString(value)
+	return true
 }

@@ -103,14 +103,15 @@ router.HandleTyped(
 ## Simple RPC handlers (recommended)
 
 ```go
-handler := virtuous.RPC[Req, Resp, ErrorMeta](func(ctx context.Context, req Req) (Resp, error) {
-	return Resp{}, nil
+handler := virtuous.RPC[Req, Resp, ErrorMeta](func(ctx context.Context, req Req) virtuous.RPCResponse[Resp, ErrorMeta] {
+	return virtuous.OK(Resp{})
 }, virtuous.HandlerMeta{Service: "Service", Method: "Call"})
 
 router.HandleTyped("POST /api/v1/call", handler)
 ```
 
-Errors map to 401/422/500 via `Unauthorized`, `Invalid`, or `Internal`.
+Errors map to 422/500 via `Invalid` or `Err`.
+RPC responses use an `{ ok, invalid, err }` envelope over the wire.
 
 ## Troubleshooting
 
