@@ -80,6 +80,38 @@ Rules:
 - Nested structs/maps are not supported.
 - Fields with `query` tags cannot also use `json` tags.
 
+## Response status docs (classic handlers)
+
+Classic `http.Handler` routes can declare multiple responses for docs:
+
+```go
+router.HandleTyped(
+	"POST /api/v1/lookup/states",
+	virtuous.WrapResponses(
+		http.HandlerFunc(StateCreate),
+		CreateStateRequest{},
+		StateResponse{},
+		virtuous.HandlerMeta{Service: "States", Method: "Create"},
+		virtuous.ResponseSpec{Status: 200, Type: StateResponse{}, Doc: "OK"},
+		virtuous.ResponseSpec{Status: 401, Type: virtuous.ErrorResponse[struct{}]{}},
+		virtuous.ResponseSpec{Status: 422, Type: virtuous.ErrorResponse[struct{}]{}},
+		virtuous.ResponseSpec{Status: 500, Type: virtuous.ErrorResponse[struct{}]{}},
+	),
+)
+```
+
+## Simple RPC handlers (recommended)
+
+```go
+handler := virtuous.RPC[Req, Resp, ErrorMeta](func(ctx context.Context, req Req) (Resp, error) {
+	return Resp{}, nil
+}, virtuous.HandlerMeta{Service: "Service", Method: "Call"})
+
+router.HandleTyped("POST /api/v1/call", handler)
+```
+
+Errors map to 401/422/500 via `Unauthorized`, `Invalid`, or `Internal`.
+
 ## Troubleshooting
 
 - Missing OpenAPI/client output: ensure routes are method-prefixed and typed (`HandleTyped` or `Wrap`).

@@ -192,6 +192,57 @@ func TestOpenAPIQueryParamsMixed(t *testing.T) {
 	}
 }
 
+type multiResponseHandler struct{}
+
+func (multiResponseHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (multiResponseHandler) RequestType() any                                 { return nil }
+func (multiResponseHandler) ResponseType() any                                { return multiResponseBody{} }
+func (multiResponseHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Test", Method: "Multi"}
+}
+func (multiResponseHandler) Responses() []ResponseSpec {
+	return []ResponseSpec{
+		{Status: http.StatusOK, Type: multiResponseBody{}, Doc: "OK"},
+		{Status: http.StatusUnauthorized, Type: ErrorResponse[struct{}]{}},
+		{Status: http.StatusNoContent, Type: nil},
+	}
+}
+
+type multiResponseBody struct {
+	Name string `json:"name"`
+}
+
+func TestOpenAPIResponsesSpec(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /multi", multiResponseHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	paths := getMap(t, doc, "paths")
+	multiPath := getMap(t, paths, "/multi")
+	getOp := getMap(t, multiPath, "get")
+	responses := getMap(t, getOp, "responses")
+	if _, ok := responses["200"]; !ok {
+		t.Fatalf("missing 200 response")
+	}
+	if _, ok := responses["401"]; !ok {
+		t.Fatalf("missing 401 response")
+	}
+	if _, ok := responses["204"]; !ok {
+		t.Fatalf("missing 204 response")
+	}
+	resp200 := getMap(t, responses, "200")
+	if resp200["description"] != "OK" {
+		t.Fatalf("expected response description from spec")
+	}
+}
+
 func getMapFromList(t *testing.T, list []any, idx int) map[string]any {
 	t.Helper()
 	if idx < 0 || idx >= len(list) {

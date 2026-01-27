@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.15
+
+- Add response specs for multi-status OpenAPI output and simple RPC helpers.
+
 ## 0.0.14
 
 - Add legacy query param support via `query` struct tags for migration use cases.

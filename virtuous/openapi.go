@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -74,24 +75,54 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			}
 		}
 
-		respType := route.Handler.ResponseType()
-		if respType == nil {
-			return nil, errors.New("response type is required for " + route.Pattern)
-		}
-		respReflect := reflect.TypeOf(respType)
-		if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" {
-			gen.preferName(derefType(respReflect), preferred)
-		}
-		status, schema := responseSchema(gen, respReflect)
-		op.Responses[status] = openAPIResponse{
-			Description: http.StatusText(parseStatus(status)),
-			Content: map[string]openAPIMedia{
-				"application/json": {Schema: schema},
-			},
-		}
-		if status == "204" || schema == nil {
+		if responder, ok := route.Handler.(TypedHandlerResponses); ok {
+			specs := responder.Responses()
+			if len(specs) == 0 {
+				return nil, errors.New("response type is required for " + route.Pattern)
+			}
+			for _, spec := range specs {
+				if spec.Status == 0 {
+					continue
+				}
+				status := strconv.Itoa(spec.Status)
+				schema := schemaForResponseSpec(gen, spec, route.Meta)
+				desc := spec.Doc
+				if desc == "" {
+					desc = http.StatusText(spec.Status)
+				}
+				if spec.Status == http.StatusNoContent || schema == nil {
+					op.Responses[status] = openAPIResponse{
+						Description: desc,
+					}
+					continue
+				}
+				op.Responses[status] = openAPIResponse{
+					Description: desc,
+					Content: map[string]openAPIMedia{
+						"application/json": {Schema: schema},
+					},
+				}
+			}
+		} else {
+			respType := route.Handler.ResponseType()
+			if respType == nil {
+				return nil, errors.New("response type is required for " + route.Pattern)
+			}
+			respReflect := reflect.TypeOf(respType)
+			if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" {
+				gen.preferName(derefType(respReflect), preferred)
+			}
+			status, schema := responseSchema(gen, respReflect)
 			op.Responses[status] = openAPIResponse{
 				Description: http.StatusText(parseStatus(status)),
+				Content: map[string]openAPIMedia{
+					"application/json": {Schema: schema},
+				},
+			}
+			if status == "204" || schema == nil {
+				op.Responses[status] = openAPIResponse{
+					Description: http.StatusText(parseStatus(status)),
+				}
 			}
 		}
 
@@ -159,6 +190,22 @@ func responseSchema(gen *schemaGen, t reflect.Type) (string, *openAPISchema) {
 		return "500", nil
 	}
 	return "200", gen.schemaFor(t)
+}
+
+func schemaForResponseSpec(gen *schemaGen, spec ResponseSpec, meta HandlerMeta) *openAPISchema {
+	if spec.Type == nil {
+		return nil
+	}
+	rt := reflect.TypeOf(spec.Type)
+	if isNoResponse(rt, reflect.TypeOf(NoResponse200{})) ||
+		isNoResponse(rt, reflect.TypeOf(NoResponse204{})) ||
+		isNoResponse(rt, reflect.TypeOf(NoResponse500{})) {
+		return nil
+	}
+	if preferred := preferredSchemaName(meta, rt); preferred != "" {
+		gen.preferName(derefType(rt), preferred)
+	}
+	return gen.schemaFor(rt)
 }
 
 func parseStatus(status string) int {

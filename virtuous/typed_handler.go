@@ -27,6 +27,28 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 	}
 }
 
+type typedHandlerResponses struct {
+	*typedHandler
+	responses []ResponseSpec
+}
+
+// WrapResponses creates a TypedHandler with explicit response specs.
+func WrapResponses(handler http.Handler, req any, resp any, meta HandlerMeta, responses ...ResponseSpec) TypedHandler {
+	return &typedHandlerResponses{
+		typedHandler: &typedHandler{
+			handler: handler,
+			req:     req,
+			resp:    resp,
+			meta:    meta,
+		},
+		responses: append([]ResponseSpec(nil), responses...),
+	}
+}
+
+func (t *typedHandlerResponses) Responses() []ResponseSpec {
+	return append([]ResponseSpec(nil), t.responses...)
+}
+
 // WrapFunc creates a TypedHandler from a handler function and metadata.
 func WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta HandlerMeta) TypedHandler {
 	if handler == nil {

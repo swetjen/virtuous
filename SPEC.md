@@ -33,6 +33,11 @@ type TypedHandler interface {
 	Metadata() HandlerMeta
 }
 
+type TypedHandlerResponses interface {
+	TypedHandler
+	Responses() []ResponseSpec
+}
+
 type TypedHandlerFunc struct {
 	Handler func(http.ResponseWriter, *http.Request)
 	Req     any
@@ -50,6 +55,12 @@ type HandlerMeta struct {
 	Summary     string
 	Description string
 	Tags        []string
+}
+
+type ResponseSpec struct {
+	Status int
+	Type   any
+	Doc    string
 }
 ```
 
@@ -131,6 +142,7 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
   - `NoResponse204` -> OpenAPI 204
   - `NoResponse500` -> OpenAPI 500
 - These types are not serialized into responses.
+- If a handler implements `TypedHandlerResponses`, the response specs are used for OpenAPI output.
 
 ## OpenAPI output
 - `components.securitySchemes` from guard specs.
@@ -142,6 +154,22 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 - `ServeDocs` can register default docs and OpenAPI routes with optional overrides.
 - `ServeAllDocs` registers docs/OpenAPI plus JS/TS/PY client routes.
 - `query` tags emit `in: query` parameters; nested structs/maps are not supported.
+
+## Simple RPC handlers
+
+```go
+handler := virtuous.RPC[Req, Resp, ErrorMeta](func(ctx context.Context, req Req) (Resp, error) {
+	return Resp{}, nil
+}, virtuous.HandlerMeta{
+	Service: "Service",
+	Method:  "Call",
+})
+
+router.HandleTyped("POST /api/v1/call", handler)
+```
+
+- Decode failures return 422 with `ErrorResponse[ErrorMeta]`.
+- Errors map to 401/422/500 via `Unauthorized`, `Invalid`, or `Internal`.
 
 ## Client output
 - At startup:

@@ -37,6 +37,19 @@ type TypedHandler interface {
 	Metadata() HandlerMeta
 }
 
+// TypedHandlerResponses extends TypedHandler with explicit response specs.
+type TypedHandlerResponses interface {
+	TypedHandler
+	Responses() []ResponseSpec
+}
+
+// ResponseSpec describes an OpenAPI response for a status code.
+type ResponseSpec struct {
+	Status int
+	Type   any
+	Doc    string
+}
+
 // Route captures a registered handler and its documentation metadata.
 type Route struct {
 	Pattern    string
@@ -50,10 +63,10 @@ type Route struct {
 
 // Router registers routes and exposes documentation metadata.
 type Router struct {
-	mux           *http.ServeMux
-	routes        []Route
-	logger        *slog.Logger
-	typeOverrides map[string]TypeOverride
+	mux            *http.ServeMux
+	routes         []Route
+	logger         *slog.Logger
+	typeOverrides  map[string]TypeOverride
 	openAPIOptions *OpenAPIOptions
 }
 
