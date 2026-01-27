@@ -12,7 +12,7 @@ It provides a **typed router** as a thin, zero-dependency wrapper around Go’s 
 - **Agent-friendly** - patterns optimized for reliable code generation.
 - **Zero dependencies** - Go 1.22+, standard library only.  no CLI, no codegen step, no YAML; routes and types define everything.
 
-## Quick start (cut, paste, run)
+## Quick start (RPC, cut, paste, run)
 
 Create a new project:
 
@@ -29,9 +29,11 @@ Create `main.go`:
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/swetjen/virtuous"
 )
@@ -42,14 +44,12 @@ type State struct {
 	Name string `json:"name" doc:"Display name for the state."`
 }
 
-type StatesResponse struct {
-	Data  []State `json:"data"`
-	Error string  `json:"error,omitempty"`
+type StateRequest struct {
+	Code string `json:"code"`
 }
 
 type StateResponse struct {
-	State State  `json:"state"`
-	Error string `json:"error,omitempty"`
+	State State `json:"state"`
 }
 
 func main() {
@@ -62,18 +62,8 @@ func RunServer() error {
 	router := virtuous.NewRouter()
 
 	router.HandleTyped(
-		"GET /api/v1/lookup/states/",
-		virtuous.WrapFunc(StatesGetMany, nil, StatesResponse{}, virtuous.HandlerMeta{
-			Service: "States",
-			Method:  "GetMany",
-			Summary: "List all states",
-			Tags:    []string{"states"},
-		}),
-	)
-
-	router.HandleTyped(
-		"GET /api/v1/lookup/states/{code}",
-		virtuous.WrapFunc(StateByCode, nil, StateResponse{}, virtuous.HandlerMeta{
+		"POST /api/v1/lookup/states/by-code",
+		virtuous.RPC[StateRequest, StateResponse, struct{}](StateByCode, virtuous.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",
@@ -91,38 +81,19 @@ func RunServer() error {
 	return server.ListenAndServe()
 }
 
-func StatesGetMany(w http.ResponseWriter, r *http.Request) {
-	var response StatesResponse
-	for _, state := range mockData {
-		response.Data = append(response.Data, State{
-			ID:   state.ID,
-			Code: state.Code,
-			Name: state.Name,
-		})
-	}
-
-	virtuous.Encode(w, r, http.StatusOK, response)
-}
-
-func StateByCode(w http.ResponseWriter, r *http.Request) {
-	var response StateResponse
-	code := r.PathValue("code")
+func StateByCode(_ context.Context, req StateRequest) (StateResponse, error) {
+	code := strings.TrimSpace(req.Code)
 	if code == "" {
-		response.Error = "code is required"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
-		return
+		return StateResponse{}, virtuous.Invalid("code is required", struct{}{})
 	}
 
 	for _, state := range mockData {
 		if state.Code == code {
-			response.State = state
-			virtuous.Encode(w, r, http.StatusOK, response)
-			return
+			return StateResponse{State: state}, nil
 		}
 	}
 
-	response.Error = "code not found"
-	virtuous.Encode(w, r, http.StatusBadRequest, response)
+	return StateResponse{}, virtuous.Invalid("code not found", struct{}{})
 }
 
 var mockData = []State{
@@ -149,6 +120,40 @@ go run .
 Open `http://localhost:8000/docs/` to view the Swagger UI.
 
 ![Example docs](example.png)
+
+## Classic handlers (http.Handler)
+
+Use this if you are migrating existing handlers or prefer manual response writing.
+
+```go
+type StatesResponse struct {
+	Data  []State `json:"data"`
+	Error string  `json:"error,omitempty"`
+}
+
+func StatesGetMany(w http.ResponseWriter, r *http.Request) {
+	var response StatesResponse
+	for _, state := range mockData {
+		response.Data = append(response.Data, State{
+			ID:   state.ID,
+			Code: state.Code,
+			Name: state.Name,
+		})
+	}
+
+	virtuous.Encode(w, r, http.StatusOK, response)
+}
+
+router.HandleTyped(
+	"GET /api/v1/lookup/states/",
+	virtuous.WrapFunc(StatesGetMany, nil, StatesResponse{}, virtuous.HandlerMeta{
+		Service: "States",
+		Method:  "GetMany",
+		Summary: "List all states",
+		Tags:    []string{"states"},
+	}),
+)
+```
 
 ## Requirements
 
