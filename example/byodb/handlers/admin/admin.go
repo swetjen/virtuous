@@ -1,15 +1,15 @@
 package admin
 
 import (
+	"context"
 	"errors"
-	"net/http"
 	"strconv"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/swetjen/virtuous/example/byodb/db"
 	"github.com/swetjen/virtuous/example/byodb/deps"
-	"github.com/swetjen/virtuous/httpapi"
+	"github.com/swetjen/virtuous/rpc"
 )
 
 type AdminHandlers struct {
@@ -43,61 +43,47 @@ type CreateAdminUserRequest struct {
 	Role  string `json:"role"`
 }
 
-func (h *AdminHandlers) UsersGetMany(w http.ResponseWriter, r *http.Request) {
-	users, err := h.app.DB.ListUsers(r.Context())
-	if err != nil {
-		httpapi.Encode(w, r, http.StatusInternalServerError, AdminUsersResponse{Error: "failed to load users"})
-		return
-	}
-	response := AdminUsersResponse{Data: toAdminUsers(users)}
-	httpapi.Encode(w, r, http.StatusOK, response)
+type AdminUserByIDRequest struct {
+	ID string `json:"id"`
 }
 
-func (h *AdminHandlers) UserByID(w http.ResponseWriter, r *http.Request) {
+func (h *AdminHandlers) UsersGetMany(ctx context.Context) (AdminUsersResponse, int) {
+	users, err := h.app.DB.ListUsers(ctx)
+	if err != nil {
+		return AdminUsersResponse{Error: "failed to load users"}, rpc.StatusError
+	}
+	return AdminUsersResponse{Data: toAdminUsers(users)}, rpc.StatusOK
+}
+
+func (h *AdminHandlers) UserByID(ctx context.Context, req AdminUserByIDRequest) (AdminUserResponse, int) {
 	response := AdminUserResponse{}
-	idStr := r.PathValue("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := strconv.ParseInt(req.ID, 10, 64)
 	if err != nil || id <= 0 {
 		response.Error = "invalid user id"
-		httpapi.Encode(w, r, http.StatusBadRequest, response)
-		return
+		return response, rpc.StatusInvalid
 	}
-	user, err := h.app.DB.GetUser(r.Context(), id)
+	user, err := h.app.DB.GetUser(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			response.Error = "user not found"
-			httpapi.Encode(w, r, http.StatusNotFound, response)
-			return
+			return response, rpc.StatusInvalid
 		}
 		response.Error = "failed to load user"
-		httpapi.Encode(w, r, http.StatusInternalServerError, response)
-		return
-	}
-	if user.ID == 0 {
-		response.Error = "user not found"
-		httpapi.Encode(w, r, http.StatusNotFound, response)
-		return
+		return response, rpc.StatusError
 	}
 	response.User = toAdminUser(user)
-	httpapi.Encode(w, r, http.StatusOK, response)
+	return response, rpc.StatusOK
 }
 
-func (h *AdminHandlers) UserCreate(w http.ResponseWriter, r *http.Request) {
+func (h *AdminHandlers) UserCreate(ctx context.Context, req CreateAdminUserRequest) (AdminUserResponse, int) {
 	response := AdminUserResponse{}
-	req, err := httpapi.Decode[CreateAdminUserRequest](r)
-	if err != nil {
-		response.Error = "invalid request"
-		httpapi.Encode(w, r, http.StatusBadRequest, response)
-		return
-	}
-	user, err := h.app.DB.CreateUser(r.Context(), req.Email, req.Name, req.Role)
+	user, err := h.app.DB.CreateUser(ctx, req.Email, req.Name, req.Role)
 	if err != nil {
 		response.Error = err.Error()
-		httpapi.Encode(w, r, http.StatusInternalServerError, response)
-		return
+		return response, rpc.StatusError
 	}
 	response.User = toAdminUser(user)
-	httpapi.Encode(w, r, http.StatusOK, response)
+	return response, rpc.StatusOK
 }
 
 func toAdminUsers(users []db.User) []AdminUser {

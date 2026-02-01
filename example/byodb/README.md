@@ -28,21 +28,26 @@ make run
 - `CORS_ALLOW_ORIGINS` (default `*`, comma-separated)
 - `DATABASE_URL` (required, PostgreSQL DSN)
 
-## Endpoints
+## Endpoints (RPC)
 
+Admin users:
 ```bash
-curl -H "Authorization: Bearer dev-admin-token" \
-  http://localhost:8000/api/v1/admin/users/
+curl -H "Authorization: Bearer dev-admin-token" \\
+  -H "Content-Type: application/json" \\
+  -d '{}' \\
+  http://localhost:8000/rpc/admin/users-get-many
 ```
 
 States:
 ```bash
-curl http://localhost:8000/api/v1/states/
+curl -H "Content-Type: application/json" \\
+  -d '{}' \\
+  http://localhost:8000/rpc/states/states-get-many
 ```
 
 Static landing page:
 - `http://localhost:8000/`
 
 Docs:
-- `http://localhost:8000/docs/`
-- `http://localhost:8000/openapi.json`
+- `http://localhost:8000/rpc/docs/`
+- `http://localhost:8000/rpc/openapi.json`

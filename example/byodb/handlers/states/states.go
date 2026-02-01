@@ -1,14 +1,14 @@
 package states
 
 import (
+	"context"
 	"errors"
-	"net/http"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/swetjen/virtuous/example/byodb/db"
 	"github.com/swetjen/virtuous/example/byodb/deps"
-	"github.com/swetjen/virtuous/httpapi"
+	"github.com/swetjen/virtuous/rpc"
 )
 
 type Handlers struct {
@@ -40,55 +40,50 @@ type CreateStateRequest struct {
 	Name string `json:"name"`
 }
 
-func (h *Handlers) StatesGetMany(w http.ResponseWriter, r *http.Request) {
-	states, err := h.app.DB.ListStates(r.Context())
+func (h *Handlers) StatesGetMany(ctx context.Context) (StatesResponse, int) {
+	states, err := h.app.DB.ListStates(ctx)
 	if err != nil {
-		httpapi.Encode(w, r, http.StatusInternalServerError, StatesResponse{Error: "failed to load states"})
-		return
+		return StatesResponse{Error: "failed to load states"}, rpc.StatusError
 	}
-	response := StatesResponse{Data: toStates(states)}
-	httpapi.Encode(w, r, http.StatusOK, response)
+	return StatesResponse{Data: toStates(states)}, rpc.StatusOK
 }
 
-func (h *Handlers) StateByCode(w http.ResponseWriter, r *http.Request) {
+type StateByCodeRequest struct {
+	Code string `json:"code"`
+}
+
+func (h *Handlers) StateByCode(ctx context.Context, req StateByCodeRequest) (StateResponse, int) {
 	response := StateResponse{}
-	code := r.PathValue("code")
-	if code == "" {
+	if req.Code == "" {
 		response.Error = "code is required"
-		httpapi.Encode(w, r, http.StatusBadRequest, response)
-		return
+		return response, rpc.StatusInvalid
 	}
-	state, err := h.app.DB.GetStateByCode(r.Context(), code)
+	state, err := h.app.DB.GetStateByCode(ctx, req.Code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			response.Error = "state not found"
-			httpapi.Encode(w, r, http.StatusNotFound, response)
-			return
+			return response, rpc.StatusInvalid
 		}
 		response.Error = "failed to load state"
-		httpapi.Encode(w, r, http.StatusInternalServerError, response)
-		return
+		return response, rpc.StatusError
 	}
 	response.State = toState(state)
-	httpapi.Encode(w, r, http.StatusOK, response)
+	return response, rpc.StatusOK
 }
 
-func (h *Handlers) StateCreate(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) StateCreate(ctx context.Context, req CreateStateRequest) (StateResponse, int) {
 	response := StateResponse{}
-	req, err := httpapi.Decode[CreateStateRequest](r)
-	if err != nil {
-		response.Error = "invalid request"
-		httpapi.Encode(w, r, http.StatusBadRequest, response)
-		return
+	if req.Code == "" || req.Name == "" {
+		response.Error = "code and name are required"
+		return response, rpc.StatusInvalid
 	}
-	state, err := h.app.DB.CreateState(r.Context(), req.Code, req.Name)
+	state, err := h.app.DB.CreateState(ctx, req.Code, req.Name)
 	if err != nil {
 		response.Error = "failed to create state"
-		httpapi.Encode(w, r, http.StatusInternalServerError, response)
-		return
+		return response, rpc.StatusError
 	}
 	response.State = toState(state)
-	httpapi.Encode(w, r, http.StatusOK, response)
+	return response, rpc.StatusOK
 }
 
 func toStates(states []db.State) []State {
