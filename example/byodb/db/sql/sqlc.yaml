@@ -1,0 +1,14 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "queries/"
+    schema: "schemas/"
+    gen:
+      go:
+        package: "db"
+        emit_prepared_queries: true
+        emit_empty_slices: true
+        out: ".."
+        sql_package: "pgx/v5"
+        query_parameter_limit: 4
+        emit_json_tags: true

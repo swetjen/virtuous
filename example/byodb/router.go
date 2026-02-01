@@ -3,28 +3,61 @@ package byodb
 import (
 	"net/http"
 
-	"github.com/swetjen/virtuous/example/template/config"
-	"github.com/swetjen/virtuous/example/template/db"
-	"github.com/swetjen/virtuous/example/template/deps"
-	"github.com/swetjen/virtuous/example/template/handlers"
-	"github.com/swetjen/virtuous/example/template/handlers/admin"
-	"github.com/swetjen/virtuous/example/template/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/swetjen/virtuous/example/byodb/config"
+	"github.com/swetjen/virtuous/example/byodb/db"
+	"github.com/swetjen/virtuous/example/byodb/deps"
+	"github.com/swetjen/virtuous/example/byodb/handlers"
+	"github.com/swetjen/virtuous/example/byodb/handlers/admin"
+	"github.com/swetjen/virtuous/example/byodb/handlers/states"
+	"github.com/swetjen/virtuous/example/byodb/middleware"
 	"github.com/swetjen/virtuous/httpapi"
 )
 
-func NewRouter(cfg config.Config, store *db.Store) http.Handler {
-	router := BuildRouter(cfg, store)
+func NewRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) http.Handler {
+	router := BuildRouter(cfg, queries, pool)
 	return httpapi.Cors(
 		httpapi.WithAllowedOrigins(cfg.AllowedOrigins...),
 	)(router)
 }
 
-func BuildRouter(cfg config.Config, store *db.Store) *httpapi.Router {
-	application := deps.New(cfg, store)
+func BuildRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) *httpapi.Router {
+	application := deps.New(cfg, queries, pool)
 	handlerSet := handlers.New(application)
 	adminGuard := middleware.AdminBearerGuard{Token: cfg.AdminBearerToken}
 
 	router := httpapi.NewRouter()
+
+	router.HandleTyped(
+		"GET /api/v1/states/",
+		httpapi.WrapFunc(handlerSet.States.StatesGetMany, nil, states.StatesResponse{}, httpapi.HandlerMeta{
+			Service: "States",
+			Method:  "GetMany",
+			Summary: "List states",
+			Tags:    []string{"states"},
+		}),
+	)
+
+	router.HandleTyped(
+		"GET /api/v1/states/{code}",
+		httpapi.WrapFunc(handlerSet.States.StateByCode, nil, states.StateResponse{}, httpapi.HandlerMeta{
+			Service: "States",
+			Method:  "GetByCode",
+			Summary: "Get state by code",
+			Tags:    []string{"states"},
+		}),
+	)
+
+	router.HandleTyped(
+		"POST /api/v1/states/",
+		httpapi.WrapFunc(handlerSet.States.StateCreate, states.CreateStateRequest{}, states.StateResponse{}, httpapi.HandlerMeta{
+			Service: "States",
+			Method:  "Create",
+			Summary: "Create state",
+			Tags:    []string{"states"},
+		}),
+	)
 
 	router.HandleTyped(
 		"GET /api/v1/admin/users/",

@@ -1,11 +1,14 @@
 package admin
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/swetjen/virtuous/example/template/db"
-	"github.com/swetjen/virtuous/example/template/deps"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/swetjen/virtuous/example/byodb/db"
+	"github.com/swetjen/virtuous/example/byodb/deps"
 	"github.com/swetjen/virtuous/httpapi"
 )
 
@@ -41,7 +44,11 @@ type CreateAdminUserRequest struct {
 }
 
 func (h *AdminHandlers) UsersGetMany(w http.ResponseWriter, r *http.Request) {
-	users := h.app.DB.ListUsers()
+	users, err := h.app.DB.ListUsers(r.Context())
+	if err != nil {
+		httpapi.Encode(w, r, http.StatusInternalServerError, AdminUsersResponse{Error: "failed to load users"})
+		return
+	}
 	response := AdminUsersResponse{Data: toAdminUsers(users)}
 	httpapi.Encode(w, r, http.StatusOK, response)
 }
@@ -55,8 +62,18 @@ func (h *AdminHandlers) UserByID(w http.ResponseWriter, r *http.Request) {
 		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
-	user, ok := h.app.DB.GetUser(id)
-	if !ok {
+	user, err := h.app.DB.GetUser(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.Error = "user not found"
+			httpapi.Encode(w, r, http.StatusNotFound, response)
+			return
+		}
+		response.Error = "failed to load user"
+		httpapi.Encode(w, r, http.StatusInternalServerError, response)
+		return
+	}
+	if user.ID == 0 {
 		response.Error = "user not found"
 		httpapi.Encode(w, r, http.StatusNotFound, response)
 		return
@@ -73,10 +90,10 @@ func (h *AdminHandlers) UserCreate(w http.ResponseWriter, r *http.Request) {
 		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
-	user, err := h.app.DB.CreateUser(db.User{Email: req.Email, Name: req.Name, Role: req.Role})
+	user, err := h.app.DB.CreateUser(r.Context(), req.Email, req.Name, req.Role)
 	if err != nil {
 		response.Error = err.Error()
-		httpapi.Encode(w, r, http.StatusBadRequest, response)
+		httpapi.Encode(w, r, http.StatusInternalServerError, response)
 		return
 	}
 	response.User = toAdminUser(user)

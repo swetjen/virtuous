@@ -6,15 +6,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/swetjen/virtuous/example/template"
-	"github.com/swetjen/virtuous/example/template/config"
-	"github.com/swetjen/virtuous/example/template/db"
+	"github.com/swetjen/virtuous/example/byodb"
+	"github.com/swetjen/virtuous/example/byodb/config"
+	"github.com/swetjen/virtuous/example/byodb/db"
 )
 
 func TestGeneratedOutputs(t *testing.T) {
 	cfg := config.Load()
-	store := db.New()
-	router := byodb.BuildRouter(cfg, store)
+	queries := db.NewTest()
+	router := byodb.BuildRouter(cfg, queries, nil)
 
 	outDir := t.TempDir()
 

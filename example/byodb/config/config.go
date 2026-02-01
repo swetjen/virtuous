@@ -9,6 +9,7 @@ type Config struct {
 	Port             string
 	AdminBearerToken string
 	AllowedOrigins   []string
+	DatabaseURL      string
 }
 
 func Load() Config {
@@ -16,6 +17,7 @@ func Load() Config {
 		Port:             getEnv("PORT", "8000"),
 		AdminBearerToken: getEnv("ADMIN_BEARER_TOKEN", "dev-admin-token"),
 		AllowedOrigins:   splitEnvList("CORS_ALLOW_ORIGINS", []string{"*"}),
+		DatabaseURL:      strings.TrimSpace(os.Getenv("DATABASE_URL")),
 	}
 }
 

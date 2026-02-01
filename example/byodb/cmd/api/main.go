@@ -1,13 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 
-	api "github.com/swetjen/virtuous/example/template"
-	"github.com/swetjen/virtuous/example/template/config"
-	"github.com/swetjen/virtuous/example/template/db"
+	api "github.com/swetjen/virtuous/example/byodb"
+	"github.com/swetjen/virtuous/example/byodb/config"
+	"github.com/swetjen/virtuous/example/byodb/db"
 )
 
 func main() {
@@ -18,12 +19,16 @@ func main() {
 
 func RunServer() error {
 	cfg := config.Load()
-	store := db.New()
+	queries, pool, err := db.Open(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
 	server := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: api.NewRouter(cfg, store),
+		Handler: api.NewRouter(cfg, queries, pool),
 	}
 
-	fmt.Println("Template server listening on :" + cfg.Port)
+	fmt.Println("Byodb server listening on :" + cfg.Port)
 	return server.ListenAndServe()
 }

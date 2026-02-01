@@ -10,5 +10,9 @@ deps:
 	go install github.com/pressly/goose/v3/cmd/goose@latest
 	go install github.com/cespare/reflex@latest
 
+gen:
+	@echo "Generating sqlc output"
+	cd db/sql && sqlc generate
+
 run:
 	reflex -r ".*\.(go,html,js,ts)" -s -- sh -c "go run ./cmd/api/main.go"
