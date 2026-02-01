@@ -3,6 +3,7 @@
 ## 0.0.15
 
 - Add RPC runtime package with typed handler reflection, OpenAPI, and client generators.
+- RPC handlers return `(Resp, status)` with 200/422/500 status codes.
 - Add RPC docs/client serving helpers and top-level RPC aliases.
 
 ## 0.0.14

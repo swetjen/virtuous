@@ -40,7 +40,7 @@ deps/
 ## Required patterns (RPC)
 
 - Use `rpc.NewRouter(rpc.WithPrefix("/rpc"))`.
-- Handlers are `func(context.Context, Req) rpc.Result[Ok, Err]`.
+- Handlers are `func(context.Context, Req) (Resp, int)`.
 - Place handlers in their own packages so paths are `/rpc/{package}/{method}`.
 - Call `router.ServeAllDocs()` to expose docs and clients.
 
@@ -60,7 +60,7 @@ Use `httpapi` when you have existing `net/http` handlers or legacy OpenAPI contr
 You are implementing a Virtuous RPC API.
 - Create router.go with rpc.NewRouter(rpc.WithPrefix("/rpc")).
 - Put handlers in package folders (states, users).
-- Use func(ctx, req) rpc.Result[Ok, Err].
+- Use func(ctx, req) (Resp, int).
 - Register handlers in router.go and call router.ServeAllDocs().
 - Use httpapi only for legacy routes.
 ```
@@ -70,7 +70,7 @@ You are implementing a Virtuous RPC API.
 ```text
 Migrate a legacy Swaggo API to Virtuous.
 - Keep existing request/response structs.
-- Convert each route to func(ctx, req) rpc.Result[Ok, Err].
+- Convert each route to func(ctx, req) (Resp, int).
 - Register with router.HandleRPC.
 - Serve docs from /rpc/docs and clients from /rpc/client.gen.*.
 ```

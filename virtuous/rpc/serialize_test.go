@@ -40,16 +40,12 @@ type serializeResponse struct {
 	Payload *serializeItem   `json:"payload,omitempty"`
 }
 
-type serializeError struct {
-	Error string `json:"error"`
-}
-
-func serializeHandler(ctx context.Context, req serializeRequest) Result[serializeResponse, serializeError] {
+func serializeHandler(ctx context.Context, req serializeRequest) (serializeResponse, int) {
 	_ = ctx
-	return OK[serializeResponse, serializeError](serializeResponse{
+	return serializeResponse{
 		Echo:    req,
 		Payload: &serializeItem{ID: 99, Name: "payload"},
-	})
+	}, StatusOK
 }
 
 func TestRPCSerializesCommonTypes(t *testing.T) {

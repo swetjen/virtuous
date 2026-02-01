@@ -71,11 +71,11 @@ type GetStateRequest struct {
 	Code string `json:"code"`
 }
 
-func GetState(_ context.Context, req GetStateRequest) rpc.Result[StateResponse, StateError] {
+func GetState(_ context.Context, req GetStateRequest) (StateResponse, int) {
 	if req.Code == "" {
-		return rpc.Invalid[StateResponse, StateError](StateError{Error: "code is required"})
+		return StateResponse{Error: "code is required"}, rpc.StatusInvalid
 	}
-	return rpc.OK[StateResponse, StateError](StateResponse{State: State{ID: 1, Code: req.Code, Name: "Minnesota"}})
+	return StateResponse{State: State{ID: 1, Code: req.Code, Name: "Minnesota"}}, rpc.StatusOK
 }
 
 func main() {
@@ -105,7 +105,7 @@ RPC is the default and recommended way to build new APIs in Virtuous.
 
 Key points:
 - RPC handlers are plain Go functions with typed request/response payloads.
-- RPC handlers return `rpc.Result[Ok, Err]` with status 200/422/500.
+- RPC handlers return `(Resp, status)` with status 200/422/500.
 - Routes are derived from the handler package and function name.
 
 Example (router wiring):
@@ -176,7 +176,7 @@ Swaggo -> Virtuous RPC migration guide (lightweight):
 
 1) Keep your existing request/response structs (they become RPC payloads).
 2) Replace Swaggo annotations with RPC handlers:
-   - `func(ctx, req) rpc.Result[Ok, Err]`
+   - `func(ctx, req) (Resp, int)`
 3) Register handlers with `router.HandleRPC(...)`.
 4) Serve docs/clients from `/rpc/docs` and `/rpc/client.gen.*`.
 
@@ -191,7 +191,7 @@ Agent prompt template (RPC):
 ```text
 You are implementing a Virtuous RPC API.
 - Create a router in router.go with rpc.NewRouter(rpc.WithPrefix("/rpc")).
-- Implement handlers as func(ctx, req) rpc.Result[Ok, Err].
+- Implement handlers as func(ctx, req) (Resp, int).
 - Put handlers in package-scoped folders (e.g., /states, /users) so paths are /rpc/{package}/{method}.
 - Register handlers in router.go and call router.ServeAllDocs().
 - Do not use httpapi unless migrating legacy handlers.

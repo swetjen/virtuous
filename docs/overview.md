@@ -24,23 +24,14 @@ RPC is the default and recommended approach for new APIs.
 ### Handler signature
 
 ```go
-func(context.Context, Req) rpc.Result[Ok, Err]
-func(context.Context) rpc.Result[Ok, Err]
+func(context.Context, Req) (Resp, int)
+func(context.Context) (Resp, int)
 ```
 
-### Result model
+### Status model
 
-```go
-type Result[Ok, Err any] struct {
-	Status int // 200, 422, 500
-	OK     Ok
-	Err    Err
-}
-
-func OK[Ok, Err any](v Ok) Result[Ok, Err]
-func Invalid[Ok, Err any](e Err) Result[Ok, Err]
-func Fail[Ok, Err any](e Err) Result[Ok, Err]
-```
+- Return `(Resp, status)` from handlers.
+- Status must be 200, 422, or 500.
 
 ### Router wiring
 
@@ -126,7 +117,7 @@ deps/
 You are implementing a Virtuous RPC API.
 - Create router.go with rpc.NewRouter(rpc.WithPrefix("/rpc")).
 - Put handlers in package folders (states, users, admin).
-- Use func(ctx, req) rpc.Result[Ok, Err].
+- Use func(ctx, req) (Resp, int).
 - Register handlers in router.go and call router.ServeAllDocs().
 - Use httpapi only for legacy handlers.
 ```
@@ -136,7 +127,7 @@ You are implementing a Virtuous RPC API.
 ```text
 Migrate Swaggo routes to Virtuous RPC.
 - Keep existing request/response structs.
-- Convert each route to an RPC handler: func(ctx, req) rpc.Result[Ok, Err].
+- Convert each route to an RPC handler: func(ctx, req) (Resp, int).
 - Register with router.HandleRPC.
 - Remove Swaggo annotations once replaced.
 ```
@@ -146,7 +137,7 @@ Migrate Swaggo routes to Virtuous RPC.
 Swaggo is annotation-first. Virtuous is type-first. Migrate in place:
 
 1) Reuse your existing request/response structs.
-2) Replace annotated handlers with RPC handlers returning `rpc.Result`.
+2) Replace annotated handlers with RPC handlers returning `(Resp, status)`.
 3) Register them with `router.HandleRPC`.
 4) Serve docs + clients from `/rpc/docs` and `/rpc/client.gen.*`.
 

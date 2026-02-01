@@ -77,20 +77,13 @@ func buildClientSpecWith(
 			responseType = typeFn(respType)
 		}
 
-		errorType := ""
-		if route.ErrorType != nil {
-			errType := route.ErrorType
-			registry.AddTypeOf(errType)
-			errorType = typeFn(errType)
-		}
-
 		method := clientMethod{
 			Name:         methodName,
 			Path:         route.Path,
 			HasBody:      route.RequestType != nil,
 			RequestType:  requestType,
 			ResponseType: responseType,
-			ErrorType:    errorType,
+			ErrorType:    responseType,
 		}
 		if len(route.Guards) > 0 {
 			method.HasAuth = true

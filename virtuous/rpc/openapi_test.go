@@ -11,16 +11,13 @@ type openAPIReq struct {
 	Name string `json:"name"`
 }
 
-type openAPIOk struct {
+type openAPIPayload struct {
 	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
 }
 
-type openAPIErr struct {
-	Error string `json:"error"`
-}
-
-func openAPIHandler(_ context.Context, _ openAPIReq) Result[openAPIOk, openAPIErr] {
-	return OK[openAPIOk, openAPIErr](openAPIOk{Message: "ok"})
+func openAPIHandler(_ context.Context, _ openAPIReq) (openAPIPayload, int) {
+	return openAPIPayload{Message: "ok"}, StatusOK
 }
 
 type openAPIGuard struct{}

@@ -11,17 +11,17 @@ import (
 
 type guardOrderKey struct{}
 
-type guardOrderOK struct {
+type guardOrderResp struct {
 	Trace []string `json:"trace"`
 }
 
-type guardOrderErr struct {
-	Error string `json:"error"`
+type guardOrderPayload struct {
+	Error string `json:"error,omitempty"`
 }
 
-func guardOrderHandler(ctx context.Context) Result[guardOrderOK, guardOrderErr] {
+func guardOrderHandler(ctx context.Context) (guardOrderResp, int) {
 	trace, _ := ctx.Value(guardOrderKey{}).([]string)
-	return OK[guardOrderOK, guardOrderErr](guardOrderOK{Trace: trace})
+	return guardOrderResp{Trace: trace}, StatusOK
 }
 
 type orderGuard struct {
@@ -48,20 +48,24 @@ func (g orderGuard) Middleware() func(http.Handler) http.Handler {
 	}
 }
 
-func sampleHandler(ctx context.Context) Result[testOK, testErr] {
-	return OK[testOK, testErr](testOK{Message: "ok"})
+func sampleHandler(ctx context.Context) (guardOrderResp, int) {
+	_ = ctx
+	return guardOrderResp{Trace: []string{"ok"}}, StatusOK
 }
 
-func invalidReqHandler(ctx context.Context, _ int) Result[testOK, testErr] {
-	return OK[testOK, testErr](testOK{Message: "ok"})
+func invalidReqHandler(ctx context.Context, _ int) (guardOrderResp, int) {
+	_ = ctx
+	return guardOrderResp{Trace: []string{"ok"}}, StatusOK
 }
 
-func invalidOKHandler(ctx context.Context, _ testReq) Result[int, testErr] {
-	return Result[int, testErr]{Status: StatusOK, OK: 42}
+func invalidRespHandler(ctx context.Context, _ testReq) (int, int) {
+	_ = ctx
+	return 1, StatusOK
 }
 
-func invalidStatusHandler(ctx context.Context, _ testReq) Result[testOK, testErr] {
-	return Result[testOK, testErr]{Status: 201, OK: testOK{Message: "created"}}
+func invalidStatusHandler(ctx context.Context, _ testReq) (testResp, int) {
+	_ = ctx
+	return testResp{Message: "created"}, 201
 }
 
 func TestRPCPathInferenceAndCollision(t *testing.T) {
@@ -85,7 +89,7 @@ func TestRPCInvalidTypePanics(t *testing.T) {
 		router.HandleRPC(invalidReqHandler)
 	})
 	expectPanic(t, func() {
-		router.HandleRPC(invalidOKHandler)
+		router.HandleRPC(invalidRespHandler)
 	})
 }
 
@@ -115,7 +119,7 @@ func TestRPCRouterAndHandlerGuardOrder(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
-	var body guardOrderOK
+	var body guardOrderResp
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}

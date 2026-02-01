@@ -53,27 +53,26 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			}
 		}
 
-		if route.ResponseType == nil || route.ErrorType == nil {
-			return nil, errors.New("rpc: response and error types are required for " + route.Path)
+		if route.ResponseType == nil {
+			return nil, errors.New("rpc: response type is required for " + route.Path)
 		}
-		okSchema := gen.SchemaForType(route.ResponseType)
-		errSchema := gen.SchemaForType(route.ErrorType)
+		respSchema := gen.SchemaForType(route.ResponseType)
 		op.Responses["200"] = openAPIResponse{
 			Description: http.StatusText(http.StatusOK),
 			Content: map[string]openAPIMedia{
-				"application/json": {Schema: okSchema},
+				"application/json": {Schema: respSchema},
 			},
 		}
 		op.Responses["422"] = openAPIResponse{
 			Description: http.StatusText(http.StatusUnprocessableEntity),
 			Content: map[string]openAPIMedia{
-				"application/json": {Schema: errSchema},
+				"application/json": {Schema: respSchema},
 			},
 		}
 		op.Responses["500"] = openAPIResponse{
 			Description: http.StatusText(http.StatusInternalServerError),
 			Content: map[string]openAPIMedia{
-				"application/json": {Schema: errSchema},
+				"application/json": {Schema: respSchema},
 			},
 		}
 
