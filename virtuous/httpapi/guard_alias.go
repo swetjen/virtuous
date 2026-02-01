@@ -1,4 +1,4 @@
-package rpc
+package httpapi
 
 import "github.com/swetjen/virtuous/guard"
 

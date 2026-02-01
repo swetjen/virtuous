@@ -28,7 +28,7 @@ type CreateStateRequest struct {
 	Name string `json:"name"`
 }
 
-func BuildRouter() *httpapi.Router {
+func BuildRouter(guards ...httpapi.Guard) *httpapi.Router {
 	router := httpapi.NewRouter()
 	router.SetOpenAPIOptions(httpapi.OpenAPIOptions{
 		Title:       "Combined HTTP API",
@@ -44,6 +44,7 @@ func BuildRouter() *httpapi.Router {
 			Summary: "List all states",
 			Tags:    []string{"states"},
 		}),
+		guards...,
 	)
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
@@ -53,6 +54,7 @@ func BuildRouter() *httpapi.Router {
 			Summary: "Get state by code",
 			Tags:    []string{"states"},
 		}),
+		guards...,
 	)
 	router.HandleTyped(
 		"POST /api/v1/lookup/states",
@@ -62,6 +64,7 @@ func BuildRouter() *httpapi.Router {
 			Summary: "Create a new state",
 			Tags:    []string{"states"},
 		}),
+		guards...,
 	)
 
 	router.ServeAllDocs()
