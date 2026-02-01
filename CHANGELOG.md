@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.17
+
+- Promote the Go module to the repository root to fix published package layout.
+- Align docs and examples with the byodb canonical flow and styleguides.
+
 ## 0.0.16
 
 - Add sqlc-backed byodb example with RPC handlers and embedded React frontend.
