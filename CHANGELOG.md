@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.16
+
+- Add sqlc-backed byodb example with RPC handlers and embedded React frontend.
+- Add client SDK generation command and byodb agent/styleguide documentation.
+
 ## 0.0.15
 
 - Add RPC handler runtime, router, guards, and code generation.
