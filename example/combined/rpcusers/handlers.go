@@ -34,31 +34,31 @@ type GetUserRequest struct {
 	ID int32 `json:"id"`
 }
 
-func List(_ context.Context) rpc.Result[UsersResponse, UserError] {
-	return rpc.OK[UsersResponse, UserError](UsersResponse{Users: append([]User(nil), userData...)})
+func List(_ context.Context) (UsersResponse, int) {
+	return UsersResponse{Users: append([]User(nil), userData...)}, rpc.StatusOK
 }
 
-func Get(_ context.Context, req GetUserRequest) rpc.Result[UserResponse, UserError] {
+func Get(_ context.Context, req GetUserRequest) (UserResponse, int) {
 	if req.ID == 0 {
-		return rpc.Invalid[UserResponse, UserError](UserError{Error: "id is required"})
+		return UserResponse{Error: "id is required"}, rpc.StatusInvalid
 	}
 	for _, user := range userData {
 		if user.ID == req.ID {
-			return rpc.OK[UserResponse, UserError](UserResponse{User: user})
+			return UserResponse{User: user}, rpc.StatusOK
 		}
 	}
-	return rpc.Invalid[UserResponse, UserError](UserError{Error: "user not found"})
+	return UserResponse{Error: "user not found"}, rpc.StatusInvalid
 }
 
-func Create(_ context.Context, req CreateUserRequest) rpc.Result[UserResponse, UserError] {
+func Create(_ context.Context, req CreateUserRequest) (UserResponse, int) {
 	email := strings.TrimSpace(req.Email)
 	name := strings.TrimSpace(req.Name)
 	if email == "" || name == "" {
-		return rpc.Invalid[UserResponse, UserError](UserError{Error: "email and name are required"})
+		return UserResponse{Error: "email and name are required"}, rpc.StatusInvalid
 	}
 	for _, user := range userData {
 		if strings.EqualFold(user.Email, email) {
-			return rpc.Invalid[UserResponse, UserError](UserError{Error: "email already exists"})
+			return UserResponse{Error: "email already exists"}, rpc.StatusInvalid
 		}
 	}
 	user := User{
@@ -68,7 +68,7 @@ func Create(_ context.Context, req CreateUserRequest) rpc.Result[UserResponse, U
 	}
 	nextUserID++
 	userData = append(userData, user)
-	return rpc.OK[UserResponse, UserError](UserResponse{User: user})
+	return UserResponse{User: user}, rpc.StatusOK
 }
 
 var nextUserID int32 = 3

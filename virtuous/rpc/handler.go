@@ -14,8 +14,7 @@ import (
 type handlerSpec struct {
 	fn       reflect.Value
 	reqType  reflect.Type
-	okType   reflect.Type
-	errType  reflect.Type
+	respType reflect.Type
 	service  string
 	method   string
 	path     string
@@ -29,12 +28,16 @@ func parseHandler(fn any, prefix string) (handlerSpec, error) {
 		return handlerSpec{}, errors.New("rpc: handler must be a function")
 	}
 	ft := value.Type()
-	if ft.NumOut() != 1 {
-		return handlerSpec{}, errors.New("rpc: handler must return a Result")
+	if ft.NumOut() != 2 {
+		return handlerSpec{}, errors.New("rpc: handler must return (Resp, status)")
 	}
-	okType, errType, err := parseResultType(ft.Out(0))
-	if err != nil {
-		return handlerSpec{}, err
+	respType := ft.Out(0)
+	if !isStructType(respType) {
+		return handlerSpec{}, errors.New("rpc: response type must be a struct or pointer to struct")
+	}
+	statusType := ft.Out(1)
+	if statusType.Kind() != reflect.Int {
+		return handlerSpec{}, errors.New("rpc: status return must be int")
 	}
 
 	if ft.NumIn() < 1 || ft.NumIn() > 2 {
@@ -66,8 +69,7 @@ func parseHandler(fn any, prefix string) (handlerSpec, error) {
 	return handlerSpec{
 		fn:       value,
 		reqType:  reqType,
-		okType:   okType,
-		errType:  errType,
+		respType: respType,
 		service:  pkgName,
 		method:   funcName,
 		path:     path,
@@ -114,40 +116,6 @@ func resolveFuncName(fn any) (fullName string, pkgName string, funcName string, 
 	return fullName, pkgName, funcName, nil
 }
 
-func parseResultType(t reflect.Type) (reflect.Type, reflect.Type, error) {
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	if t.Kind() != reflect.Struct {
-		return nil, nil, errors.New("rpc: handler must return rpc.Result")
-	}
-	if t.PkgPath() != "github.com/swetjen/virtuous/rpc" {
-		return nil, nil, errors.New("rpc: handler must return rpc.Result")
-	}
-	if !strings.HasPrefix(t.Name(), "Result") {
-		return nil, nil, errors.New("rpc: handler must return rpc.Result")
-	}
-	statusField, ok := t.FieldByName("Status")
-	if !ok || statusField.Type.Kind() != reflect.Int {
-		return nil, nil, errors.New("rpc: Result.Status must be int")
-	}
-	okField, ok := t.FieldByName("OK")
-	if !ok {
-		return nil, nil, errors.New("rpc: Result.OK is required")
-	}
-	errField, ok := t.FieldByName("Err")
-	if !ok {
-		return nil, nil, errors.New("rpc: Result.Err is required")
-	}
-	if !isStructType(okField.Type) {
-		return nil, nil, errors.New("rpc: Result.OK must be struct or pointer to struct")
-	}
-	if !isStructType(errField.Type) {
-		return nil, nil, errors.New("rpc: Result.Err must be struct or pointer to struct")
-	}
-	return okField.Type, errField.Type, nil
-}
-
 func isStructType(t reflect.Type) bool {
 	base := derefType(t)
 	return base != nil && base.Kind() == reflect.Struct
@@ -165,27 +133,20 @@ func buildRPCHandler(spec handlerSpec) http.Handler {
 		if spec.reqType != nil {
 			reqVal, err := decodeRequest(r, spec.reqType)
 			if err != nil {
-				writeError(w, StatusInvalid, spec.errType)
+				writeJSON(w, StatusInvalid, reflect.Zero(spec.respType))
 				return
 			}
 			args = append(args, reqVal)
 		}
 
-		result := spec.fn.Call(args)[0]
-		status, okVal, errVal, err := unpackResult(result)
-		if err != nil {
-			writeError(w, StatusError, spec.errType)
-			return
+		out := spec.fn.Call(args)
+		respVal := out[0]
+		statusVal := out[1]
+		status := int(statusVal.Int())
+		if status != StatusOK && status != StatusInvalid && status != StatusError {
+			status = StatusError
 		}
-
-		switch status {
-		case StatusOK:
-			writeJSON(w, status, okVal)
-		case StatusInvalid, StatusError:
-			writeJSON(w, status, errVal)
-		default:
-			writeError(w, StatusError, spec.errType)
-		}
+		writeJSON(w, status, respVal)
 	})
 }
 
@@ -206,33 +167,6 @@ func decodeRequest(r *http.Request, reqType reflect.Type) (reflect.Value, error)
 		return reflect.Value{}, err
 	}
 	return target.Elem(), nil
-}
-
-func unpackResult(v reflect.Value) (int, reflect.Value, reflect.Value, error) {
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return 0, reflect.Value{}, reflect.Value{}, errors.New("rpc: nil Result")
-		}
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return 0, reflect.Value{}, reflect.Value{}, errors.New("rpc: invalid Result")
-	}
-	status := v.FieldByName("Status")
-	okVal := v.FieldByName("OK")
-	errVal := v.FieldByName("Err")
-	if !status.IsValid() || status.Kind() != reflect.Int {
-		return 0, reflect.Value{}, reflect.Value{}, errors.New("rpc: Result.Status missing")
-	}
-	if !okVal.IsValid() || !errVal.IsValid() {
-		return 0, reflect.Value{}, reflect.Value{}, errors.New("rpc: Result fields missing")
-	}
-	return int(status.Int()), okVal, errVal, nil
-}
-
-func writeError(w http.ResponseWriter, status int, errType reflect.Type) {
-	zero := reflect.Zero(errType)
-	writeJSON(w, status, zero)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v reflect.Value) {

@@ -34,33 +34,33 @@ type GetByCodeRequest struct {
 	Code string `json:"code"`
 }
 
-func GetMany(_ context.Context) rpc.Result[StatesResponse, StateError] {
+func GetMany(_ context.Context) (StatesResponse, int) {
 	response := StatesResponse{Data: append([]State(nil), stateData...)}
-	return rpc.OK[StatesResponse, StateError](response)
+	return response, rpc.StatusOK
 }
 
-func GetByCode(_ context.Context, req GetByCodeRequest) rpc.Result[StateResponse, StateError] {
+func GetByCode(_ context.Context, req GetByCodeRequest) (StateResponse, int) {
 	code := strings.TrimSpace(req.Code)
 	if code == "" {
-		return rpc.Invalid[StateResponse, StateError](StateError{Error: "code is required"})
+		return StateResponse{Error: "code is required"}, rpc.StatusInvalid
 	}
 	for _, state := range stateData {
 		if strings.EqualFold(state.Code, code) {
-			return rpc.OK[StateResponse, StateError](StateResponse{State: state})
+			return StateResponse{State: state}, rpc.StatusOK
 		}
 	}
-	return rpc.Invalid[StateResponse, StateError](StateError{Error: "code not found"})
+	return StateResponse{Error: "code not found"}, rpc.StatusInvalid
 }
 
-func Create(_ context.Context, req CreateStateRequest) rpc.Result[StateResponse, StateError] {
+func Create(_ context.Context, req CreateStateRequest) (StateResponse, int) {
 	code := strings.TrimSpace(req.Code)
 	name := strings.TrimSpace(req.Name)
 	if code == "" || name == "" {
-		return rpc.Invalid[StateResponse, StateError](StateError{Error: "code and name are required"})
+		return StateResponse{Error: "code and name are required"}, rpc.StatusInvalid
 	}
 	for _, state := range stateData {
 		if strings.EqualFold(state.Code, code) {
-			return rpc.Invalid[StateResponse, StateError](StateError{Error: "state code already exists"})
+			return StateResponse{Error: "state code already exists"}, rpc.StatusInvalid
 		}
 	}
 	state := State{
@@ -70,7 +70,7 @@ func Create(_ context.Context, req CreateStateRequest) rpc.Result[StateResponse,
 	}
 	nextStateID++
 	stateData = append(stateData, state)
-	return rpc.OK[StateResponse, StateError](StateResponse{State: state})
+	return StateResponse{State: state}, rpc.StatusOK
 }
 
 var nextStateID int32 = 3

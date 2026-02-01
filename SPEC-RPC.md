@@ -52,31 +52,18 @@ type GuardSpec struct {
 }
 ```
 
-### Result model
-```
-type Result[Ok, Err any] struct {
-	Status int // 200, 422, 500
-	OK     Ok
-	Err    Err
-}
-
-func OK[Ok, Err any](v Ok) Result[Ok, Err]         // Status=200
-func Invalid[Ok, Err any](e Err) Result[Ok, Err]   // Status=422
-func Fail[Ok, Err any](e Err) Result[Ok, Err]      // Status=500
-```
-
 ## Handler signature
 
 RPC handlers must match one of:
 ```
-func(context.Context, Req) Result[Ok, Err]
-func(context.Context) Result[Ok, Err]
+func(context.Context, Req) (Resp, int)
+func(context.Context) (Resp, int)
 ```
 
 Notes:
 - The request type must be a struct (or pointer to struct).
-- The response OK type must be a struct (or pointer to struct).
-- The error type must be a struct (or pointer to struct) and is used for both 422 and 500 responses.
+- The response type must be a struct (or pointer to struct).
+- The status must be one of 200, 422, 500.
 
 ## Path + metadata inference
 - Route path is derived from the function's package and name:
@@ -90,17 +77,18 @@ Notes:
 - Request body is JSON for handlers with a request param.
 - For handlers with no request param, `requestBody` is omitted from OpenAPI.
 - Response:
-  - 200 → `Result.OK` JSON
-  - 422/500 → `Result.Err` JSON
-- `Status` must be one of 200, 422, 500. Any other status is invalid.
+  - `status == 200` → JSON response payload
+  - `status == 422` → JSON response payload
+  - `status == 500` → JSON response payload
+- Status codes are restricted to 200, 422, 500. Any other status is invalid and treated as 500.
 - For guarded routes, 401 is produced by guard middleware only (not by handlers).
 
 ## OpenAPI output
 - One OpenAPI doc per `rpc.Router`.
 - Responses for each operation:
-  - `200` with OK schema
-  - `422` with Err schema
-  - `500` with Err schema
+  - `200` with response schema
+  - `422` with response schema
+  - `500` with response schema
 - `401` is included only when guards are attached.
 - `components.securitySchemes` and `security` are derived from guard specs.
 

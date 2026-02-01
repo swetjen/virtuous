@@ -123,8 +123,7 @@ func (r *Router) HandleRPC(fn any, guards ...Guard) {
 		Service:      spec.service,
 		Method:       spec.method,
 		RequestType:  spec.reqType,
-		ResponseType: spec.okType,
-		ErrorType:    spec.errType,
+		ResponseType: spec.respType,
 		Guards:       guardSpecs(allGuards),
 	}
 	r.routes = append(r.routes, route)

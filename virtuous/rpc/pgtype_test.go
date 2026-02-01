@@ -35,12 +35,8 @@ type pgtypeResponse struct {
 	Raw         json.RawMessage    `json:"raw"`
 }
 
-type pgtypeError struct {
-	Error string `json:"error"`
-}
-
-func pgtypeHandler(_ context.Context, req pgtypeRequest) Result[pgtypeResponse, pgtypeError] {
-	return OK[pgtypeResponse, pgtypeError](pgtypeResponse{
+func pgtypeHandler(_ context.Context, req pgtypeRequest) (pgtypeResponse, int) {
+	return pgtypeResponse{
 		Text:        req.Text,
 		Num:         req.Num,
 		When:        req.When,
@@ -49,7 +45,7 @@ func pgtypeHandler(_ context.Context, req pgtypeRequest) Result[pgtypeResponse, 
 		Timestamptz: req.Timestamptz,
 		Date:        req.Date,
 		Raw:         req.Raw,
-	})
+	}, StatusOK
 }
 
 func TestRPCPgtypeRoundTrip(t *testing.T) {

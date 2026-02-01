@@ -58,7 +58,7 @@ export function createClient(basepath = "/") {
 {{- else }}
 			 * @param {AuthOptions} [options]
 {{- end }}
-			 * @returns {Promise<{{- if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}any{{ end }}>}
+			 * @returns {Promise<{{- if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}any{{ end }}>} 
 			 */
 			async {{ $method.Name }}({{ if $method.HasBody }}request, {{ end }}options) {
 				const headers = {

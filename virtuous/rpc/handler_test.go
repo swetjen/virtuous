@@ -13,19 +13,16 @@ type testReq struct {
 	Name string `json:"name"`
 }
 
-type testOK struct {
+type testResp struct {
 	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
 }
 
-type testErr struct {
-	Error string `json:"error"`
-}
-
-func testHandler(ctx context.Context, req testReq) Result[testOK, testErr] {
+func testHandler(_ context.Context, req testReq) (testResp, int) {
 	if strings.TrimSpace(req.Name) == "" {
-		return Invalid[testOK, testErr](testErr{Error: "name required"})
+		return testResp{Error: "name required"}, StatusInvalid
 	}
-	return OK[testOK, testErr](testOK{Message: "hello " + req.Name})
+	return testResp{Message: "hello " + req.Name}, StatusOK
 }
 
 func TestRPCHandleOK(t *testing.T) {
@@ -44,7 +41,7 @@ func TestRPCHandleOK(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
-	var body testOK
+	var body testResp
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -69,7 +66,7 @@ func TestRPCHandleInvalid(t *testing.T) {
 	if rec.Code != StatusInvalid {
 		t.Fatalf("expected status 422, got %d", rec.Code)
 	}
-	var body testErr
+	var body testResp
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}

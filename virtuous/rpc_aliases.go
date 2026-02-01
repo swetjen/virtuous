@@ -7,7 +7,6 @@ type RPCGuard = rpc.Guard
 type RPCGuardSpec = rpc.GuardSpec
 type RPCRoute = rpc.Route
 type RPCRouter = rpc.Router
-type RPCResult[Ok, Err any] = rpc.Result[Ok, Err]
 type RPCTypeOverride = rpc.TypeOverride
 
 type RPCDocsOptions = rpc.DocsOptions
@@ -22,6 +21,12 @@ type RPCOpenAPIContact = rpc.OpenAPIContact
 type RPCOpenAPILicense = rpc.OpenAPILicense
 type RPCOpenAPIExternalDocs = rpc.OpenAPIExternalDocs
 
+const (
+	RPCStatusOK      = rpc.StatusOK
+	RPCStatusInvalid = rpc.StatusInvalid
+	RPCStatusError   = rpc.StatusError
+)
+
 // RPC function shims.
 func NewRPCRouter(opts ...rpc.RouterOption) *rpc.Router {
 	return rpc.NewRouter(opts...)
@@ -33,18 +38,6 @@ func RPCWithPrefix(prefix string) rpc.RouterOption {
 
 func RPCWithGuards(guards ...rpc.Guard) rpc.RouterOption {
 	return rpc.WithGuards(guards...)
-}
-
-func RPCOK[Ok, Err any](v Ok) rpc.Result[Ok, Err] {
-	return rpc.OK[Ok, Err](v)
-}
-
-func RPCInvalid[Ok, Err any](e Err) rpc.Result[Ok, Err] {
-	return rpc.Invalid[Ok, Err](e)
-}
-
-func RPCFail[Ok, Err any](e Err) rpc.Result[Ok, Err] {
-	return rpc.Fail[Ok, Err](e)
 }
 
 func RPCDefaultDocsHTML(openAPIPath string) string {
