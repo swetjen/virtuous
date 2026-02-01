@@ -21,5 +21,6 @@ Primary index for byodb agents. Start here.
 - You must follow the linked styleguides for any change in their domain.
 - Never edit sqlc outputs, generated SDKs, or `frontend-web/dist` manually.
 - Never edit `frontend-web/api/client.gen.js` by hand (generated).
+- Do not modify files under `frontend-web/api/` manually (generated).
 - Use the generated JS client in the frontend whenever possible.
 - Before release, run `make gen-all`.
