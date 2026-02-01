@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/swetjen/virtuous/example/rpc-basic/states"
 	"github.com/swetjen/virtuous/rpc"
 )
 
@@ -18,9 +17,13 @@ func main() {
 func RunServer() error {
 	router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
 
-	router.HandleRPC(states.GetMany)
-	router.HandleRPC(states.GetByCode)
-	router.HandleRPC(states.Create)
+	router.HandleRPC(StatesGetMany)
+	router.HandleRPC(StateByCode)
+	router.HandleRPC(StateCreate)
+
+	router.HandleRPC(UsersList)
+	router.HandleRPC(UserGet)
+	router.HandleRPC(UserCreate)
 
 	router.ServeAllDocs()
 

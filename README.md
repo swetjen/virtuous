@@ -61,10 +61,7 @@ type State struct {
 
 type StateResponse struct {
 	State State `json:"state"`
-}
-
-type StateError struct {
-	Error string `json:"error"`
+	Error string `json:"error,omitempty"`
 }
 
 type GetStateRequest struct {
@@ -160,8 +157,7 @@ mux.Handle("/", httpRouter)
 ## Examples
 
 RPC:
-- `example/rpc-basic/` - simplified States API (RPC)
-- `example/rpc-users/` - simplified Users API (RPC)
+- `example/rpc-basic/` - simplified States + Users API (RPC)
 
 Combined:
 - `example/combined/` - httpapi + RPC in one server
