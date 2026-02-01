@@ -19,10 +19,7 @@ type UsersResponse struct {
 
 type UserResponse struct {
 	User User `json:"user"`
-}
-
-type UserError struct {
-	Error string `json:"error"`
+	Error string `json:"error,omitempty"`
 }
 
 type CreateUserRequest struct {
