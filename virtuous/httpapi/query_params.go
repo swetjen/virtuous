@@ -148,10 +148,3 @@ func hasOmitEmpty(parts []string) bool {
 func fieldDoc(field reflect.StructField) string {
 	return strings.TrimSpace(field.Tag.Get("doc"))
 }
-
-func lowerFirst(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToLower(s[:1]) + s[1:]
-}

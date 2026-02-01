@@ -51,6 +51,9 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
 				gen.PreferNameOf(reqReflect, preferred)
 			}
+			// Register the request schema so prefixed names and collisions are tracked
+			// even when the request body schema is filtered for query params.
+			_ = gen.SchemaForType(reqReflect)
 			queryInfo, err := queryParamsFor(reqReflect)
 			if err != nil {
 				return nil, err
