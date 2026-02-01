@@ -15,4 +15,4 @@ require (
 	golang.org/x/text v0.29.0 // indirect
 )
 
-replace github.com/swetjen/virtuous => ../../virtuous
+replace github.com/swetjen/virtuous => ../..
