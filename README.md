@@ -2,18 +2,27 @@
 
 Virtuous is an **agent-first API framework for Go** with **self-generating docs and clients**.
 
-RPC is the canonical (new) way to build APIs in Virtuous. `httpapi` exists for legacy `net/http` handlers and migration.
+Virtuous supports two API styles:
+
+- **RPC** — the primary, recommended model
+- **httpapi** — compatibility support for existing `net/http` handlers
+
+RPC is optimized for simplicity, correctness, and reliable code generation.  
+`httpapi` exists to support migration and interoperability with existing APIs.
 
 ## Table of contents
 
-- [RPC (canonical)](#rpc-canonical)
-- [httpapi (legacy)](#httpapi-legacy)
-- [Combined (demo only)](#combined-demo-only)
+- [RPC (recommended)](#rpc-recommended)
+- [httpapi (compatibility)](#httpapi-compatibility)
+- [Combined (migration demo)](#combined-migration-demo)
 - [Docs](#docs)
 
-## RPC (canonical)
+## RPC (recommended)
 
-RPC uses plain Go functions with typed requests/responses. Routes are inferred from package + function name.
+RPC uses plain Go functions with typed requests and responses.  
+Routes, schemas, and clients are inferred from package and function names.
+
+This model minimizes surface area, avoids configuration drift, and produces predictable client code.
 
 ### Quick start (cut, paste, run)
 
@@ -81,6 +90,8 @@ go run .
 
 ### Handler signature
 
+RPC handlers must follow one of these forms:
+
 ```go
 func(context.Context, Req) (Resp, int)
 func(context.Context) (Resp, int)
@@ -88,12 +99,26 @@ func(context.Context) (Resp, int)
 
 ### Status model
 
-- Status must be 200, 422, or 500.
-- Docs and SDKs are served at `/rpc/docs` and `/rpc/client.gen.*`.
+RPC handlers return an HTTP status code directly.
 
-## httpapi (legacy)
+Supported statuses:
 
-`httpapi` wraps classic `net/http` handlers and helps preserve existing OpenAPI shapes. Use it for migrations or compatibility.
+- `200` — success
+- `422` — invalid input
+- `500` — server error
+
+Docs and SDKs are served at:
+
+- `/rpc/docs`
+- `/rpc/client.gen.*`
+
+## httpapi (compatibility)
+
+`httpapi` wraps classic `net/http` handlers and preserves existing request/response shapes.
+
+Use this when:
+- Migrating an existing API to Virtuous
+- Maintaining compatibility with established OpenAPI contracts
 
 ```go
 router := httpapi.NewRouter()
@@ -107,9 +132,11 @@ router.HandleTyped(
 router.ServeAllDocs()
 ```
 
-## Combined (demo only)
+## Combined (migration demo)
 
-Use both routers in one server for migration. Not a canonical production layout.
+Both routers can be mounted in the same server to support incremental migration.
+
+This layout is intended for transition periods, not as a long-term structure.
 
 ```go
 httpRouter := httpstates.BuildRouter()
@@ -123,10 +150,34 @@ mux.Handle("/rpc/", rpcRouter)
 mux.Handle("/", httpRouter)
 ```
 
+## Why RPC?
+
+Virtuous uses an RPC-style API model because it produces **simpler, more reliable systems**—especially when APIs are consumed by agents.
+
+RPC treats APIs as **typed functions**, not as collections of loosely related HTTP resources. This keeps the surface area small and the intent explicit.
+
+### What RPC optimizes for
+
+- **Clarity over convention** — function names express intent directly, without guessing paths or schemas.
+- **Types as the contract** — request and response structs *are* the API; no separate schema to sync.
+- **Predictable code generation** — small, explicit signatures produce reliable client SDKs.
+- **Fewer invalid states** — avoids ambiguous partial updates, nested resources, and overloaded semantics.
+- **Runtime truth** — routes, schemas, docs, and clients all derive from the same runtime definitions.
+
+### HTTP still matters
+
+Virtuous RPC runs on HTTP and uses HTTP status codes intentionally.  
+What changes is the *mental model*: from “resources and verbs” to “operations with inputs and outputs.”
+
+For teams migrating existing APIs or preserving established contracts, Virtuous also supports classic `net/http` handlers via `httpapi`.
+
+RPC is simply the default because it’s **harder to misuse and easier to automate**.
+
+
 ## Docs
 
-- `docs/overview.md` is the canonical documentation (RPC first).
-- `docs/agent_quickstart.md` contains the agent-friendly flow.
+- `docs/overview.md` — primary documentation (RPC-first)
+- `docs/agent_quickstart.md` — agent-oriented usage guide
 
 ## Requirements
 
