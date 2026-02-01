@@ -4,15 +4,15 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/swetjen/virtuous"
+	"github.com/swetjen/virtuous/httpapi"
 )
 
 type AdminBearerGuard struct {
 	Token string
 }
 
-func (g AdminBearerGuard) Spec() virtuous.GuardSpec {
-	return virtuous.GuardSpec{
+func (g AdminBearerGuard) Spec() httpapi.GuardSpec {
+	return httpapi.GuardSpec{
 		Name:   "AdminBearer",
 		In:     "header",
 		Param:  "Authorization",

@@ -1,4 +1,4 @@
-module github.com/swetjen/virtuous/example/template
+module github.com/swetjen/virtuous/example/rpc-basic
 
 go 1.25
 

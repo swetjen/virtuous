@@ -1,4 +1,4 @@
-module github.com/swetjen/virtuous/example/template
+module github.com/swetjen/virtuous/example/combined
 
 go 1.25
 

@@ -1,4 +1,4 @@
-package main
+package httpstates
 
 import (
 	"net/http"
@@ -26,6 +26,46 @@ type StateResponse struct {
 type CreateStateRequest struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
+}
+
+func BuildRouter() *httpapi.Router {
+	router := httpapi.NewRouter()
+	router.SetOpenAPIOptions(httpapi.OpenAPIOptions{
+		Title:       "Combined HTTP API",
+		Version:     "0.0.1",
+		Description: "Legacy HTTP routes for state lookup.",
+	})
+
+	router.HandleTyped(
+		"GET /api/v1/lookup/states/",
+		httpapi.WrapFunc(StatesGetMany, nil, StatesResponse{}, httpapi.HandlerMeta{
+			Service: "States",
+			Method:  "GetMany",
+			Summary: "List all states",
+			Tags:    []string{"states"},
+		}),
+	)
+	router.HandleTyped(
+		"GET /api/v1/lookup/states/{code}",
+		httpapi.WrapFunc(StateByCode, nil, StateResponse{}, httpapi.HandlerMeta{
+			Service: "States",
+			Method:  "GetByCode",
+			Summary: "Get state by code",
+			Tags:    []string{"states"},
+		}),
+	)
+	router.HandleTyped(
+		"POST /api/v1/lookup/states",
+		httpapi.WrapFunc(StateCreate, CreateStateRequest{}, StateResponse{}, httpapi.HandlerMeta{
+			Service: "States",
+			Method:  "Create",
+			Summary: "Create a new state",
+			Tags:    []string{"states"},
+		}),
+	)
+
+	router.ServeAllDocs()
+	return router
 }
 
 func StatesGetMany(w http.ResponseWriter, r *http.Request) {
