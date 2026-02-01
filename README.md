@@ -104,6 +104,7 @@ RPC handlers return an HTTP status code directly.
 Supported statuses:
 
 - `200` — success
+- `401` — unauthorized (guard)
 - `422` — invalid input
 - `500` — server error
 
@@ -115,7 +116,7 @@ Docs and SDKs are served at:
 
 ## httpapi (compatibility)
 
-`httpapi` wraps classic `net/http` handlers and preserves existing request/response shapes.
+`httpapi` wraps classic `net/http` handlers and preserves existing request/response shapes.  It also implements automatic OpenAPI 3.0 specs for all handlers wrapped in this way.
 
 Use this when:
 - Migrating an existing API to Virtuous
@@ -172,7 +173,7 @@ What changes is the *mental model*: from “resources and verbs” to “operati
 
 For teams migrating existing APIs or preserving established contracts, Virtuous also supports classic `net/http` handlers via `httpapi`.
 
-RPC is simply the default because it’s **harder to misuse and easier to automate**.
+RPC is the default because it’s **harder to misuse and easier to automate**.
 
 
 ## Docs
