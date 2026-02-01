@@ -24,6 +24,7 @@ _ = server.ListenAndServe()
 - RPC handlers are plain functions: `func(ctx, req) (resp, status)`.
 - Status must be 200, 422, or 500.
 - `HandleRPC` infers the path from package + function name.
+- Use a canonical `error` field in response payloads (string or struct) when errors occur.
 
 ## Docs and clients
 
@@ -77,3 +78,12 @@ Rules:
 - Query params are serialized as strings and URL-escaped.
 - Nested structs/maps are not supported.
 - Fields with `query` tags cannot also use `json` tags.
+
+## Canonical flow (byodb-style)
+
+1) Add/update schema + queries in `db/sql/schemas` and `db/sql/queries`.
+2) Run `make gen`.
+3) Implement RPC handlers.
+4) Run `make gen-sdk`.
+5) Update frontend using the generated JS client.
+6) Run `make gen-web` (or `make gen-all`).

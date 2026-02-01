@@ -22,9 +22,9 @@ func RunServer() error {
 	sharedGuard := auth.BearerGuard{}
 	httpRouter := httpstates.BuildRouter(sharedGuard)
 	rpcRouter := rpc.NewRouter(rpc.WithPrefix("/rpc"))
-	rpcRouter.HandleRPC(rpcusers.List, sharedGuard)
-	rpcRouter.HandleRPC(rpcusers.Get, sharedGuard)
-	rpcRouter.HandleRPC(rpcusers.Create, sharedGuard)
+	rpcRouter.HandleRPC(rpcusers.UsersGetMany, sharedGuard)
+	rpcRouter.HandleRPC(rpcusers.UserGetByID, sharedGuard)
+	rpcRouter.HandleRPC(rpcusers.UserCreate, sharedGuard)
 	rpcRouter.ServeAllDocs()
 
 	mux := http.NewServeMux()

@@ -18,7 +18,7 @@ type UsersResponse struct {
 }
 
 type UserResponse struct {
-	User User `json:"user"`
+	User  User   `json:"user"`
 	Error string `json:"error,omitempty"`
 }
 
@@ -31,11 +31,11 @@ type GetUserRequest struct {
 	ID int32 `json:"id"`
 }
 
-func List(_ context.Context) (UsersResponse, int) {
+func UsersGetMany(_ context.Context) (UsersResponse, int) {
 	return UsersResponse{Users: append([]User(nil), userData...)}, rpc.StatusOK
 }
 
-func Get(_ context.Context, req GetUserRequest) (UserResponse, int) {
+func UserGetByID(_ context.Context, req GetUserRequest) (UserResponse, int) {
 	if req.ID == 0 {
 		return UserResponse{Error: "id is required"}, rpc.StatusInvalid
 	}
@@ -47,7 +47,7 @@ func Get(_ context.Context, req GetUserRequest) (UserResponse, int) {
 	return UserResponse{Error: "user not found"}, rpc.StatusInvalid
 }
 
-func Create(_ context.Context, req CreateUserRequest) (UserResponse, int) {
+func UserCreate(_ context.Context, req CreateUserRequest) (UserResponse, int) {
 	email := strings.TrimSpace(req.Email)
 	name := strings.TrimSpace(req.Name)
 	if email == "" || name == "" {

@@ -20,6 +20,7 @@ RPC is the default and recommended approach for new APIs.
 - Requests and responses are typed and reflected into OpenAPI and client SDKs.
 - Routes are inferred from the handler package and function name.
 - Docs and SDKs are served at runtime.
+ - Canonical flow: schema/queries → `make gen` → RPC handlers → `make gen-sdk` → frontend → `make gen-web`.
 
 ### Handler signature
 
@@ -32,6 +33,7 @@ func(context.Context) (Resp, int)
 
 - Return `(Resp, status)` from handlers.
 - Status must be 200, 422, or 500.
+ - Responses should include a canonical `error` field (string or struct) when errors occur.
 
 ### Router wiring
 
@@ -82,8 +84,8 @@ Virtuous supports running both routers in the same server for migration or exper
 httpRouter := httpstates.BuildRouter()
 
 rpcRouter := rpc.NewRouter(rpc.WithPrefix("/rpc"))
-rpcRouter.HandleRPC(rpcusers.List)
-rpcRouter.HandleRPC(rpcusers.Create)
+rpcRouter.HandleRPC(rpcusers.UsersGetMany)
+rpcRouter.HandleRPC(rpcusers.UserCreate)
 
 mux := http.NewServeMux()
 mux.Handle("/rpc/", rpcRouter)
@@ -110,6 +112,9 @@ deps/
 - `router.go` wires routes and guards.
 - `handlers/` defines RPC handlers per domain.
 - `deps/` owns external wiring (db, cache, services).
+ - After adding/adjusting queries: `make gen`.
+ - After adding/adjusting RPC routes: `make gen-sdk`.
+ - After updating frontend: `make gen-web` (or `make gen-all`).
 
 ### Agent prompt template (RPC)
 

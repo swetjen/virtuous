@@ -111,6 +111,7 @@ Docs and SDKs are served at:
 
 - `/rpc/docs`
 - `/rpc/client.gen.*`
+- Responses should include a canonical `error` field (string or struct) when errors occur.
 
 ## httpapi (compatibility)
 
@@ -142,8 +143,8 @@ This layout is intended for transition periods, not as a long-term structure.
 httpRouter := httpstates.BuildRouter()
 
 rpcRouter := rpc.NewRouter(rpc.WithPrefix("/rpc"))
-rpcRouter.HandleRPC(rpcusers.List)
-rpcRouter.HandleRPC(rpcusers.Create)
+rpcRouter.HandleRPC(rpcusers.UsersGetMany)
+rpcRouter.HandleRPC(rpcusers.UserCreate)
 
 mux := http.NewServeMux()
 mux.Handle("/rpc/", rpcRouter)
@@ -178,6 +179,7 @@ RPC is simply the default because it’s **harder to misuse and easier to automa
 
 - `docs/overview.md` — primary documentation (RPC-first)
 - `docs/agent_quickstart.md` — agent-oriented usage guide
+- `example/byodb/docs/STYLEGUIDES.md` — byodb styleguide index and canonical flow
 
 ## Requirements
 

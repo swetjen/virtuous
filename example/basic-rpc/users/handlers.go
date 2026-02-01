@@ -31,11 +31,11 @@ type GetUserRequest struct {
 	ID int32 `json:"id"`
 }
 
-func UsersList(_ context.Context) (UsersResponse, int) {
+func UsersGetMany(_ context.Context) (UsersResponse, int) {
 	return UsersResponse{Users: append([]User(nil), userData...)}, rpc.StatusOK
 }
 
-func UserGet(_ context.Context, req GetUserRequest) (UserResponse, int) {
+func UserGetByID(_ context.Context, req GetUserRequest) (UserResponse, int) {
 	if req.ID == 0 {
 		return UserResponse{Error: "id is required"}, rpc.StatusInvalid
 	}

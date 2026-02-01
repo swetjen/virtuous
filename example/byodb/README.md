@@ -20,6 +20,8 @@ make run
 - `make test` runs tests.
 - `make deps` installs local tooling dependencies.
 - `make gen` regenerates sqlc output from `db/sql/*`.
+- `make gen-sdk` regenerates client SDKs (including `frontend-web/api/client.gen.js`).
+- `make gen-web` rebuilds the embedded frontend assets.
 
 ## Environment
 
