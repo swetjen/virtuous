@@ -23,9 +23,10 @@ func RunServer() error {
 	router.HandleRPC(states.StateByCode)
 	router.HandleRPC(states.StateCreate)
 
-	router.HandleRPC(users.UsersList)
-	router.HandleRPC(users.UserGet)
-	router.HandleRPC(users.UserCreate)
+	userGuard := bearerGuard{}
+	router.HandleRPC(users.UsersList, userGuard)
+	router.HandleRPC(users.UserGet, userGuard)
+	router.HandleRPC(users.UserCreate, userGuard)
 
 	router.ServeAllDocs()
 
