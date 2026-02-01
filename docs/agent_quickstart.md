@@ -1,20 +1,14 @@
 # Agent Quickstart
 
-Virtuous is router-first. Use the Virtuous router directly as your `http.Server` handler and let it serve docs/clients for you.
+Virtuous is router-first and RPC-first. Use the RPC router for new APIs and `httpapi` only for legacy handlers.
 
-## Minimal wiring (no mux)
+## Minimal RPC wiring
 
 ```go
-router := virtuous.NewRouter()
+router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
 
-router.HandleTyped(
-	"GET /api/v1/hello",
-	virtuous.Wrap(http.HandlerFunc(Hello), nil, HelloResponse{}, virtuous.HandlerMeta{
-		Service: "Hello",
-		Method:  "Get",
-		Summary: "Say hello",
-	}),
-)
+router.HandleRPC(states.GetMany)
+router.HandleRPC(states.GetByCode)
 
 router.ServeAllDocs()
 
@@ -25,16 +19,16 @@ server := &http.Server{
 _ = server.ListenAndServe()
 ```
 
-## Required patterns
+## Required patterns (RPC)
 
-- Use method-prefixed patterns like `GET /path`. Non-prefixed routes do not emit docs/clients.
-- Use `Wrap` so request/response types are attached to handlers.
-- Set `HandlerMeta.Service` and `HandlerMeta.Method` for stable client names.
+- RPC handlers are plain functions: `func(ctx, req) (resp, status)`.
+- Status must be 200, 422, or 500.
+- `HandleRPC` infers the path from package + function name.
 
 ## Docs and clients
 
-- `ServeDocs()` registers `/docs` and `/openapi.json`.
-- `ServeAllDocs()` registers docs/OpenAPI plus `/client.gen.js`, `/client.gen.ts`, and `/client.gen.py`.
+- `ServeDocs()` registers `/rpc/docs` and `/rpc/openapi.json`.
+- `ServeAllDocs()` registers docs/OpenAPI plus `/rpc/client.gen.js`, `/rpc/client.gen.ts`, and `/rpc/client.gen.py`.
 
 ## Guards
 
@@ -43,8 +37,8 @@ Guards provide auth metadata for OpenAPI and client generation:
 ```go
 type bearerGuard struct{}
 
-func (bearerGuard) Spec() virtuous.GuardSpec {
-	return virtuous.GuardSpec{
+func (bearerGuard) Spec() guard.Spec {
+	return guard.Spec{
 		Name:   "BearerAuth",
 		In:     "header",
 		Param:  "Authorization",
@@ -61,11 +55,15 @@ func (bearerGuard) Middleware() func(http.Handler) http.Handler {
 }
 ```
 
-Swagger UI auto-prepends `GuardSpec.Prefix` for header schemes using `x-virtuousauth-prefix`.
+## Legacy httpapi (migration only)
+
+- Method-prefixed patterns like `GET /path` are required for docs/clients.
+- Use `Wrap` or `WrapFunc` so request/response types attach to handlers.
+- `HandlerMeta.Service` and `HandlerMeta.Method` control client method names.
 
 ## Query params (legacy)
 
-Query params are supported for migrations but not recommended for new APIs. Prefer typed bodies and path params. If you must use query params, use `query` tags on request fields:
+Query params exist only for migrations. Prefer typed bodies and path params. Use `query` tags on request fields:
 
 ```go
 type SearchRequest struct {
@@ -79,9 +77,3 @@ Rules:
 - Query params are serialized as strings and URL-escaped.
 - Nested structs/maps are not supported.
 - Fields with `query` tags cannot also use `json` tags.
-
-## Troubleshooting
-
-- Missing OpenAPI/client output: ensure routes are method-prefixed and typed (`HandleTyped` or `Wrap`).
-- Missing client method names: ensure `HandlerMeta.Service` and `HandlerMeta.Method` are set.
-- Auth header missing prefix: set `GuardSpec.Prefix` (for Swagger UI, the prefix is auto-prepended).

@@ -4,6 +4,12 @@
 
 - Add legacy query param support via `query` struct tags for migration use cases.
 
+## 0.0.15
+
+- Add RPC handler runtime, router, guards, and code generation.
+- Split `httpapi` into a dedicated package while keeping aliases for legacy imports.
+- Add RPC and combined examples plus consolidated docs updates.
+
 ## 0.0.13
 
 - Add schema name prefixing for top-level request/response types.
