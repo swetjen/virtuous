@@ -1,6 +1,7 @@
 package byodb
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,9 +20,7 @@ func NewRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) http.
 
 	mux := http.NewServeMux()
 	mux.Handle("/rpc/", rpcRouter)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "frontend-web/index.html")
-	})
+	mux.Handle("/", embedAndServeReact())
 
 	return httpapi.Cors(
 		httpapi.WithAllowedOrigins(cfg.AllowedOrigins...),
@@ -43,6 +42,9 @@ func BuildRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) *rp
 	router.HandleRPC(handlerSet.Admin.UserByID, adminGuard)
 	router.HandleRPC(handlerSet.Admin.UserCreate, adminGuard)
 
+	if err := WriteFrontendClient(router); err != nil {
+		log.Printf("byodb: failed to write js client: %v", err)
+	}
 	router.ServeAllDocs()
 
 	return router

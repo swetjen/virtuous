@@ -12,23 +12,38 @@ import (
 )
 
 func main() {
-	if err := RunServer(); err != nil {
+	server, cleanup, err := RunServer()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err := ListenAndServe(server); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func RunServer() error {
+func RunServer() (*http.Server, func(), error) {
 	cfg := config.Load()
 	queries, pool, err := db.Open(context.Background(), cfg.DatabaseURL)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	defer pool.Close()
+	cleanup := func() {
+		pool.Close()
+	}
 	server := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: api.NewRouter(cfg, queries, pool),
 	}
+	return server, cleanup, nil
+}
 
-	fmt.Println("Byodb server listening on :" + cfg.Port)
+func ListenAndServe(server *http.Server) error {
+	if server == nil {
+		return fmt.Errorf("server is nil")
+	}
+	fmt.Println("Byodb server listening on " + server.Addr)
 	return server.ListenAndServe()
 }

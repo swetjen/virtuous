@@ -8,7 +8,12 @@ These instructions apply to the database layer in `example/byodb/db`.
 
 ## Required Workflow
 - Add or update SQL in `db/sql/schemas` and `db/sql/queries`.
-- Run `make gen` from `example/byodb` to regenerate sqlc output.
+- Run `make gen` after SQL changes to regenerate sqlc output.
+- Run `make gen-sdk` after adding or adjusting API routes to refresh client SDKs.
+- Run `make gen-web` after frontend changes to rebuild embedded assets.
+- Run `make gen-all` before release to regenerate SQL, SDKs, and frontend assets together.
+- Do not manually edit sqlc outputs or generated SDKs or `frontend-web/dist`.
+- You must follow the linked styleguides for any change in this domain.
 - Only use the generated Go methods in the `db` package.
 
 ## Style Guides
