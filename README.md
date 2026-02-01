@@ -2,17 +2,33 @@
 
 Virtuous is an **agent-first API framework for Go** with **self-generating documentation and clients**.
 
-It provides a **typed router** as a thin, zero-dependency wrapper around Go’s `net/http` package.  Your handlers define everything--routes, schemas, auth, docs, and client SDKs.
+Virtuous provides two router styles:
+- **RPC (canonical)**: typed, POST-only, reflective RPC handlers designed for new APIs.
+- **httpapi (legacy)**: typed wrappers for classic `net/http` handlers and legacy OpenAPI flows.
+
+## Table of contents
+
+- [Why Virtuous](#why-virtuous)
+- [Quick start (RPC)](#quick-start-rpc)
+- [RPC (canonical)](#rpc-canonical)
+- [httpapi (legacy)](#httpapi-legacy)
+- [Combined (demo only)](#combined-demo-only)
+- [Examples](#examples)
+- [Migration: Swaggo](#migration-swaggo)
+- [Agents](#agents)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Spec](#spec)
 
 ## Why Virtuous
 
+- **Agent-first** - patterns optimized for reliable code generation.
 - **Typed handlers** - request/response types generate OpenAPI and clients automatically.
 - **Typed guards** - auth as composable middleware with self-describing metadata.
-- **Native SDKs** - simple, correct clients for Python, JavaScript, and TypeScript.
-- **Agent-friendly** - patterns optimized for reliable code generation.
-- **Zero dependencies** - Go 1.22+, standard library only.  no CLI, no codegen step, no YAML; routes and types define everything.
+- **Native SDKs** - simple clients for Python, JavaScript, and TypeScript.
+- **Zero dependencies** - standard library only in the runtime; no CLI, no YAML, no codegen step.
 
-## Quick start (cut, paste, run)
+## Quick start (RPC)
 
 Create a new project:
 
@@ -29,11 +45,12 @@ Create `main.go`:
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 
-	"github.com/swetjen/virtuous"
+	"github.com/swetjen/virtuous/rpc"
 )
 
 type State struct {
@@ -42,102 +59,34 @@ type State struct {
 	Name string `json:"name" doc:"Display name for the state."`
 }
 
-type StatesResponse struct {
-	Data  []State `json:"data"`
-	Error string  `json:"error,omitempty"`
+type StateResponse struct {
+	State State `json:"state"`
 }
 
-type StateResponse struct {
-	State State  `json:"state"`
-	Error string `json:"error,omitempty"`
+type StateError struct {
+	Error string `json:"error"`
+}
+
+type GetStateRequest struct {
+	Code string `json:"code"`
+}
+
+func GetState(_ context.Context, req GetStateRequest) rpc.Result[StateResponse, StateError] {
+	if req.Code == "" {
+		return rpc.Invalid[StateResponse, StateError](StateError{Error: "code is required"})
+	}
+	return rpc.OK[StateResponse, StateError](StateResponse{State: State{ID: 1, Code: req.Code, Name: "Minnesota"}})
 }
 
 func main() {
-	if err := RunServer(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func RunServer() error {
-	router := virtuous.NewRouter()
-
-	router.HandleTyped(
-		"GET /api/v1/lookup/states/",
-		virtuous.WrapFunc(StatesGetMany, nil, StatesResponse{}, virtuous.HandlerMeta{
-			Service: "States",
-			Method:  "GetMany",
-			Summary: "List all states",
-			Tags:    []string{"states"},
-		}),
-	)
-
-	router.HandleTyped(
-		"GET /api/v1/lookup/states/{code}",
-		virtuous.WrapFunc(StateByCode, nil, StateResponse{}, virtuous.HandlerMeta{
-			Service: "States",
-			Method:  "GetByCode",
-			Summary: "Get state by code",
-			Tags:    []string{"states"},
-		}),
-	)
-
+	router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
+	router.HandleRPC(GetState)
 	router.ServeAllDocs()
 
-	server := &http.Server{
-		Addr:    ":8000",
-		Handler: router,
-	}
+	server := &http.Server{Addr: ":8000", Handler: router}
 	fmt.Println("Listening on :8000")
-	return server.ListenAndServe()
+	log.Fatal(server.ListenAndServe())
 }
-
-func StatesGetMany(w http.ResponseWriter, r *http.Request) {
-	var response StatesResponse
-	for _, state := range mockData {
-		response.Data = append(response.Data, State{
-			ID:   state.ID,
-			Code: state.Code,
-			Name: state.Name,
-		})
-	}
-
-	virtuous.Encode(w, r, http.StatusOK, response)
-}
-
-func StateByCode(w http.ResponseWriter, r *http.Request) {
-	var response StateResponse
-	code := r.PathValue("code")
-	if code == "" {
-		response.Error = "code is required"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
-		return
-	}
-
-	for _, state := range mockData {
-		if state.Code == code {
-			response.State = state
-			virtuous.Encode(w, r, http.StatusOK, response)
-			return
-		}
-	}
-
-	response.Error = "code not found"
-	virtuous.Encode(w, r, http.StatusBadRequest, response)
-}
-
-var mockData = []State{
-	{
-		ID:   1,
-		Code: "mn",
-		Name: "Minnesota",
-	},
-	{
-		ID:   2,
-		Code: "tx",
-		Name: "Texas",
-	},
-}
-
 ```
 
 Run it:
@@ -146,11 +95,111 @@ Run it:
 go run .
 ```
 
-Open `http://localhost:8000/docs/` to view the Swagger UI.
+Open:
+- RPC docs: `http://localhost:8000/rpc/docs/`
+- RPC OpenAPI: `http://localhost:8000/rpc/openapi.json`
+
+## RPC (canonical)
+
+RPC is the default and recommended way to build new APIs in Virtuous.
+
+Key points:
+- RPC handlers are plain Go functions with typed request/response payloads.
+- RPC handlers return `rpc.Result[Ok, Err]` with status 200/422/500.
+- Routes are derived from the handler package and function name.
+
+Example (router wiring):
+
+```go
+router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
+router.HandleRPC(states.GetMany)
+router.HandleRPC(states.GetByCode)
+router.HandleRPC(states.Create)
+router.ServeAllDocs()
+```
+
+## httpapi (legacy)
+
+`httpapi` exists for legacy `net/http` handlers and existing OpenAPI-driven workflows.
+
+Use `httpapi` when:
+- You already have `http.Handler` or `http.HandlerFunc` code.
+- You are adopting Virtuous to document a legacy API.
+
+Example (legacy typed handler):
+
+```go
+router := httpapi.NewRouter()
+router.HandleTyped(
+	"GET /api/v1/lookup/states/{code}",
+	httpapi.WrapFunc(StateByCode, nil, StateResponse{}, httpapi.HandlerMeta{
+		Service: "States",
+		Method:  "GetByCode",
+	}),
+)
+router.ServeAllDocs()
+```
+
+## Combined (demo only)
+
+It is possible to run both routers in one app (RPC + httpapi). This is only to
+illustrate how each pattern works. Most apps should choose one style.
+
+```go
+httpRouter := httpstates.BuildRouter()
+
+rpcRouter := rpc.NewRouter(rpc.WithPrefix("/rpc"))
+rpcRouter.HandleRPC(rpcusers.List)
+rpcRouter.HandleRPC(rpcusers.Create)
+
+mux := http.NewServeMux()
+mux.Handle("/rpc/", rpcRouter)
+mux.Handle("/", httpRouter)
+```
+
+## Examples
+
+RPC:
+- `example/rpc-basic/` - simplified States API (RPC)
+- `example/rpc-users/` - simplified Users API (RPC)
+
+Combined:
+- `example/combined/` - httpapi + RPC in one server
+
+Legacy:
+- `example/basic/` - classic httpapi States
+- `example/template/` - larger httpapi example
+
+## Migration: Swaggo
+
+Swaggo -> Virtuous RPC migration guide (lightweight):
+
+1) Keep your existing request/response structs (they become RPC payloads).
+2) Replace Swaggo annotations with RPC handlers:
+   - `func(ctx, req) rpc.Result[Ok, Err]`
+3) Register handlers with `router.HandleRPC(...)`.
+4) Serve docs/clients from `/rpc/docs` and `/rpc/client.gen.*`.
+
+If you are not ready to convert handlers, start with `httpapi` and migrate to RPC later.
+
+## Agents
+
+Virtuous is agent-first. Start with the RPC flow and only use `httpapi` for legacy routes.
+
+Agent prompt template (RPC):
+
+```text
+You are implementing a Virtuous RPC API.
+- Create a router in router.go with rpc.NewRouter(rpc.WithPrefix("/rpc")).
+- Implement handlers as func(ctx, req) rpc.Result[Ok, Err].
+- Put handlers in package-scoped folders (e.g., /states, /users) so paths are /rpc/{package}/{method}.
+- Register handlers in router.go and call router.ServeAllDocs().
+- Do not use httpapi unless migrating legacy handlers.
+```
 
 ## Requirements
 
-- Go 1.22+ (for method-prefixed route patterns like `GET /path`)
+- Go 1.25+ (for generics + method-prefixed route patterns)
 
 ## Install
 
@@ -158,167 +207,10 @@ Open `http://localhost:8000/docs/` to view the Swagger UI.
 go get github.com/swetjen/virtuous@latest
 ```
 
-## Router wiring 
-
-Virtuous is router-first.
-
-Use the Virtuous router directly as your server handler and let it serve APIs, docs, and clients from a single runtime:
-```text
-http.Server
-  -> Virtuous Router
-     -> /api routes
-     -> /docs
-     -> /openapi.json
-     -> /client.gen.*
-```
-
-## Handler metadata
-
-`HandlerMeta` describes how a typed route appears in generated clients and OpenAPI:
-
-- `Service` and `Method` group methods into client services.
-- `Summary` and `Description` show up in OpenAPI and JS JSDoc.
-- `Tags` are emitted as OpenAPI tags.
-
-## Runtime outputs
-
-Virtuous can emit OpenAPI schemas and client SDKs directly at runtime:
-
-```go
-openapiJSON, err := router.OpenAPI()
-if err != nil {
-	log.Fatal(err)
-}
-_ = os.WriteFile("openapi.json", openapiJSON, 0644)
-
-f, _ := os.Create("client.gen.js")
-_ = router.WriteClientJS(f)
-
-py, _ := os.Create("client.gen.py")
-_ = router.WriteClientPY(py)
-
-ts, _ := os.Create("client.gen.ts")
-_ = router.WriteClientTS(ts)
-```
-
-Notes:
-- `/openapi.json` can be served directly for Swagger UI or similar tools.
-- Client SDKs can be written at startup or served dynamically.
-- Pointer fields are emitted as nullable in OpenAPI.
-- Swagger UI auto-prepends GuardSpec.Prefix for header-based auth schemes.
-- Client outputs include a Virtuous client hash for versioning and drift detection.
-- Hash endpoints can be served via:
-  - `router.ServeClientJSHash`
-  - `router.ServeClientTSHash`
-  - `router.ServeClientPYHash`
-
-## Guards (auth middleware)
-
-Guards combine middleware with explicit auth metadata:
-
-Guards serve two purposes:
-- Enforce authentication at runtime
-- Describe auth requirements to docs and generated clients
-
-```go
-type bearerGuard struct{}
-
-func (bearerGuard) Spec() virtuous.GuardSpec {
-	return virtuous.GuardSpec{
-		Name:   "BearerAuth",
-		In:     "header",
-		Param:  "Authorization",
-		Prefix: "Bearer",
-	}
-}
-
-func (bearerGuard) Middleware() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// validate token here
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-```
-
-Register guarded routes:
-
-```go
-router.HandleTyped(
-	"GET /api/v1/secure/states/{code}",
-	virtuous.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, virtuous.HandlerMeta{
-		Service: "States",
-		Method:  "GetByCodeSecure",
-		Summary: "Get state by code (bearer token required)",
-	}),
-	bearerGuard{},
-)
-```
-
-## Examples
-
-Basic example (`example/basic/`)
-- List/get/create state routes
-- Generates OpenAPI + JS/TS/PY clients
-
-Template example (`example/template/`)
-- Admin routes with guard middleware
-- CORS applied at the router boundary
-- Static landing page with docs links
-
-Larger example app with React embedded (`example/`)
-- Guarded routes and admin workflows
-- OpenAPI + JS/TS/PY client generation
-
-## Troubleshooting
-
-- Missing OpenAPI/client output: ensure routes are method-prefixed and typed (`HandleTyped` or `Wrap`).
-- Missing client method names: ensure `HandlerMeta.Service` and `HandlerMeta.Method` are set.
-- Auth header missing prefix in Swagger UI: set `GuardSpec.Prefix`.
-
 ## Spec
-See `SPEC.md` for the detailed runtime specification.
+
+See `SPEC.md` for the httpapi spec and `SPEC-RPC.md` for the RPC spec.
 
 ## Agent quickstart
+
 See `docs/agent_quickstart.md` for a focused guide for agents building services.
-
-## Using Virtuous in Python
-
-Virtuous includes a zero-dependency Python loader that fetches a client from a URL and returns a ready-to-use module.
-
-Install the loader:
-
-```bash
-pip install virtuous
-```
-
-```python
-from virtuous import load_module
-
-module = load_module("http://localhost:8000/client.gen.py")
-client = module.create_client("http://localhost:8000")
-states = client.States.getMany()
-```
-
-## Using Virtuous in JavaScript
-
-```js
-import { createClient } from "./client.gen.js"
-
-const client = createClient("http://localhost:8000")
-const states = await client.States.getMany()
-```
-
-## Using Virtuous in TypeScript
-
-```ts
-import { createClient } from "./client.gen"
-
-const client = createClient("http://localhost:8000")
-const states = await client.States.getMany()
-```
-
-## Acknowledgements
-
-Virtuous is inspired by the Oto project from Pace.dev and Matt Ryer.

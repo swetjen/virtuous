@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.15
+
+- Add RPC runtime package with typed handler reflection, OpenAPI, and client generators.
+- Add RPC docs/client serving helpers and top-level RPC aliases.
+
+## 0.0.14
+
+- Move HTTP API implementation into `httpapi` subpackage with root-package shims.
+
 ## 0.0.13
 
 - Add schema name prefixing for top-level request/response types.

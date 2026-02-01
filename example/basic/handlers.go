@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/swetjen/virtuous"
+	"github.com/swetjen/virtuous/httpapi"
 )
 
 type State struct {
@@ -30,7 +30,7 @@ type CreateStateRequest struct {
 
 func StatesGetMany(w http.ResponseWriter, r *http.Request) {
 	response := StatesResponse{Data: append([]State(nil), stateData...)}
-	virtuous.Encode(w, r, http.StatusOK, response)
+	httpapi.Encode(w, r, http.StatusOK, response)
 }
 
 func StateByCode(w http.ResponseWriter, r *http.Request) {
@@ -38,28 +38,28 @@ func StateByCode(w http.ResponseWriter, r *http.Request) {
 	code := strings.TrimSpace(r.PathValue("code"))
 	if code == "" {
 		response.Error = "code is required"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
+		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
 
 	for _, state := range stateData {
 		if strings.EqualFold(state.Code, code) {
 			response.State = state
-			virtuous.Encode(w, r, http.StatusOK, response)
+			httpapi.Encode(w, r, http.StatusOK, response)
 			return
 		}
 	}
 
 	response.Error = "code not found"
-	virtuous.Encode(w, r, http.StatusBadRequest, response)
+	httpapi.Encode(w, r, http.StatusBadRequest, response)
 }
 
 func StateCreate(w http.ResponseWriter, r *http.Request) {
 	response := StateResponse{}
-	req, err := virtuous.Decode[CreateStateRequest](r)
+	req, err := httpapi.Decode[CreateStateRequest](r)
 	if err != nil {
 		response.Error = "invalid request"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
+		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
 
@@ -67,14 +67,14 @@ func StateCreate(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(req.Name)
 	if code == "" || name == "" {
 		response.Error = "code and name are required"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
+		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
 
 	for _, state := range stateData {
 		if strings.EqualFold(state.Code, code) {
 			response.Error = "state code already exists"
-			virtuous.Encode(w, r, http.StatusBadRequest, response)
+			httpapi.Encode(w, r, http.StatusBadRequest, response)
 			return
 		}
 	}
@@ -87,7 +87,7 @@ func StateCreate(w http.ResponseWriter, r *http.Request) {
 	nextStateID++
 	stateData = append(stateData, state)
 	response.State = state
-	virtuous.Encode(w, r, http.StatusOK, response)
+	httpapi.Encode(w, r, http.StatusOK, response)
 }
 
 var nextStateID int32 = 3

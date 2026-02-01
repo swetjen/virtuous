@@ -12,7 +12,7 @@
 - `HandleFunc` registers a handler function directly.
 - Patterns must be method-prefixed (e.g. `GET /path`). Invalid patterns still register on the mux but are excluded from docs/clients and emit a warning.
 - Guards wrap handlers in registration order and contribute auth metadata for docs/clients.
-- `HandlerMeta` is optional; missing `Service`/`Method` is inferred from `/virtuous/Service.Method` or falls back to defaults.
+- `HandlerMeta` is optional; missing `Service`/`Method` falls back to defaults.
 
 ## Typed Handlers
 - `Wrap` adapts a standard `http.Handler` into `TypedHandler` by attaching request/response types and metadata.
@@ -49,7 +49,7 @@
 - Request bodies emit JSON schemas when request types are provided.
 - Responses use sentinel types to emit 200/204/500 with or without bodies.
 - Schemas include numeric formats and field descriptions from `doc` tags.
-- `WriteOpenAPIFile` persists OpenAPI output, and docs HTML helpers live in `virtuous/docs.go`.
+- `WriteOpenAPIFile` persists OpenAPI output, and docs HTML helpers live in `virtuous/httpapi/docs.go`.
 - `ServeDocs` registers `/docs` and `/openapi.json` routes with optional overrides.
 - `ServeAllDocs` wires docs/OpenAPI and client routes in one call.
 - `SetOpenAPIOptions` customizes top-level OpenAPI metadata.

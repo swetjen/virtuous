@@ -3,32 +3,32 @@ package template
 import (
 	"net/http"
 
-	"github.com/swetjen/virtuous"
 	"github.com/swetjen/virtuous/example/template/config"
 	"github.com/swetjen/virtuous/example/template/db"
 	"github.com/swetjen/virtuous/example/template/deps"
 	"github.com/swetjen/virtuous/example/template/handlers"
 	"github.com/swetjen/virtuous/example/template/handlers/admin"
 	"github.com/swetjen/virtuous/example/template/middleware"
+	"github.com/swetjen/virtuous/httpapi"
 )
 
 func NewRouter(cfg config.Config, store *db.Store) http.Handler {
 	router := BuildRouter(cfg, store)
-	return virtuous.Cors(
-		virtuous.WithAllowedOrigins(cfg.AllowedOrigins...),
+	return httpapi.Cors(
+		httpapi.WithAllowedOrigins(cfg.AllowedOrigins...),
 	)(router)
 }
 
-func BuildRouter(cfg config.Config, store *db.Store) *virtuous.Router {
+func BuildRouter(cfg config.Config, store *db.Store) *httpapi.Router {
 	application := deps.New(cfg, store)
 	handlerSet := handlers.New(application)
 	adminGuard := middleware.AdminBearerGuard{Token: cfg.AdminBearerToken}
 
-	router := virtuous.NewRouter()
+	router := httpapi.NewRouter()
 
 	router.HandleTyped(
 		"GET /api/v1/admin/users/",
-		virtuous.WrapFunc(handlerSet.Admin.UsersGetMany, nil, admin.AdminUsersResponse{}, virtuous.HandlerMeta{
+		httpapi.WrapFunc(handlerSet.Admin.UsersGetMany, nil, admin.AdminUsersResponse{}, httpapi.HandlerMeta{
 			Service: "Admin",
 			Method:  "UsersGetMany",
 			Summary: "List admin users",
@@ -39,7 +39,7 @@ func BuildRouter(cfg config.Config, store *db.Store) *virtuous.Router {
 
 	router.HandleTyped(
 		"GET /api/v1/admin/users/{id}",
-		virtuous.WrapFunc(handlerSet.Admin.UserByID, nil, admin.AdminUserResponse{}, virtuous.HandlerMeta{
+		httpapi.WrapFunc(handlerSet.Admin.UserByID, nil, admin.AdminUserResponse{}, httpapi.HandlerMeta{
 			Service: "Admin",
 			Method:  "UserByID",
 			Summary: "Get admin user",
@@ -50,7 +50,7 @@ func BuildRouter(cfg config.Config, store *db.Store) *virtuous.Router {
 
 	router.HandleTyped(
 		"POST /api/v1/admin/users/",
-		virtuous.WrapFunc(handlerSet.Admin.UserCreate, admin.CreateAdminUserRequest{}, admin.AdminUserResponse{}, virtuous.HandlerMeta{
+		httpapi.WrapFunc(handlerSet.Admin.UserCreate, admin.CreateAdminUserRequest{}, admin.AdminUserResponse{}, httpapi.HandlerMeta{
 			Service: "Admin",
 			Method:  "UserCreate",
 			Summary: "Create admin user",

@@ -4,15 +4,15 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/swetjen/virtuous"
+	"github.com/swetjen/virtuous/httpapi"
 )
 
 const demoBearerToken = "demo-token"
 
 type bearerGuard struct{}
 
-func (bearerGuard) Spec() virtuous.GuardSpec {
-	return virtuous.GuardSpec{
+func (bearerGuard) Spec() httpapi.GuardSpec {
+	return httpapi.GuardSpec{
 		Name:   "BearerAuth",
 		In:     "header",
 		Param:  "Authorization",

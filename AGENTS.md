@@ -7,13 +7,14 @@ These instructions describe how to understand and work with this repository.
 - Route registration is runtime-only; there is no CLI.
 
 ## Key Files
-- `virtuous/router.go`: route registration, guards, metadata inference.
-- `virtuous/typed_handler.go`: adapter to attach request/response types and metadata.
-- `virtuous/types.go`: reflection-based type registry and override logic.
-- `virtuous/openapi.go`: OpenAPI 3.0.3 generation.
-- `virtuous/client_spec.go`: client spec builder shared by emitters.
-- `virtuous/client_js_gen.go`: JS client template and helpers.
-- `virtuous/client_ts.go`: TS client template and helpers.
+- `virtuous/httpapi/router.go`: HTTP route registration, guards, metadata inference.
+- `virtuous/httpapi/typed_handler.go`: adapter to attach request/response types and metadata.
+- `virtuous/schema/registry.go`: reflection-based type registry and override logic.
+- `virtuous/schema/openapi_schema.go`: OpenAPI schema generation for types.
+- `virtuous/httpapi/openapi.go`: OpenAPI 3.0.3 document generation.
+- `virtuous/httpapi/client_spec.go`: client spec builder shared by emitters.
+- `virtuous/httpapi/client_js_gen.go`: JS client template and helpers.
+- `virtuous/httpapi/client_ts.go`: TS client template and helpers.
 - `example/`: reference app and generated outputs.
 
 ## Architecture Notes

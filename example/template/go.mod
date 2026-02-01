@@ -1,6 +1,6 @@
 module github.com/swetjen/virtuous/example/template
 
-go 1.22
+go 1.25
 
 require github.com/swetjen/virtuous v0.0.0
 

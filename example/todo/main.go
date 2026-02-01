@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/swetjen/virtuous"
+	"github.com/swetjen/virtuous/httpapi"
 )
 
 func main() {
@@ -60,12 +60,12 @@ func RunServer() error {
 	return nil
 }
 
-func buildRouter() *virtuous.Router {
-	router := virtuous.NewRouter()
+func buildRouter() *httpapi.Router {
+	router := httpapi.NewRouter()
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/",
-		virtuous.Wrap(http.HandlerFunc(StatesGetMany), nil, StatesResponse{}, virtuous.HandlerMeta{
+		httpapi.Wrap(http.HandlerFunc(StatesGetMany), nil, StatesResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "GetMany",
 			Summary: "List all states",
@@ -75,7 +75,7 @@ func buildRouter() *virtuous.Router {
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
-		virtuous.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, virtuous.HandlerMeta{
+		httpapi.Wrap(http.HandlerFunc(StateByCode), nil, StateResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",
@@ -84,7 +84,7 @@ func buildRouter() *virtuous.Router {
 	)
 	router.HandleTyped(
 		"GET /api/v1/secure/states/{code}",
-		virtuous.Wrap(http.HandlerFunc(StateByCodeSecure), nil, StateResponse{}, virtuous.HandlerMeta{
+		httpapi.Wrap(http.HandlerFunc(StateByCodeSecure), nil, StateResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCodeSecure",
 			Summary: "Get state by code (bearer token required)",
@@ -95,7 +95,7 @@ func buildRouter() *virtuous.Router {
 
 	router.HandleTyped(
 		"GET /api/v1/admin/users",
-		virtuous.Wrap(http.HandlerFunc(UsersGetMany), nil, UsersResponse{}, virtuous.HandlerMeta{
+		httpapi.Wrap(http.HandlerFunc(UsersGetMany), nil, UsersResponse{}, httpapi.HandlerMeta{
 			Service: "Users",
 			Method:  "GetMany",
 			Summary: "List users",
@@ -105,7 +105,7 @@ func buildRouter() *virtuous.Router {
 	)
 	router.HandleTyped(
 		"GET /api/v1/admin/users/{id}",
-		virtuous.Wrap(http.HandlerFunc(UserByID), nil, UserResponse{}, virtuous.HandlerMeta{
+		httpapi.Wrap(http.HandlerFunc(UserByID), nil, UserResponse{}, httpapi.HandlerMeta{
 			Service: "Users",
 			Method:  "GetByID",
 			Summary: "Get user by id",
@@ -115,7 +115,7 @@ func buildRouter() *virtuous.Router {
 	)
 	router.HandleTyped(
 		"POST /api/v1/admin/users",
-		virtuous.Wrap(http.HandlerFunc(UsersCreate), CreateUserRequest{}, UserResponse{}, virtuous.HandlerMeta{
+		httpapi.Wrap(http.HandlerFunc(UsersCreate), CreateUserRequest{}, UserResponse{}, httpapi.HandlerMeta{
 			Service: "Users",
 			Method:  "Create",
 			Summary: "Create user",

@@ -18,24 +18,24 @@ handling). The same registry is intended to support additional language emitters
 
 ## Key components
 
-- `virtuous/types.go`: Type registry and override logic.
+- `virtuous/schema/registry.go`: Type registry and override logic.
   - Walks request/response types from routes.
   - Records object fields, optionality (`omitempty`) and nullability (pointers).
   - Applies `TypeOverride` mappings and built-in defaults (e.g., `time.Time`).
   - Extracts field docs from `doc:"..."` struct tags.
-- `virtuous/client_spec.go`: Adds object/field metadata to the client spec
+- `virtuous/httpapi/client_spec.go`: Adds object/field metadata to the client spec
   and emits request/response type names for client emitters.
-- `virtuous/client_js_gen.go`: Emits typedef blocks and method docs with
+- `virtuous/httpapi/client_js_gen.go`: Emits typedef blocks and method docs with
   accurate JSDoc types, optional fields, and nullable pointers for JavaScript.
-- `virtuous/openapi.go`: OpenAPI generation with configurable metadata.
-- `virtuous/router.go`: Adds `SetTypeOverrides` so callers can control
+- `virtuous/httpapi/openapi.go`: OpenAPI generation with configurable metadata.
+- `virtuous/httpapi/router.go`: Adds `SetTypeOverrides` so callers can control
   type mappings without changing generator code.
-- `virtuous/docs.go`: Convenience helpers for serving docs and OpenAPI
+- `virtuous/httpapi/docs.go`: Convenience helpers for serving docs and OpenAPI
   directly from the router without external mux wiring.
-- `virtuous/serve_all.go`: Bundles docs/OpenAPI and client route registration
+- `virtuous/httpapi/serve_all.go`: Bundles docs/OpenAPI and client route registration
   into a single call for quick-start servers.
-- `virtuous/encode.go`: Shared JSON encode/decode helpers for handlers.
-- `virtuous/cors.go`: Configurable CORS middleware.
+- `virtuous/httpapi/encode.go`: Shared JSON encode/decode helpers for handlers.
+- `virtuous/httpapi/cors.go`: Configurable CORS middleware.
 
 ## Usage notes
 

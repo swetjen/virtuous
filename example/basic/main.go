@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/swetjen/virtuous"
+	"github.com/swetjen/virtuous/httpapi"
 )
 
 func main() {
@@ -25,17 +25,17 @@ func RunServer() error {
 	return server.ListenAndServe()
 }
 
-func buildRouter() *virtuous.Router {
-	router := virtuous.NewRouter()
-	router.SetOpenAPIOptions(virtuous.OpenAPIOptions{
-		Title:       "Virtuous Basic API",
+func buildRouter() *httpapi.Router {
+	router := httpapi.NewRouter()
+	router.SetOpenAPIOptions(httpapi.OpenAPIOptions{
+		Title:       "Virtuous API",
 		Version:     "0.0.1",
 		Description: "Basic example with list/get/create state routes.",
 	})
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/",
-		virtuous.WrapFunc(StatesGetMany, nil, StatesResponse{}, virtuous.HandlerMeta{
+		httpapi.WrapFunc(StatesGetMany, nil, StatesResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "GetMany",
 			Summary: "List all states",
@@ -45,7 +45,7 @@ func buildRouter() *virtuous.Router {
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
-		virtuous.WrapFunc(StateByCode, nil, StateResponse{}, virtuous.HandlerMeta{
+		httpapi.WrapFunc(StateByCode, nil, StateResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",
@@ -55,7 +55,7 @@ func buildRouter() *virtuous.Router {
 
 	router.HandleTyped(
 		"GET /api/v1/secure/states/{code}",
-		virtuous.WrapFunc(StateByCode, nil, StateResponse{}, virtuous.HandlerMeta{
+		httpapi.WrapFunc(StateByCode, nil, StateResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCodeSecure",
 			Summary: "Get state by code (bearer token required)",
@@ -66,7 +66,7 @@ func buildRouter() *virtuous.Router {
 
 	router.HandleTyped(
 		"POST /api/v1/lookup/states",
-		virtuous.WrapFunc(StateCreate, CreateStateRequest{}, StateResponse{}, virtuous.HandlerMeta{
+		httpapi.WrapFunc(StateCreate, CreateStateRequest{}, StateResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "Create",
 			Summary: "Create a new state",

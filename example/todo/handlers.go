@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/swetjen/virtuous"
+	"github.com/swetjen/virtuous/httpapi"
 )
 
 type State struct {
@@ -28,7 +28,7 @@ func StatesGetMany(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	virtuous.Encode(w, r, http.StatusOK, response)
+	httpapi.Encode(w, r, http.StatusOK, response)
 }
 
 type StateResponse struct {
@@ -41,20 +41,20 @@ func StateByCode(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	if code == "" {
 		response.Error = "code is required"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
+		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
 
 	for _, state := range mockData {
 		if state.Code == code {
 			response.State = state
-			virtuous.Encode(w, r, http.StatusOK, response)
+			httpapi.Encode(w, r, http.StatusOK, response)
 			return
 		}
 	}
 
 	response.Error = "code not found"
-	virtuous.Encode(w, r, http.StatusBadRequest, response)
+	httpapi.Encode(w, r, http.StatusBadRequest, response)
 }
 
 func StateByCodeSecure(w http.ResponseWriter, r *http.Request) {
@@ -62,20 +62,20 @@ func StateByCodeSecure(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	if code == "" {
 		response.Error = "code is required"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
+		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
 
 	for _, state := range mockData {
 		if state.Code == code {
 			response.State = state
-			virtuous.Encode(w, r, http.StatusOK, response)
+			httpapi.Encode(w, r, http.StatusOK, response)
 			return
 		}
 	}
 
 	response.Error = "code not found"
-	virtuous.Encode(w, r, http.StatusBadRequest, response)
+	httpapi.Encode(w, r, http.StatusBadRequest, response)
 }
 
 var mockData = []State{
@@ -117,7 +117,7 @@ type CreateUserRequest struct {
 func UsersGetMany(w http.ResponseWriter, r *http.Request) {
 	var response UsersResponse
 	response.Data = append(response.Data, userData...)
-	virtuous.Encode(w, r, http.StatusOK, response)
+	httpapi.Encode(w, r, http.StatusOK, response)
 }
 
 func UserByID(w http.ResponseWriter, r *http.Request) {
@@ -126,20 +126,20 @@ func UserByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil || id <= 0 {
 		response.Error = "invalid user id"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
+		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
 
 	for _, user := range userData {
 		if int(user.ID) == id {
 			response.User = user
-			virtuous.Encode(w, r, http.StatusOK, response)
+			httpapi.Encode(w, r, http.StatusOK, response)
 			return
 		}
 	}
 
 	response.Error = "user not found"
-	virtuous.Encode(w, r, http.StatusNotFound, response)
+	httpapi.Encode(w, r, http.StatusNotFound, response)
 }
 
 func UsersCreate(w http.ResponseWriter, r *http.Request) {
@@ -147,12 +147,12 @@ func UsersCreate(w http.ResponseWriter, r *http.Request) {
 	req, err := Decode[CreateUserRequest](r)
 	if err != nil {
 		response.Error = "invalid request"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
+		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
 	if req.Email == "" || req.Name == "" || req.Role == "" {
 		response.Error = "email, name, and role are required"
-		virtuous.Encode(w, r, http.StatusBadRequest, response)
+		httpapi.Encode(w, r, http.StatusBadRequest, response)
 		return
 	}
 
@@ -165,7 +165,7 @@ func UsersCreate(w http.ResponseWriter, r *http.Request) {
 	nextUserID++
 	userData = append(userData, user)
 	response.User = user
-	virtuous.Encode(w, r, http.StatusCreated, response)
+	httpapi.Encode(w, r, http.StatusCreated, response)
 }
 
 var nextUserID int32 = 3
