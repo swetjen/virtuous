@@ -14,9 +14,17 @@ Or with the Makefile:
 make run
 ```
 
+Or use the agent-friendly target that captures logs into `ERRORS`:
+
+```bash
+make agent-run
+```
+
 ## Makefile
 
 - `make run` starts the dev server with `reflex` for hot reloads.
+- `make agent-run` starts the dev server and captures all output into `ERRORS`.
+  It watches server code, `frontend-web/src`, and `.env` (but ignores generated client output to avoid restart loops).
 - `make test` runs tests.
 - `make deps` installs local tooling dependencies.
 - `make gen` regenerates sqlc output from `db/sql/*`.
@@ -24,6 +32,11 @@ make run
 - `make gen-web` rebuilds the embedded frontend assets.
 
 ## Environment
+
+This repo supports a root `.env` file for local development. Values from `.env`
+only fill missing environment variables, so shell exports still win.
+
+In a real app, avoid committing secrets; this template keeps `.env` in-repo for convenience.
 
 - `PORT` (default `8000`)
 - `ADMIN_BEARER_TOKEN` (default `dev-admin-token`)

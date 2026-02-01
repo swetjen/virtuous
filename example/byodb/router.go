@@ -1,7 +1,7 @@
 package byodb
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,6 +28,7 @@ func NewRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) http.
 }
 
 func BuildRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) *rpc.Router {
+	slog.Info("byodb: building rpc router", "prefix", "/rpc")
 	application := deps.New(cfg, queries, pool)
 	handlerSet := handlers.New(application)
 	adminGuard := middleware.AdminBearerGuard{Token: cfg.AdminBearerToken}
@@ -43,9 +44,10 @@ func BuildRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) *rp
 	router.HandleRPC(handlerSet.Admin.UserCreate, adminGuard)
 
 	if err := WriteFrontendClient(router); err != nil {
-		log.Printf("byodb: failed to write js client: %v", err)
+		slog.Error("byodb: failed to write js client", "err", err)
 	}
 	router.ServeAllDocs()
+	slog.Info("byodb: router ready", "status", "all clear")
 
 	return router
 }

@@ -30,4 +30,7 @@ gen-all:
 	make gen-web
 
 run:
-	reflex -r ".*\.(go,html,js,ts)" -s -- sh -c "go run ./cmd/api/main.go"
+	reflex -r '(^|/)(cmd|config|db|deps|handlers|middleware|frontend-web/src)/.*\.(go|html|js|ts|tsx)$$|(^|/)router\.go$$|(^|/)frontend_embed\.go$$|(^|/)client_gen\.go$$|(^|/)\.env$$' -s -- sh -c "go run ./cmd/api/main.go"
+
+agent-run:
+	@bash -c ': > ERRORS; reflex -r '\''(^|/)(cmd|config|db|deps|handlers|middleware|frontend-web/src)/.*\.(go|html|js|ts|tsx)$$|(^|/)router\.go$$|(^|/)frontend_embed\.go$$|(^|/)client_gen\.go$$|(^|/)\.env$$'\'' -s -- sh -c "go run ./cmd/api/main.go" 2>&1 | tee ERRORS'
