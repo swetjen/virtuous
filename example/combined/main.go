@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/swetjen/virtuous/example/combined/auth"
 	"github.com/swetjen/virtuous/example/combined/httpstates"
 	"github.com/swetjen/virtuous/example/combined/rpcusers"
 	"github.com/swetjen/virtuous/httpapi"
@@ -18,11 +19,12 @@ func main() {
 }
 
 func RunServer() error {
-	httpRouter := httpstates.BuildRouter()
+	sharedGuard := auth.BearerGuard{}
+	httpRouter := httpstates.BuildRouter(sharedGuard)
 	rpcRouter := rpc.NewRouter(rpc.WithPrefix("/rpc"))
-	rpcRouter.HandleRPC(rpcusers.List)
-	rpcRouter.HandleRPC(rpcusers.Get)
-	rpcRouter.HandleRPC(rpcusers.Create)
+	rpcRouter.HandleRPC(rpcusers.List, sharedGuard)
+	rpcRouter.HandleRPC(rpcusers.Get, sharedGuard)
+	rpcRouter.HandleRPC(rpcusers.Create, sharedGuard)
 	rpcRouter.ServeAllDocs()
 
 	mux := http.NewServeMux()

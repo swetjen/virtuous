@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"unicode"
 
 	"github.com/swetjen/virtuous/schema"
 )
@@ -21,7 +22,7 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			Responses: map[string]openAPIResponse{},
 		}
 		if route.Service != "" {
-			op.Tags = []string{route.Service}
+			op.Tags = []string{titleTag(route.Service)}
 		}
 
 		if len(route.Guards) > 0 {
@@ -242,7 +243,7 @@ func openAPITags(tags []OpenAPITag) []openAPITag {
 		if tag.Name == "" {
 			continue
 		}
-		out = append(out, openAPITag{Name: tag.Name, Description: tag.Description})
+		out = append(out, openAPITag{Name: titleTag(tag.Name), Description: tag.Description})
 	}
 	return out
 }
@@ -266,4 +267,13 @@ func defaultString(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func titleTag(name string) string {
+	if name == "" {
+		return name
+	}
+	runes := []rune(name)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }

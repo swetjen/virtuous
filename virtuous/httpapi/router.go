@@ -6,20 +6,6 @@ import (
 	"strings"
 )
 
-// Guard carries auth metadata and middleware for a route.
-type Guard interface {
-	Spec() GuardSpec
-	Middleware() func(http.Handler) http.Handler
-}
-
-// GuardSpec describes how to inject auth for a route.
-type GuardSpec struct {
-	Name   string
-	In     string
-	Param  string
-	Prefix string
-}
-
 // HandlerMeta provides optional documentation metadata for a handler.
 type HandlerMeta struct {
 	Service     string
