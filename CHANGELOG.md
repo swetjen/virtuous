@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.18
+
+- Add lightweight JavaScript client generation for `httpapi` with React Query hooks.
+- Validate generated lightweight client syntax in `httpapi` client generation tests.
+
 ## 0.0.17
 
 - Promote the Go module to the repository root to fix published package layout.

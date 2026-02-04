@@ -19,6 +19,7 @@ type clientService struct {
 
 type clientMethod struct {
 	Name         string
+	FlatName     string
 	Summary      string
 	HTTPMethod   string
 	Path         string
