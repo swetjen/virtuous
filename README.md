@@ -82,7 +82,7 @@ func main() {
 }
 ```
 
-![Virtuous Basic API Docs](example.png)
+![Virtuous Basic API Docs](docs/example.png)
 
 Run it:
 
