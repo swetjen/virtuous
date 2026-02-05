@@ -82,6 +82,8 @@ func main() {
 }
 ```
 
+![Virtuous Basic API Docs](example.png)
+
 Run it:
 
 ```bash
