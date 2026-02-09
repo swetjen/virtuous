@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Byodb SQLite Example</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #1e293b, #0f172a 60%);
+    }
+    main {
+      max-width: 720px;
+      padding: 48px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.6);
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 2.2rem;
+      letter-spacing: 0.02em;
+    }
+    p {
+      line-height: 1.6;
+      color: #cbd5f5;
+    }
+    code {
+      font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background: rgba(15, 23, 42, 0.7);
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #93c5fd;
+    }
+    .links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+    a {
+      color: #38bdf8;
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+    a:hover {
+      border-bottom-color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Byodb SQLite Example</h1>
+    <p>
+      This is a lightweight Virtuous example that uses pure-Go SQLite via
+      <code>modernc.org/sqlite</code>. The server auto-initializes its schema on startup.
+    </p>
+    <div class="links">
+      <a href="/rpc/docs/">RPC docs</a>
+      <a href="/rpc/openapi.json">OpenAPI JSON</a>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.19
+
+- Add SQLite-backed byodb example that auto-initializes schema with a pure-Go driver.
+- Add unit tests for the SQLite example datastore and router outputs.
+
 ## 0.0.18
 
 - Add lightweight JavaScript client generation for `httpapi` with React Query hooks.
