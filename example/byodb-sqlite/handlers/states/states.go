@@ -76,7 +76,10 @@ func (h *Handlers) StateCreate(ctx context.Context, req CreateStateRequest) (Sta
 		response.Error = "code and name are required"
 		return response, rpc.StatusInvalid
 	}
-	state, err := h.app.DB.CreateState(ctx, req.Code, req.Name)
+	state, err := h.app.DB.CreateState(ctx, db.CreateStateParams{
+		Code: req.Code,
+		Name: req.Name,
+	})
 	if err != nil {
 		response.Error = "failed to create state"
 		return response, rpc.StatusError

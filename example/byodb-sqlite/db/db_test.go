@@ -13,7 +13,11 @@ func TestQueriesUsers(t *testing.T) {
 	}
 	defer pool.Close()
 
-	created, err := queries.CreateUser(context.Background(), "dev@example.com", "Dev", "admin")
+	created, err := queries.CreateUser(context.Background(), CreateUserParams{
+		Email: "dev@example.com",
+		Name:  "Dev",
+		Role:  "admin",
+	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -45,7 +49,10 @@ func TestQueriesStates(t *testing.T) {
 	}
 	defer pool.Close()
 
-	created, err := queries.CreateState(context.Background(), "CA", "California")
+	created, err := queries.CreateState(context.Background(), CreateStateParams{
+		Code: "CA",
+		Name: "California",
+	})
 	if err != nil {
 		t.Fatalf("create state: %v", err)
 	}

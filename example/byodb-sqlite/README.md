@@ -1,6 +1,6 @@
 # Byodb SQLite example
 
-A lightweight Virtuous example with admin routes, states endpoints, CORS middleware, and an embedded static landing page. This version uses pure-Go SQLite (no external DB tooling).
+A lightweight Virtuous example with admin routes, states endpoints, CORS middleware, and an embedded static landing page. This version uses pure-Go SQLite (no external DB tooling) with sqlc-generated queries.
 
 ## Run
 
@@ -18,6 +18,7 @@ make run
 
 - `make run` starts the dev server.
 - `make test` runs tests.
+- `make gen` regenerates sqlc output from `db/sql/*`.
 - `make clients` regenerates client SDKs in the working directory.
 
 ## Environment

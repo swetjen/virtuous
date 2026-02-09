@@ -76,7 +76,11 @@ func (h *AdminHandlers) UserByID(ctx context.Context, req AdminUserByIDRequest) 
 
 func (h *AdminHandlers) UserCreate(ctx context.Context, req CreateAdminUserRequest) (AdminUserResponse, int) {
 	response := AdminUserResponse{}
-	user, err := h.app.DB.CreateUser(ctx, req.Email, req.Name, req.Role)
+	user, err := h.app.DB.CreateUser(ctx, db.CreateUserParams{
+		Email: req.Email,
+		Name:  req.Name,
+		Role:  req.Role,
+	})
 	if err != nil {
 		response.Error = err.Error()
 		return response, rpc.StatusError
