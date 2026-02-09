@@ -122,6 +122,7 @@ Docs and SDKs are served at:
 
 Use this when:
 - Migrating an existing API to Virtuous
+- Developing rich http APIs.
 - Maintaining compatibility with established OpenAPI contracts
 
 ```go
