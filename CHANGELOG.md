@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.19
+
+- Add SQLite-backed byodb example that auto-initializes schema with a pure-Go driver.
+- Add unit tests for the SQLite example datastore and router outputs.
+- Log sqlite example version and applied schema files on startup.
+- Seed SQLite example with 50 US states on initialization.
+- Track and log SQLite schema migration version in the database.
+- Make SQLite schema migrations idempotent for restarts.
+
 ## 0.0.18
 
 - Add lightweight JavaScript client generation for `httpapi` with React Query hooks.
