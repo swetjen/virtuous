@@ -6,6 +6,8 @@
 - Add unit tests for the SQLite example datastore and router outputs.
 - Log sqlite example version and applied schema files on startup.
 - Seed SQLite example with 50 US states on initialization.
+- Track and log SQLite schema migration version in the database.
+- Make SQLite schema migrations idempotent for restarts.
 
 ## 0.0.18
 

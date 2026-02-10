@@ -3,7 +3,7 @@ module github.com/swetjen/virtuous/example/byodb-sqlite
 go 1.25
 
 require (
-	github.com/swetjen/virtuous v0.0.0
+	github.com/swetjen/virtuous v0.0.17
 	modernc.org/sqlite v1.34.5
 )
 
@@ -19,4 +19,3 @@ require (
 	modernc.org/memory v1.8.0 // indirect
 )
 
-replace github.com/swetjen/virtuous => ../..

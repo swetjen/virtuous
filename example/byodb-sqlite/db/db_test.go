@@ -50,8 +50,8 @@ func TestQueriesStates(t *testing.T) {
 	defer pool.Close()
 
 	created, err := queries.CreateState(context.Background(), CreateStateParams{
-		Code: "CA",
-		Name: "California",
+		Code: "ZZ",
+		Name: "Zeta State",
 	})
 	if err != nil {
 		t.Fatalf("create state: %v", err)
@@ -60,7 +60,7 @@ func TestQueriesStates(t *testing.T) {
 		t.Fatalf("expected state id")
 	}
 
-	got, err := queries.GetStateByCode(context.Background(), "CA")
+	got, err := queries.GetStateByCode(context.Background(), "ZZ")
 	if err != nil {
 		t.Fatalf("get state: %v", err)
 	}
@@ -72,8 +72,18 @@ func TestQueriesStates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list states: %v", err)
 	}
-	if len(states) != 1 {
-		t.Fatalf("expected 1 state, got %d", len(states))
+	if len(states) < 51 {
+		t.Fatalf("expected at least 51 states, got %d", len(states))
+	}
+	found := false
+	for _, state := range states {
+		if state.Code == created.Code {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected to find created state %q in list", created.Code)
 	}
 }
 
