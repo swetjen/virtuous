@@ -5,6 +5,7 @@
 - Add SQLite-backed byodb example that auto-initializes schema with a pure-Go driver.
 - Add unit tests for the SQLite example datastore and router outputs.
 - Log sqlite example version and applied schema files on startup.
+- Seed SQLite example with 50 US states on initialization.
 
 ## 0.0.18
 
