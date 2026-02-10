@@ -6,7 +6,7 @@ ORDER BY name;
 -- name: GetStateByCode :one
 SELECT id, code, name
 FROM states
-WHERE code = ?;
+WHERE lower(code) = lower(?);
 
 -- name: CreateState :one
 INSERT INTO states (code, name)

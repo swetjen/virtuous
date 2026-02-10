@@ -30,11 +30,11 @@ func (q *Queries) CreateState(ctx context.Context, arg CreateStateParams) (State
 const getStateByCode = `-- name: GetStateByCode :one
 SELECT id, code, name
 FROM states
-WHERE code = ?
+WHERE lower(code) = lower(?)
 `
 
-func (q *Queries) GetStateByCode(ctx context.Context, code string) (State, error) {
-	row := q.db.QueryRowContext(ctx, getStateByCode, code)
+func (q *Queries) GetStateByCode(ctx context.Context, lower string) (State, error) {
+	row := q.db.QueryRowContext(ctx, getStateByCode, lower)
 	var i State
 	err := row.Scan(&i.ID, &i.Code, &i.Name)
 	return i, err
