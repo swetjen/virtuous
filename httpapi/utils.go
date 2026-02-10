@@ -2,8 +2,8 @@ package httpapi
 
 import (
 	"regexp"
-	"strings"
-	"unicode"
+
+	"github.com/swetjen/virtuous/internal/textutil"
 )
 
 var pathParamRegexp = regexp.MustCompile(`\{([^/}]+)\}`)
@@ -25,30 +25,9 @@ func parsePathParams(path string) []string {
 
 // camelizeDown converts a name into lower camel case.
 func camelizeDown(word string) string {
-	if word == "" {
-		return ""
-	}
-	parts := strings.FieldsFunc(word, func(r rune) bool {
-		return r == '_' || r == '-' || r == ' ' || r == '.' || r == '/'
-	})
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		runes := []rune(part)
-		runes[0] = unicode.ToUpper(runes[0])
-		parts[i] = string(runes)
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	parts[0] = lowerFirst(parts[0])
-	return strings.Join(parts, "")
+	return textutil.CamelizeDown(word)
 }
 
 func lowerFirst(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToLower(s[:1]) + s[1:]
+	return textutil.LowerFirst(s)
 }

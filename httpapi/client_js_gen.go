@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"github.com/swetjen/virtuous/internal/clientgen"
 	"io"
 	"net/http"
 	"os"
@@ -167,7 +168,7 @@ func (r *Router) WriteClientJS(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	hash := hashClientBytes(body)
+	hash := clientgen.HashBytes(body)
 	if _, err := io.WriteString(w, "// Virtuous client hash: "+hash+"\n"); err != nil {
 		return err
 	}
@@ -216,7 +217,7 @@ func (r *Router) clientJSBody() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return renderClientTemplate(clientJSTemplate, spec)
+	return clientgen.RenderTemplate(clientJSTemplate, spec)
 }
 
 func (r *Router) clientJSHash() (string, error) {
@@ -224,5 +225,5 @@ func (r *Router) clientJSHash() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return hashClientBytes(body), nil
+	return clientgen.HashBytes(body), nil
 }

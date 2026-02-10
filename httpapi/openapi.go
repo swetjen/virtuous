@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/swetjen/virtuous/internal/reflectutil"
 	"github.com/swetjen/virtuous/schema"
 )
 
@@ -188,7 +189,7 @@ func isNoResponse(t, target reflect.Type) bool {
 }
 
 func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]struct{}) *schema.OpenAPISchema {
-	base := derefType(t)
+	base := reflectutil.DerefType(t)
 	if base == nil {
 		return nil
 	}
@@ -206,7 +207,7 @@ func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]st
 		if _, ok := skip[field.Name]; ok {
 			continue
 		}
-		name, omit := jsonFieldName(field)
+		name, omit := reflectutil.JSONFieldName(field)
 		if name == "" {
 			continue
 		}
@@ -214,7 +215,7 @@ func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]st
 		if fieldSchema == nil {
 			continue
 		}
-		doc := fieldDoc(field)
+		doc := reflectutil.FieldDoc(field)
 		nullable := fieldSchema.Nullable
 		if doc != "" {
 			if fieldSchema.Ref != "" {

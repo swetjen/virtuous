@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/swetjen/virtuous/internal/textutil"
 )
 
 // DefaultDocsHTML returns a Swagger UI HTML page for the provided OpenAPI path.
@@ -219,11 +221,5 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 }
 
 func ensureLeadingSlash(path string) string {
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
+	return textutil.EnsureLeadingSlash(path)
 }

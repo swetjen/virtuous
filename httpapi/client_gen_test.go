@@ -43,7 +43,6 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	router.HandleTyped("GET /api/v1/lookup/states/{code}", testHandler{})
 
 	js := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientJS(buf) })
-	jsLite := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientJSLite(buf) })
 	ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
 	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
 
@@ -57,15 +56,11 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	}
 
 	jsPath := writeTemp(".js", js)
-	jsLitePath := writeTemp(".lite.js", jsLite)
 	tsPath := writeTemp(".ts", ts)
 	pyPath := writeTemp(".py", py)
 
 	if err := runCommand("node", "--check", jsPath); err != nil {
 		t.Fatalf("node check failed: %v", err)
-	}
-	if err := runCommand("node", "--check", jsLitePath); err != nil {
-		t.Fatalf("node check failed (lite): %v", err)
 	}
 	if err := runCommand("tsc", "--noEmit", "--target", "ES2017", "--lib", "ES2017,DOM", tsPath); err != nil {
 		t.Fatalf("tsc check failed: %v", err)

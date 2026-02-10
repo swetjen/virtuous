@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"github.com/swetjen/virtuous/internal/clientgen"
 	"io"
 	"net/http"
 	"os"
@@ -123,7 +124,7 @@ func (r *Router) WriteClientJS(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	hash := hashClientBytes(body)
+	hash := clientgen.HashBytes(body)
 	if _, err := io.WriteString(w, "// Virtuous client hash: "+hash+"\n"); err != nil {
 		return err
 	}
@@ -169,7 +170,7 @@ func (r *Router) ServeClientJSHash(w http.ResponseWriter, _ *http.Request) {
 
 func (r *Router) clientJSBody() ([]byte, error) {
 	spec := buildClientSpec(r.Routes(), r.typeOverrides)
-	return renderClientTemplate(clientJSTemplate, spec)
+	return clientgen.RenderTemplate(clientJSTemplate, spec)
 }
 
 func (r *Router) clientJSHash() (string, error) {
@@ -177,5 +178,5 @@ func (r *Router) clientJSHash() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return hashClientBytes(body), nil
+	return clientgen.HashBytes(body), nil
 }

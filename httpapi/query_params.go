@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/swetjen/virtuous/internal/reflectutil"
 )
 
 type queryParam struct {
@@ -20,7 +22,7 @@ type queryParamsInfo struct {
 }
 
 func queryParamsFor(t reflect.Type) (queryParamsInfo, error) {
-	base := derefType(t)
+	base := reflectutil.DerefType(t)
 	if base == nil || base.Kind() != reflect.Struct {
 		return queryParamsInfo{BodyFields: 1}, nil
 	}
@@ -49,13 +51,13 @@ func queryParamsFor(t reflect.Type) (queryParamsInfo, error) {
 				Name:     name,
 				Optional: optional,
 				IsArray:  isArray,
-				Doc:      fieldDoc(field),
+				Doc:      reflectutil.FieldDoc(field),
 			})
 			info.QueryFieldSet[field.Name] = struct{}{}
 			continue
 		}
 
-		if jsonName, _ := jsonFieldName(field); jsonName != "" {
+		if jsonName, _ := reflectutil.JSONFieldName(field); jsonName != "" {
 			info.BodyFields++
 		}
 	}
@@ -90,7 +92,7 @@ func parseQueryTag(field reflect.StructField) (string, bool, bool, error) {
 }
 
 func queryParamKind(t reflect.Type) (bool, error) {
-	base := derefType(t)
+	base := reflectutil.DerefType(t)
 	if base == nil {
 		return false, fmt.Errorf("invalid query param type")
 	}
@@ -98,7 +100,7 @@ func queryParamKind(t reflect.Type) (bool, error) {
 	case reflect.Struct, reflect.Map:
 		return false, fmt.Errorf("query params do not support %s", base.Kind())
 	case reflect.Slice, reflect.Array:
-		elem := derefType(base.Elem())
+		elem := reflectutil.DerefType(base.Elem())
 		if elem == nil {
 			return false, fmt.Errorf("invalid query param element type")
 		}
@@ -111,40 +113,4 @@ func queryParamKind(t reflect.Type) (bool, error) {
 	default:
 		return false, nil
 	}
-}
-
-func derefType(t reflect.Type) reflect.Type {
-	for t != nil && t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	return t
-}
-
-func jsonFieldName(field reflect.StructField) (string, bool) {
-	tag := field.Tag.Get("json")
-	if tag == "-" {
-		return "", false
-	}
-	if tag != "" {
-		parts := strings.Split(tag, ",")
-		name := parts[0]
-		if name == "" {
-			name = lowerFirst(field.Name)
-		}
-		return name, hasOmitEmpty(parts)
-	}
-	return lowerFirst(field.Name), false
-}
-
-func hasOmitEmpty(parts []string) bool {
-	for _, part := range parts[1:] {
-		if part == "omitempty" {
-			return true
-		}
-	}
-	return false
-}
-
-func fieldDoc(field reflect.StructField) string {
-	return strings.TrimSpace(field.Tag.Get("doc"))
 }

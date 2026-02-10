@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.20
+
+- Remove the unused `httpapi` lightweight JS client generator path.
+- Deduplicate shared client rendering/hashing and reflection/tag parsing helpers via internal packages.
+- Fix Makefile test targets to run from the repository root and current example directories.
+
 ## 0.0.19
 
 - Add SQLite-backed byodb example that auto-initializes schema with a pure-Go driver.

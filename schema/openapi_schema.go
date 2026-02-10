@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/swetjen/virtuous/internal/reflectutil"
 )
 
 // OpenAPISchema describes a JSON schema object used in OpenAPI documents.
@@ -56,7 +58,7 @@ func (g *Generator) PreferNameOf(t reflect.Type, name string) {
 }
 
 func (g *Generator) preferNameOf(t reflect.Type, name string) {
-	t = derefType(t)
+	t = reflectutil.DerefType(t)
 	if t == nil || name == "" {
 		return
 	}
@@ -164,7 +166,7 @@ func (g *Generator) structSchema(t reflect.Type) *OpenAPISchema {
 		if field.PkgPath != "" {
 			continue
 		}
-		name, omit := jsonFieldName(field)
+		name, omit := reflectutil.JSONFieldName(field)
 		if name == "" {
 			continue
 		}
@@ -172,7 +174,7 @@ func (g *Generator) structSchema(t reflect.Type) *OpenAPISchema {
 		if schema == nil {
 			continue
 		}
-		doc := fieldDoc(field)
+		doc := reflectutil.FieldDoc(field)
 		nullable := schema.Nullable
 		if doc != "" {
 			if schema.Ref != "" {

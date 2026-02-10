@@ -3,23 +3,25 @@
 test: test-go test-example test-js test-python test-ts
 
 test-go:
-	cd virtuous && go test ./...
+	go test ./...
 
 test-example:
-	cd example/basic && go test ./...
+	cd example/basic-combined && go test ./...
+	cd example/basic-httpapi && go test ./...
+	cd example/basic-rpc && go test ./...
 	cd example/byodb && go test ./...
 
 test-js:
 	@command -v node >/dev/null 2>&1 && echo "node present" || { echo "node not found; skipping"; exit 0; }
-	cd virtuous && go test ./... -run TestGeneratedClientsAreValid -count=1
+	go test ./... -run TestGeneratedClientsAreValid -count=1
 
 test-python:
 	@command -v python3 >/dev/null 2>&1 && echo "python3 present" || { echo "python3 not found; skipping"; exit 0; }
-	cd virtuous && go test ./... -run TestGeneratedClientsAreValid -count=1
+	go test ./... -run TestGeneratedClientsAreValid -count=1
 
 test-ts:
 	@command -v tsc >/dev/null 2>&1 && echo "tsc present" || { echo "tsc not found; skipping"; exit 0; }
-	cd virtuous && go test ./... -run TestGeneratedClientsAreValid -count=1
+	go test ./... -run TestGeneratedClientsAreValid -count=1
 
 ROOT_DIR := $(abspath .)
 PYTHON_LOADER_DIR := $(ROOT_DIR)/python_loader

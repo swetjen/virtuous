@@ -4,16 +4,13 @@ import (
 	"reflect"
 	"strings"
 	"unicode"
+
+	"github.com/swetjen/virtuous/internal/reflectutil"
+	"github.com/swetjen/virtuous/internal/textutil"
 )
 
 func ensureLeadingSlash(path string) string {
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
+	return textutil.EnsureLeadingSlash(path)
 }
 
 func normalizePrefix(prefix string) string {
@@ -83,38 +80,10 @@ func isSeparator(r rune) bool {
 }
 
 func derefType(t reflect.Type) reflect.Type {
-	for t != nil && t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	return t
+	return reflectutil.DerefType(t)
 }
 
 // camelizeDown converts a name into lower camel case.
 func camelizeDown(word string) string {
-	if word == "" {
-		return ""
-	}
-	parts := strings.FieldsFunc(word, func(r rune) bool {
-		return r == '_' || r == '-' || r == ' ' || r == '.' || r == '/'
-	})
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		runes := []rune(part)
-		runes[0] = unicode.ToUpper(runes[0])
-		parts[i] = string(runes)
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	parts[0] = lowerFirst(parts[0])
-	return strings.Join(parts, "")
-}
-
-func lowerFirst(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToLower(s[:1]) + s[1:]
+	return textutil.CamelizeDown(word)
 }

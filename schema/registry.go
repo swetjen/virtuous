@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/swetjen/virtuous/internal/reflectutil"
 )
 
 // TypeOverride customizes how a Go type is rendered for clients and OpenAPI.
@@ -157,7 +159,7 @@ func defaultTypeOverrides() map[string]TypeOverride {
 }
 
 func (r *Registry) addType(t reflect.Type) {
-	base := derefType(t)
+	base := reflectutil.DerefType(t)
 	if base == nil {
 		return
 	}
@@ -180,7 +182,7 @@ func (r *Registry) addType(t reflect.Type) {
 			if field.PkgPath != "" {
 				continue
 			}
-			name, omit := jsonFieldName(field)
+			name, omit := reflectutil.JSONFieldName(field)
 			if name == "" {
 				continue
 			}
@@ -189,7 +191,7 @@ func (r *Registry) addType(t reflect.Type) {
 				Type:     field.Type,
 				Optional: omit,
 				Nullable: isOptionalType(field.Type),
-				Doc:      fieldDoc(field),
+				Doc:      reflectutil.FieldDoc(field),
 			})
 			r.addType(field.Type)
 		}
@@ -225,7 +227,7 @@ func (r *Registry) objectName(t reflect.Type) string {
 }
 
 func (r *Registry) preferName(t reflect.Type, name string) {
-	t = derefType(t)
+	t = reflectutil.DerefType(t)
 	if t == nil || name == "" {
 		return
 	}
@@ -233,7 +235,7 @@ func (r *Registry) preferName(t reflect.Type, name string) {
 }
 
 func (r *Registry) jsType(t reflect.Type) string {
-	base := derefType(t)
+	base := reflectutil.DerefType(t)
 	if base == nil {
 		return ""
 	}
@@ -270,7 +272,7 @@ func (r *Registry) jsType(t reflect.Type) string {
 }
 
 func (r *Registry) pyType(t reflect.Type) string {
-	base := derefType(t)
+	base := reflectutil.DerefType(t)
 	if base == nil {
 		return ""
 	}
@@ -348,13 +350,6 @@ func typeOverrideFor(overrides map[string]TypeOverride, t reflect.Type) (TypeOve
 	return override, ok
 }
 
-func derefType(t reflect.Type) reflect.Type {
-	for t != nil && t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	return t
-}
-
 // PreferredName derives a schema name from a service prefix and Go type.
 func PreferredName(service string, v any) string {
 	return PreferredNameOf(service, reflect.TypeOf(v))
@@ -365,7 +360,7 @@ func PreferredNameOf(service string, t reflect.Type) string {
 	if service == "" || service == "API" {
 		return ""
 	}
-	base := derefType(t)
+	base := reflectutil.DerefType(t)
 	if base == nil || base.Name() == "" {
 		return ""
 	}
@@ -374,40 +369,4 @@ func PreferredNameOf(service string, t reflect.Type) string {
 
 func isOptionalType(t reflect.Type) bool {
 	return t != nil && t.Kind() == reflect.Ptr
-}
-
-func jsonFieldName(field reflect.StructField) (string, bool) {
-	tag := field.Tag.Get("json")
-	if tag == "-" {
-		return "", false
-	}
-	if tag != "" {
-		parts := strings.Split(tag, ",")
-		name := parts[0]
-		if name == "" {
-			name = lowerFirst(field.Name)
-		}
-		return name, hasOmitEmpty(parts)
-	}
-	return lowerFirst(field.Name), false
-}
-
-func hasOmitEmpty(parts []string) bool {
-	for _, part := range parts[1:] {
-		if part == "omitempty" {
-			return true
-		}
-	}
-	return false
-}
-
-func fieldDoc(field reflect.StructField) string {
-	return strings.TrimSpace(field.Tag.Get("doc"))
-}
-
-func lowerFirst(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToLower(s[:1]) + s[1:]
 }
