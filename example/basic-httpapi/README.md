@@ -1,6 +1,6 @@
-# Basic example
+# Basic httpapi example
 
-This example shows list/get/create routes for states and generates OpenAPI plus JS/TS/PY clients.
+Legacy-style `net/http` handlers wrapped with `httpapi` to auto-generate OpenAPI and JS/TS/PY clients. Use this pattern when you must keep an existing route shape while migrating toward RPC.
 
 ## Run
 
@@ -8,31 +8,26 @@ This example shows list/get/create routes for states and generates OpenAPI plus 
 go run .
 ```
 
-## Endpoints
+Docs/clients: `http://localhost:8000/api/docs/`
+
+## Try it
 
 ```bash
 curl http://localhost:8000/api/v1/lookup/states/
-```
 
-```bash
 curl http://localhost:8000/api/v1/lookup/states/mn
-```
 
-```bash
 curl http://localhost:8000/api/v1/secure/states/mn \
   -H 'Authorization: Bearer demo-token'
-```
 
-```bash
 curl -X POST http://localhost:8000/api/v1/lookup/states \
   -H 'Content-Type: application/json' \
   -d '{"code":"ca","name":"California"}'
 ```
 
-## Generated outputs
+## Extend it
 
-- `openapi.json`
-- `client.gen.js`
-- `client.gen.ts`
-- `client.gen.py`
-- `docs.html`
+- Add a new handler with `httpapi.WrapFunc` to mirror a real legacy endpoint you plan to migrate.
+- Introduce request/response structs that match your production payloads, then observe the OpenAPI change.
+- Add a second guard (API key) to see multiple auth schemes reflected in the docs.
+- If you are ready to migrate, port one route to RPC and compare the generated clients.

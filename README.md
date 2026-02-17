@@ -1,21 +1,31 @@
 # Virtuous
 
-Virtuous is an **agent-first API framework for Go** with **self-generating docs and clients**.
+Virtuous is an **agent-first, typed RPC API framework for Go** with **self-generating docs and clients**.
 
-Virtuous supports two API styles:
+**RPC-first:** APIs are plain Go functions with typed inputs and outputs, served over HTTP. Routes, schemas, docs, and JS/TS/Python clients are generated at runtime from those functions.
 
-- **RPC** — the primary, recommended model
-- **httpapi** — compatibility support for existing `net/http` handlers
-
-RPC is optimized for simplicity, correctness, and reliable code generation.  
-`httpapi` exists to support migration and interoperability with existing APIs.
+**Compatibility:** `httpapi` wraps existing `net/http` handlers when you must preserve a legacy shape or migrate gradually. New work should start with RPC.
 
 ## Table of contents
 
+- [Why RPC (default)](#why-rpc-default)
 - [RPC (recommended)](#rpc-recommended)
 - [httpapi (compatibility)](#httpapi-compatibility)
 - [Combined (migration demo)](#combined-migration-demo)
 - [Docs](#docs)
+
+## Why RPC (default)
+
+Virtuous treats APIs as **typed functions** instead of loosely defined HTTP resources. That keeps the surface area small, predictable, and agent-friendly.
+
+What this means in practice:
+
+- Inputs/outputs are Go structs; they *are* the contract and generate OpenAPI + SDKs automatically.
+- Routes derive from package + function names, so naming stays consistent without manual path design.
+- A minimal status model (200/401/422/500) keeps error handling explicit and uniform.
+- Docs and clients are emitted from the running server, so they cannot drift from the code.
+
+`httpapi` stays in the toolbox for teams migrating existing handlers or preserving exact legacy responses.
 
 ## RPC (recommended)
 

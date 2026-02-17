@@ -66,3 +66,10 @@ Static landing page:
 Docs:
 - `http://localhost:8000/rpc/docs/`
 - `http://localhost:8000/rpc/openapi.json`
+
+## Extend it
+
+- Swap the PostgreSQL DSN for your own database and regenerate SQLC output with `make gen`.
+- Add a new domain (e.g., `orders`) with RPC handlers and expose fresh SDKs via `make gen-sdk`.
+- Layer an additional guard (API key or mTLS) to demo multiple auth schemes in the docs.
+- Point the embedded frontend at the generated client to validate the end-to-end flow.

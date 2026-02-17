@@ -1,15 +1,26 @@
 # Virtuous Documentation (Overview)
 
-This document is the single, canonical overview for Virtuous. It covers RPC first, then legacy httpapi, then combined use, migration, and agent workflows.
+This is the canonical overview for Virtuous. It is RPC-first by design, with legacy `httpapi` noted for migration scenarios and a brief combined example.
 
 ## Table of contents
 
+- [Why RPC (default)](#why-rpc-default)
 - [RPC (canonical)](#rpc-canonical)
 - [httpapi (legacy)](#httpapi-legacy)
 - [Combined (demo only)](#combined-demo-only)
 - [Agents](#agents)
 - [Migration: Swaggo](#migration-swaggo)
 - [Other routers (chi, echo, gin, fiber)](#other-routers-chi-echo-gin-fiber)
+
+## Why RPC (default)
+
+Virtuous models APIs as **typed functions** running over HTTP. Requests and responses are Go structs; they *are* the contract that drives OpenAPI and SDK generation. This keeps surface area small, prevents drift, and makes the system agent-friendly.
+
+In practice this means:
+- Plain Go functions with explicit inputs/outputs and a narrow status model (200/401/422/500).
+- Routes derive from package + function names—no manual path design to maintain.
+- Docs and clients are emitted from the running server, ensuring runtime truth.
+- `httpapi` exists only for compatibility when you cannot yet move a handler to RPC.
 
 ## RPC (canonical)
 
