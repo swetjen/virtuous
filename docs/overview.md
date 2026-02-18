@@ -141,23 +141,25 @@ You are implementing a Virtuous RPC API.
 ### Agent prompt template (migration)
 
 ```text
-Migrate Swaggo routes to Virtuous RPC.
-- Keep existing request/response structs.
-- Convert each route to an RPC handler: func(ctx, req) (Resp, int).
-- Register with router.HandleRPC.
-- Remove Swaggo annotations once replaced.
+Use the canonical Swaggo migration prompt in docs/tutorials/migrate-swaggo.md.
+- Default to httpapi for Swaggo routes.
+- Use rpc only for phase-2 moves.
+- Validate against the migration Definition of Done in that guide.
 ```
 
 ## Migration: Swaggo
 
-Swaggo is annotation-first. Virtuous is type-first. Migrate in place:
+Swaggo is annotation-first. Virtuous is type-first.
 
-1) Reuse your existing request/response structs.
-2) Replace annotated handlers with RPC handlers returning `(Resp, status)`.
-3) Register them with `router.HandleRPC`.
-4) Serve docs + clients from `/rpc/docs` and `/rpc/client.gen.*`.
+Use the canonical migration guide:
 
-If you cannot migrate immediately, use `httpapi` as a compatibility layer while you port handlers.
+- `docs/tutorials/migrate-swaggo.md`
+
+It includes:
+
+- Annotation mapping rules (`@Summary`, `@Param`, `@Router`, `@Security`, etc.).
+- Route-by-route decision logic (`rpc` vs `httpapi`).
+- A copy-paste migration prompt for future agents.
 
 ## Other routers (chi, echo, gin, fiber)
 

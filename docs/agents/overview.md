@@ -25,12 +25,21 @@ You are implementing a Virtuous RPC API.
 ## Agent prompt template (migration)
 
 ```text
-Migrate Swaggo routes to Virtuous RPC.
-- Keep existing request/response structs.
-- Convert each route to an RPC handler: func(ctx, req) (Resp, int).
-- Register with router.HandleRPC.
-- Remove Swaggo annotations once replaced.
+Migrate Swaggo routes to Virtuous using the canonical guide at docs/tutorials/migrate-swaggo.md.
+- For Swaggo migrations, use httpapi first.
+- Use rpc only for explicit phase-2 moves.
+- Move field docs to doc struct tags.
+- Map security annotations to guards.
+- Ensure routes appear in ServeAllDocs output.
 ```
+
+## Canonical migration spec
+
+For Swaggo migrations, treat this file as an index and use:
+
+- `docs/tutorials/migrate-swaggo.md`
+
+That tutorial is the canonical transformation guide, including mapping rules, migration phases, and a reusable long-form agent prompt.
 
 ## Documentation hints
 

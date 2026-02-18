@@ -30,6 +30,35 @@ make agent-run
 - `make gen` regenerates sqlc output from `db/sql/*`.
 - `make gen-sdk` regenerates client SDKs (including `frontend-web/api/client.gen.js`).
 - `make gen-web` rebuilds the embedded frontend assets.
+- `make init-db` provisions DB + role with admin credentials (from `db/sql/admin_schemas`).
+- `make up` applies app schema migrations from `db/sql/schemas`.
+- `make down` rolls back one Goose migration in `db/sql/schemas`.
+
+## Database Setup
+
+1. Configure `.env` (or exported env vars): `PG_HOST`, `PG_PORT`, `PG_DB`, `PG_USER`, `PG_PASS`, `PG_ADMIN_USER`, `PG_ADMIN_PASS`.
+2. Create/reset the database and provision the app role:
+
+```bash
+make init-db
+```
+
+3. Apply app schema migrations as the provisioned user:
+
+```bash
+make up
+```
+
+4. Run the API using the app DSN in `DATABASE_URL`:
+
+```bash
+make run
+```
+
+Notes:
+- `make init-db` renders `db/sql/admin_schemas/202602160001_reset_and_provision.sql.tmpl` into `.generated/admin/` and runs Goose with admin creds.
+- `make up/down` use `db/sql/schemas` to match sqlc schema sources.
+- Current schema files define `-- +goose Up` only, so `make down` will report `EMPTY` unless Down blocks are added.
 
 ## Environment
 
@@ -41,7 +70,9 @@ In a real app, avoid committing secrets; this template keeps `.env` in-repo for 
 - `PORT` (default `8000`)
 - `ADMIN_BEARER_TOKEN` (default `dev-admin-token`)
 - `CORS_ALLOW_ORIGINS` (default `*`, comma-separated)
-- `DATABASE_URL` (required, PostgreSQL DSN)
+- `DATABASE_URL` (runtime PostgreSQL DSN used by API)
+- `PG_HOST`, `PG_PORT`, `PG_DB`, `PG_USER`, `PG_PASS` (Make/Goose app connection)
+- `PG_ADMIN_USER`, `PG_ADMIN_PASS` (Make/Goose admin provisioning)
 
 ## Endpoints (RPC)
 
