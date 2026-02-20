@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.21
+
+- Treat `encoding/json.RawMessage` as arbitrary JSON in generated schemas and clients instead of byte arrays.
+
 ## 0.0.20
 
 - Remove the unused `httpapi` lightweight JS client generator path.
