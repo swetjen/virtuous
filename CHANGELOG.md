@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.22
+
+- Replace default Swagger UI docs pages with Scalar API Reference for both RPC and legacy HTTP routers.
+- Preserve auth prefix behavior in docs by applying guard prefixes to outgoing request headers.
+
 ## 0.0.21
 
 - Treat `encoding/json.RawMessage` as arbitrary JSON in generated schemas and clients instead of byte arrays.

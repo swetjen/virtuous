@@ -8,28 +8,65 @@ import (
 	"strings"
 )
 
-// DefaultDocsHTML returns a Swagger UI HTML page for the provided OpenAPI path.
+// DefaultDocsHTML returns a Scalar API Reference HTML page for the provided OpenAPI path.
 func DefaultDocsHTML(openAPIPath string) string {
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Virtuous RPC Docs</title>
-	<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
 	<style>
+		* {
+			box-sizing: border-box;
+		}
+
 		body {
 			margin: 0;
-			background: #f7f7f7;
+			min-height: 100vh;
+			background:
+				radial-gradient(circle at 10%% 10%%, #e5f4ff 0%%, rgba(229, 244, 255, 0) 45%%),
+				radial-gradient(circle at 90%% 0%%, #d9ffe9 0%%, rgba(217, 255, 233, 0) 35%%),
+				#f4f7fb;
+		}
+
+		.docs-shell {
+			padding: 12px;
+		}
+
+		#app {
+			min-height: calc(100vh - 24px);
+			border: 1px solid #c7d4e0;
+			border-radius: 14px;
+			overflow: hidden;
+			background: #ffffff;
+			box-shadow: 0 20px 60px rgba(17, 46, 79, 0.1);
+		}
+
+		@media (max-width: 800px) {
+			.docs-shell {
+				padding: 0;
+			}
+
+			#app {
+				min-height: 100vh;
+				border-radius: 0;
+				border: 0;
+				box-shadow: none;
+			}
 		}
 	</style>
 </head>
 <body>
-	<div id="swagger-ui"></div>
-	<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+	<main class="docs-shell">
+		<div id="app"></div>
+	</main>
+	<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 	<script>
-		window.onload = function () {
+		(function () {
 			const VIRTUOUS_DEBUG_AUTH = false
 			const OPENAPI_URL = %q
+
 			function buildPrefixMap(spec) {
 				const map = {}
 				if (!spec || !spec.components || !spec.components.securitySchemes) {
@@ -51,71 +88,81 @@ func DefaultDocsHTML(openAPIPath string) string {
 				})
 				return map
 			}
-			function applyAuthPrefix(req, prefixMap) {
-				try {
-					if (!prefixMap || !req || !req.headers) {
-						return req
-					}
-					function findHeaderName(headers, target) {
-						if (!headers || !target) {
-							return ""
-						}
-						const targetLower = target.toLowerCase()
-						const keys = Object.keys(headers)
-						for (let i = 0; i < keys.length; i++) {
-							const key = keys[i]
-							if (key.toLowerCase() === targetLower) {
-								return key
-							}
-						}
-						return ""
-					}
-					Object.keys(prefixMap).forEach(function (headerName) {
-						const prefix = prefixMap[headerName]
-						const headerKey = findHeaderName(req.headers, headerName)
-						const current = headerKey ? req.headers[headerKey] : req.headers[headerName]
-						if (!current) {
-							return
-						}
-						const expected = prefix + " "
-						if (typeof current === "string" && !current.startsWith(expected)) {
-							if (headerKey) {
-								req.headers[headerKey] = expected + current
-							} else {
-								req.headers[headerName] = expected + current
-							}
-							if (VIRTUOUS_DEBUG_AUTH && typeof console !== "undefined") {
-								console.log("virtuous docs auth prefix applied", headerName)
-							}
-						}
-					})
-				} catch (e) {
-					return req
+
+			function installFetchAuthPrefixer(prefixMap) {
+				window.__virtuousDocsPrefixMap = prefixMap || {}
+				if (window.__virtuousDocsFetchWrapped) {
+					return
 				}
-				return req
+				window.__virtuousDocsFetchWrapped = true
+				const originalFetch = window.fetch.bind(window)
+				window.fetch = function (input, init) {
+					const activePrefixMap = window.__virtuousDocsPrefixMap || {}
+					const headerNames = Object.keys(activePrefixMap)
+					if (headerNames.length === 0) {
+						return originalFetch(input, init)
+					}
+					try {
+						const sourceHeaders = init && init.headers ? init.headers : (input instanceof Request ? input.headers : undefined)
+						const headers = new Headers(sourceHeaders || {})
+						let changed = false
+						headerNames.forEach(function (headerName) {
+							const prefix = activePrefixMap[headerName]
+							const current = headers.get(headerName)
+							if (!prefix || !current) {
+								return
+							}
+							const expected = prefix + " "
+							if (!String(current).startsWith(expected)) {
+								headers.set(headerName, expected + current)
+								changed = true
+								if (VIRTUOUS_DEBUG_AUTH && typeof console !== "undefined") {
+									console.log("virtuous docs auth prefix applied", headerName)
+								}
+							}
+						})
+						if (!changed) {
+							return originalFetch(input, init)
+						}
+						if (input instanceof Request) {
+							const nextInit = init ? Object.assign({}, init) : {}
+							nextInit.headers = headers
+							return originalFetch(new Request(input, nextInit))
+						}
+						const nextInit = init ? Object.assign({}, init) : {}
+						nextInit.headers = headers
+						return originalFetch(input, nextInit)
+					} catch (e) {
+						return originalFetch(input, init)
+					}
+				}
 			}
-			function initUI(prefixMap) {
-				let ui
-				ui = SwaggerUIBundle({
+
+			function renderScalar(prefixMap) {
+				installFetchAuthPrefixer(prefixMap)
+				if (typeof Scalar === "undefined" || !Scalar.createApiReference) {
+					const app = document.getElementById("app")
+					if (app) {
+						app.innerHTML = "<pre style=\"padding: 24px; margin: 0;\">Unable to load Scalar API Reference.</pre>"
+					}
+					return
+				}
+				Scalar.createApiReference("#app", {
 					url: OPENAPI_URL,
-					dom_id: "#swagger-ui",
-					requestInterceptor: function (req) {
-						return applyAuthPrefix(req, prefixMap)
-					},
 				})
-				window.ui = ui
 			}
+
 			fetch(OPENAPI_URL)
 				.then(function (resp) {
 					return resp.json()
 				})
 				.then(function (spec) {
-					initUI(buildPrefixMap(spec))
+					renderScalar(buildPrefixMap(spec))
 				})
 				.catch(function () {
-					initUI({})
+					renderScalar({})
 				})
-		}
+		})()
 	</script>
 </body>
 </html>`, openAPIPath)
