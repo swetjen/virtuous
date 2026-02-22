@@ -175,6 +175,7 @@ Use this prompt for migration automation:
 You are migrating a Go API from Swaggo annotations to Virtuous.
 
 Goal:
+- Pin the target Virtuous version from `VERSION` and report it explicitly (current: `0.0.21`).
 - Replace annotation-driven docs with Virtuous runtime docs/clients.
 - For Swaggo migrations, migrate routes to httpapi first.
 - Use RPC as an explicit phase-2 optimization after compatibility is preserved.
@@ -191,9 +192,10 @@ Rules:
 
 Deliverables:
 1) Code changes for migrated routes.
-2) A migration completion checklist against the Definition of Done in docs/tutorials/migrate-swaggo.md.
-3) List of routes intentionally deferred to phase-2 RPC and why.
-4) Any routes blocked by feature mismatch, with concrete gap notes.
+2) Reported target Virtuous version from `VERSION`.
+3) A migration completion checklist against the Definition of Done in docs/tutorials/migrate-swaggo.md.
+4) List of routes intentionally deferred to phase-2 RPC and why.
+5) Any routes blocked by feature mismatch, with concrete gap notes.
 ```
 
 ## Known gaps vs Swaggo

@@ -133,6 +133,23 @@ func TestRPCPgtypeOpenAPIAndClients(t *testing.T) {
 			t.Fatalf("OpenAPI missing schema %s", name)
 		}
 	}
+	for _, name := range []string{"pgtypeRequest", "pgtypeResponse"} {
+		root, ok := schemas[name].(map[string]any)
+		if !ok {
+			t.Fatalf("OpenAPI schema %s has unexpected type", name)
+		}
+		props, ok := root["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("OpenAPI schema %s missing properties", name)
+		}
+		raw, ok := props["raw"].(map[string]any)
+		if !ok {
+			t.Fatalf("OpenAPI schema %s missing raw property", name)
+		}
+		if raw["type"] != "object" {
+			t.Fatalf("OpenAPI raw type in %s = %v, want object", name, raw["type"])
+		}
+	}
 
 	var js bytes.Buffer
 	if err := router.WriteClientJS(&js); err != nil {
@@ -157,5 +174,14 @@ func TestRPCPgtypeOpenAPIAndClients(t *testing.T) {
 		if !strings.Contains(js.String(), "typedef {Object} "+name) {
 			t.Fatalf("js client missing %s", name)
 		}
+	}
+	if !strings.Contains(ts.String(), "raw: any;") {
+		t.Fatalf("ts client should type raw as any")
+	}
+	if !strings.Contains(py.String(), "raw: Any") {
+		t.Fatalf("py client should type raw as Any")
+	}
+	if !strings.Contains(js.String(), "@property {any} raw") {
+		t.Fatalf("js client should type raw as any")
 	}
 }

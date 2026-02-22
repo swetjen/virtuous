@@ -131,6 +131,7 @@ deps/
 
 ```text
 You are implementing a Virtuous RPC API.
+- Target Virtuous version: read `VERSION` in the repo and pin it in the output (current: `0.0.21`).
 - Create router.go with rpc.NewRouter(rpc.WithPrefix("/rpc")).
 - Put handlers in package folders (states, users, admin).
 - Use func(ctx, req) (Resp, int).
@@ -142,6 +143,7 @@ You are implementing a Virtuous RPC API.
 
 ```text
 Use the canonical Swaggo migration prompt in docs/tutorials/migrate-swaggo.md.
+- Target Virtuous version: read `VERSION` in the repo and pin it in the output (current: `0.0.21`).
 - Default to httpapi for Swaggo routes.
 - Use rpc only for phase-2 moves.
 - Validate against the migration Definition of Done in that guide.
@@ -171,6 +173,7 @@ Agent prompt (porting legacy handlers):
 
 ```text
 Port legacy handlers into Virtuous.
+- Target Virtuous version: read `VERSION` in the repo and pin it in the output (current: `0.0.21`).
 - For each handler, decide: RPC (new) or httpapi (legacy).
 - For legacy: wrap http.HandlerFunc with httpapi.WrapFunc and register a method-prefixed route.
 - For new: create an RPC handler and register with router.HandleRPC.
