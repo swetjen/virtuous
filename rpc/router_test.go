@@ -134,6 +134,57 @@ func TestRPCRouterAndHandlerGuardOrder(t *testing.T) {
 	}
 }
 
+func TestRPCEventFeedRequiresAttachLogger(t *testing.T) {
+	router := NewRouter()
+	router.HandleRPC(testHandler)
+	path := router.Routes()[0].Path
+
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"Virtuous"}`))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	if got := len(router.events.Snapshot(10)); got != 0 {
+		t.Fatalf("expected no events before AttachLogger, got %d", got)
+	}
+
+	wrapped := router.AttachLogger(router)
+	req = httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"Virtuous"}`))
+	rec = httptest.NewRecorder()
+	wrapped.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 from wrapped handler, got %d", rec.Code)
+	}
+
+	events := router.events.Snapshot(10)
+	if len(events) == 0 {
+		t.Fatalf("expected at least one event")
+	}
+	last := events[len(events)-1]
+	if last.Kind != "request" {
+		t.Fatalf("expected request event, got %q", last.Kind)
+	}
+	if last.Path != path {
+		t.Fatalf("expected event path %q, got %q", path, last.Path)
+	}
+	if last.Status != http.StatusOK {
+		t.Fatalf("expected event status 200, got %d", last.Status)
+	}
+	if last.Outcome != "ok" {
+		t.Fatalf("expected outcome ok, got %q", last.Outcome)
+	}
+	if !router.loggingEnabled() {
+		t.Fatalf("expected logger to be marked enabled")
+	}
+	if !router.loggingActive() {
+		t.Fatalf("expected logger to be marked active")
+	}
+}
+
 func expectPanic(t *testing.T, fn func()) {
 	t.Helper()
 	defer func() {

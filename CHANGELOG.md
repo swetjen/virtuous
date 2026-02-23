@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.23
+
+- Replace the single-pane docs page with an integrated docs/admin shell (top navigation + summary tiles).
+- Add a built-in SQL explorer panel that surfaces `db/sql/schemas` and `db/sql/queries` files for quick visibility.
+- Add a live runtime log panel with request status/latency history via JSON snapshot and SSE stream endpoints.
+- Make runtime request logging explicit and mux-level via `AttachLogger(...)`; when not attached, docs show a zero-state with the exact enablement snippet.
+
 ## 0.0.22
 
 - Replace default Swagger UI docs pages with Scalar API Reference for both RPC and legacy HTTP routers.

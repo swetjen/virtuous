@@ -3,6 +3,8 @@ package rpc
 import (
 	"log/slog"
 	"net/http"
+
+	"github.com/swetjen/virtuous/internal/adminui"
 )
 
 // Router registers RPC handlers and exposes documentation metadata.
@@ -12,6 +14,9 @@ type Router struct {
 	prefix         string
 	guards         []Guard
 	logger         *slog.Logger
+	events         *adminui.EventFeed
+	loggerAttached uint32
+	loggerActive   uint32
 	typeOverrides  map[string]TypeOverride
 	openAPIOptions *OpenAPIOptions
 }
@@ -52,6 +57,7 @@ func NewRouter(opts ...RouterOption) *Router {
 		prefix: normalizePrefix(config.Prefix),
 		guards: append([]Guard(nil), config.Guards...),
 		logger: slog.Default(),
+		events: adminui.NewEventFeed(600),
 	}
 }
 

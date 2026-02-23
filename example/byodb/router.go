@@ -22,9 +22,10 @@ func NewRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) http.
 	mux.Handle("/rpc/", rpcRouter)
 	mux.Handle("/", embedAndServeReact())
 
-	return httpapi.Cors(
+	handler := httpapi.Cors(
 		httpapi.WithAllowedOrigins(cfg.AllowedOrigins...),
 	)(mux)
+	return rpcRouter.AttachLogger(handler)
 }
 
 func BuildRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) *rpc.Router {

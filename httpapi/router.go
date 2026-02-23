@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/swetjen/virtuous/internal/adminui"
 )
 
 // HandlerMeta provides optional documentation metadata for a handler.
@@ -39,6 +41,9 @@ type Router struct {
 	mux            *http.ServeMux
 	routes         []Route
 	logger         *slog.Logger
+	events         *adminui.EventFeed
+	loggerAttached uint32
+	loggerActive   uint32
 	typeOverrides  map[string]TypeOverride
 	openAPIOptions *OpenAPIOptions
 }
@@ -48,6 +53,7 @@ func NewRouter() *Router {
 	return &Router{
 		mux:    http.NewServeMux(),
 		logger: slog.Default(),
+		events: adminui.NewEventFeed(600),
 	}
 }
 

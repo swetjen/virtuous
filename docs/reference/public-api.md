@@ -12,6 +12,7 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `(*rpc.Router).HandleRPC(fn any, guards ...rpc.Guard)`
 - `(*rpc.Router).ServeDocs(opts ...rpc.DocOpt)`
 - `(*rpc.Router).ServeAllDocs(opts ...rpc.ServeAllDocsOpt)`
+- `(*rpc.Router).AttachLogger(next http.Handler)`
 - `(*rpc.Router).OpenAPI()`
 - `(*rpc.Router).Routes()`
 - `(*rpc.Router).SetTypeOverrides(overrides map[string]rpc.TypeOverride)`
@@ -29,6 +30,7 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta httpapi.HandlerMeta)`
 - `(*httpapi.Router).ServeDocs(opts ...httpapi.DocOpt)`
 - `(*httpapi.Router).ServeAllDocs(opts ...httpapi.ServeAllDocsOpt)`
+- `(*httpapi.Router).AttachLogger(next http.Handler)`
 - `(*httpapi.Router).OpenAPI()`
 - `(*httpapi.Router).Routes()`
 - `(*httpapi.Router).SetTypeOverrides(overrides map[string]httpapi.TypeOverride)`
