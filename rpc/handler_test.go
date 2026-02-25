@@ -3,8 +3,10 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -73,4 +75,38 @@ func TestRPCHandleInvalid(t *testing.T) {
 	if body.Error != "name required" {
 		t.Fatalf("unexpected error response: %q", body.Error)
 	}
+}
+
+func TestWriteJSONEncodeFailureDoesNotWriteHeaderTwice(t *testing.T) {
+	w := &failingResponseWriter{header: make(http.Header)}
+	writeJSON(w, StatusOK, reflect.ValueOf(testResp{Message: "ok"}))
+
+	if w.writeHeaderCalls != 1 {
+		t.Fatalf("expected exactly one WriteHeader call, got %d", w.writeHeaderCalls)
+	}
+	if w.status != StatusOK {
+		t.Fatalf("expected status %d, got %d", StatusOK, w.status)
+	}
+	if got := w.header.Get("Content-Type"); got != "application/json" {
+		t.Fatalf("expected content type application/json, got %q", got)
+	}
+}
+
+type failingResponseWriter struct {
+	header           http.Header
+	status           int
+	writeHeaderCalls int
+}
+
+func (w *failingResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *failingResponseWriter) WriteHeader(statusCode int) {
+	w.status = statusCode
+	w.writeHeaderCalls++
+}
+
+func (w *failingResponseWriter) Write(_ []byte) (int, error) {
+	return 0, errors.New("write failed")
 }

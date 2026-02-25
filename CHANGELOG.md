@@ -6,6 +6,7 @@
 - Add a built-in SQL explorer panel that surfaces `db/sql/schemas` and `db/sql/queries` files for quick visibility.
 - Add a live runtime log panel with request status/latency history via JSON snapshot and SSE stream endpoints.
 - Make runtime request logging explicit and mux-level via `AttachLogger(...)`; when not attached, docs show a zero-state with the exact enablement snippet.
+- Fix RPC response encoding error handling to avoid superfluous `WriteHeader` warnings on partial/broken client writes.
 
 ## 0.0.22
 

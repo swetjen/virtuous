@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -176,10 +175,9 @@ func writeJSON(w http.ResponseWriter, status int, v reflect.Value) {
 		return
 	}
 	enc := json.NewEncoder(w)
-	if err := enc.Encode(v.Interface()); err != nil {
-		msg := fmt.Sprintf("encode json: %v", err)
-		http.Error(w, msg, http.StatusInternalServerError)
-	}
+	// At this point headers are already written; do not attempt to write another
+	// status line on encode/write failure.
+	_ = enc.Encode(v.Interface())
 }
 
 func buildRPCPath(prefix, pkgName, funcName string) string {
