@@ -45,6 +45,14 @@ These instructions describe how to understand and work with this repository.
 - When changing release details or publishing workflows, bump `VERSION`, `python_loader/pyproject.toml`, and add a changelog entry.
 - Before publishing, ensure the tree is clean and run `make publish` to tag and push the release.
 
+## Merge-To-Main Release SOP
+- On merge-ready changes, add or update a top `CHANGELOG.md` entry for the release version.
+- Bump `VERSION` and `python_loader/pyproject.toml` to the same version.
+- Verify `main` is green (`make test` and CI/basebuild status).
+- Ensure release-facing README links/badges are valid (especially license and workflow badges).
+- From a clean tree on `main`, run `make publish` to create and push tag `v$(cat VERSION)`.
+- Confirm the new tag exists in GitHub tags and that the release/version badge reflects it.
+
 ## Extension Points
 - Router-level type overrides via `SetTypeOverrides`.
 - Custom guards for auth schemes and middleware.

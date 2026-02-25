@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.24
+
+- Fix README license badge link to target the canonical GitHub `LICENSE` file URL.
+- Add explicit merge-to-main release SOP instructions to `AGENTS.md` (changelog/version sync, CI check, and `make publish` flow).
+
 ## 0.0.23
 
 - Replace the single-pane docs page with an integrated docs/admin shell (top navigation + summary tiles).

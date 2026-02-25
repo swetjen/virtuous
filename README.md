@@ -5,7 +5,7 @@ Virtuous is an **agent-first, typed RPC API framework for Go** with **self-gener
 [![Release](https://img.shields.io/github/v/tag/swetjen/virtuous)](https://github.com/swetjen/virtuous/tags)
 [![Build Status](https://github.com/swetjen/virtuous/actions/workflows/ci.yaml/badge.svg)](https://github.com/swetjen/virtuous/actions/workflows/ci.yaml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/swetjen/virtuous)](go.mod)
-[![License](https://img.shields.io/github/license/swetjen/virtuous)](LICENSE)
+[![License](https://img.shields.io/github/license/swetjen/virtuous)](https://github.com/swetjen/virtuous/blob/main/LICENSE)
 
 **RPC-first:** APIs are plain Go functions with typed inputs and outputs, served over HTTP. Routes, schemas, docs, and JS/TS/Python clients are generated at runtime from those functions.
 
