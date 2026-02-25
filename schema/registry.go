@@ -156,7 +156,7 @@ func defaultTypeOverrides() map[string]TypeOverride {
 			OpenAPIFormat: "date-time",
 		},
 		"encoding/json.RawMessage": {
-			JSType:      "any",
+			JSType:      "object|any[]",
 			PyType:      "Any",
 			OpenAPIType: "object",
 		},
