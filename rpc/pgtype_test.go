@@ -181,7 +181,7 @@ func TestRPCPgtypeOpenAPIAndClients(t *testing.T) {
 	if !strings.Contains(py.String(), "raw: Any") {
 		t.Fatalf("py client should type raw as Any")
 	}
-	if !strings.Contains(js.String(), "@property {any} raw") {
-		t.Fatalf("js client should type raw as any")
+	if !strings.Contains(js.String(), "@property {object|any[]} raw") {
+		t.Fatalf("js client should type raw as object|any[]")
 	}
 }
