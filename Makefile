@@ -58,11 +58,28 @@ python-publish:
 	cd $(PYTHON_LOADER_DIR) && $(TWINE) upload dist/*
 
 publish:
-	@git diff --quiet || { echo "working tree is dirty; commit before publishing"; exit 1; }
+	@[ -z "$$(git status --porcelain)" ] || { echo "working tree is dirty; commit before publishing"; exit 1; }
+	@[ "$$(git branch --show-current)" = "main" ] || { echo "publish must run from main"; exit 1; }
+	@command -v gh >/dev/null 2>&1 || { echo "gh CLI is required for publishing"; exit 1; }
 	@version="$$(cat VERSION)"; \
 	tag="v$${version}"; \
-	if git rev-parse "$${tag}" >/dev/null 2>&1; then \
-		echo "tag $${tag} already exists"; exit 1; \
+	notes_file="$$(mktemp)"; \
+	trap 'rm -f "$$notes_file"' EXIT; \
+	awk -v version="$$version" '\
+		$$0 == "## " version { found=1; next } \
+		found && /^## / { exit } \
+		found { print } \
+	' CHANGELOG.md > "$$notes_file"; \
+	if [ ! -s "$$notes_file" ]; then \
+		echo "missing CHANGELOG entry for $${version}"; exit 1; \
 	fi; \
-	git tag "$${tag}"; \
-	git push origin "$${tag}"
+	if ! git rev-parse "$${tag}" >/dev/null 2>&1; then \
+		git tag "$${tag}"; \
+	fi; \
+	if ! git ls-remote --tags origin "$${tag}" | grep -q "$${tag}"; then \
+		git push origin "$${tag}"; \
+	fi; \
+	if gh release view "$${tag}" >/dev/null 2>&1; then \
+		echo "GitHub release $${tag} already exists"; exit 1; \
+	fi; \
+	gh release create "$${tag}" --title "$${tag}" --notes-file "$$notes_file"

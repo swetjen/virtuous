@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.26
+
+- Update `make publish` to require `main`, enforce a clean tree, push the version tag, and create the matching GitHub release from the current `CHANGELOG.md` entry.
+- Document the `gh` CLI requirement in the agent release SOP.
+
 ## 0.0.25
 
 - Add typed `httpapi` response media support for `string` (`text/plain`) and `[]byte` (`application/octet-stream`) in OpenAPI and generated JS/TS/PY clients.
