@@ -29,6 +29,20 @@ Use this table for exceptions and phase-2 planning:
 | Move to typed RPC operations and allow inferred RPC paths (phase 2) | `rpc` |
 | Migrate incrementally with both models in one process | Combined (`httpapi` + `rpc`) |
 
+## Migration capability matrix (current behavior)
+
+Use this matrix to separate "supported now" from "known product limitations":
+
+| Migration concern | Current behavior | Recommendation |
+| --- | --- | --- |
+| Many response status codes (`201`, `202`, `400`, `404`, `409`, `503`, etc.) | Supported via `httpapi.HandlerMeta.Responses`. | Declare explicit `ResponseSpec` entries for each documented status. |
+| Non-JSON responses (`image/png`, `text/html`, files) | Supported for typed `string`/`[]byte` responses, including custom media types via `httpapi.HandlerMeta.Responses`. | Use `ResponseSpec{MediaType: ...}` for typed custom media responses; keep runtime headers in the handler. |
+| Optional request body (`@Param ... body ... false`) | Supported via `httpapi.Optional[...]` request marker. | Wrap request type with `httpapi.Optional[Req]()` when body is optional. |
+| Mixed query + body requests | Supported when query and JSON use different struct fields. | Use separate fields; do not dual-tag a single field with both `query` and `json`. Tag aliases are literal wire names and can overlap across query/body on different fields. |
+| Multiple security schemes on one route | Runtime middleware composes all guards. OpenAPI emits multiple security entries. Generated clients currently use only the first guard auth input. | Keep route security in middleware; treat generated-client multi-auth parity as a known capability gap. |
+| Query/path param type fidelity | Query/path values are documented and generated as strings. | Accept string transport types during phase-1 migration; cast to `int`/`bool`/etc. in handler logic when needed. |
+| Swaggo annotation drift vs router wiring | Runtime registration drives OpenAPI and clients. | Treat router registration as source of truth. |
+
 ## Annotation mapping (Swaggo -> Virtuous)
 
 | Swaggo annotation | Virtuous equivalent | Notes |
@@ -38,10 +52,10 @@ Use this table for exceptions and phase-2 planning:
 | `@Param ... body` | Typed request struct with `json` tags | RPC request is always JSON body when request type exists. |
 | `@Param ... query` | Request struct fields with `query:"..."` tags (`httpapi`) | Query tags are migration-only; nested structs/maps are not supported. |
 | `@Param ... path` | Method-prefixed route pattern with `{param}` (`httpapi`) | Path params come from route pattern, not struct tags. |
-| `@Success` / `@Failure` | Typed response struct | RPC always documents 200/422/500 with the same response schema. |
+| `@Success` / `@Failure` | Typed response struct and optional `httpapi.HandlerMeta.Responses` | RPC always documents 200/422/500 with the same response schema. `httpapi` can declare explicit response entries per status. |
 | `@Security` | `guard.Guard` with `Spec()` + middleware | Security schemes are emitted from guard specs. |
 | `@Router /path [method]` | `router.HandleTyped("METHOD /path", ...)` (`httpapi`) or `router.HandleRPC(fn)` (`rpc`) | RPC path is inferred: `/{prefix}/{package}/{kebab(function)}`. |
-| `@Accept`, `@Produce` | Implicit JSON | Virtuous generated docs/clients are JSON-focused. |
+| `@Accept`, `@Produce` | Implicit JSON by default for typed routes; override response media with `httpapi.HandlerMeta.Responses` | Use `ResponseSpec{MediaType: ...}` for typed custom response media types. |
 
 ## Behavioral differences that matter
 
@@ -49,6 +63,7 @@ Use this table for exceptions and phase-2 planning:
 2. RPC operations are HTTP POST only.
 3. RPC operation summary/description is not comment-driven.
 4. `httpapi` is the compatibility lane when you must preserve REST routes and per-route metadata.
+5. Typed `httpapi` is JSON-first for OpenAPI/client output.
 
 ## Phase 1 (required): Preserve existing routes with `httpapi`
 
@@ -145,6 +160,112 @@ func (bearerGuard) Middleware() func(http.Handler) http.Handler {
 
 Attach globally with `rpc.WithGuards(...)` or per route in `HandleRPC(...)` / `HandleTyped(...)`.
 
+### Security semantics (important)
+
+- Runtime middleware semantics: guards compose in order; all attached guard middleware runs.
+- OpenAPI semantics: each guard spec is emitted as a security requirement entry.
+- Generated client semantics: current JS/TS/PY generators expose auth input for the first guard only.
+
+For routes that require strict multi-scheme client ergonomics, track this as a capability gap during migration.
+
+### Composite OR guard (no framework changes required)
+
+If a route should accept either of two credentials, combine that logic inside one guard and attach that guard to the route.
+
+```go
+type bearerOrAPIKeyGuard struct {
+	bearer bearerGuard
+	apiKey apiKeyGuard
+}
+
+func (g bearerOrAPIKeyGuard) Spec() guard.Spec {
+	return guard.Spec{
+		Name:  "BearerOrApiKey",
+		In:    "header",
+		Param: "Authorization",
+	}
+}
+
+func (g bearerOrAPIKeyGuard) Middleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if g.bearer.authenticate(r) || g.apiKey.authenticate(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		})
+	}
+}
+
+router := httpapi.NewRouter()
+router.HandleTyped(
+	"GET /api/v1/secure/report",
+	httpapi.WrapFunc(GetSecureReport, nil, ReportResponse{}, httpapi.HandlerMeta{
+		Service: "Reports",
+		Method:  "GetSecure",
+	}),
+	bearerOrAPIKeyGuard{},
+)
+```
+
+## Non-JSON migration pattern
+
+Use typed handlers for JSON, plain text, raw bytes, and custom text/byte media types. Keep only fully untyped runtime-only routes on `Handle` during migration:
+
+```go
+router := httpapi.NewRouter()
+
+// JSON route (typed; included in OpenAPI + generated clients)
+router.HandleTyped(
+	"GET /api/v1/reports/{id}",
+	httpapi.WrapFunc(GetReportMeta, nil, ReportMetaResponse{}, httpapi.HandlerMeta{
+		Service: "Reports",
+		Method:  "GetMeta",
+	}),
+)
+
+// Plain text route (typed; included as text/plain)
+router.HandleTyped(
+	"GET /api/v1/reports/{id}/summary.txt",
+	httpapi.WrapFunc(GetReportSummaryText, nil, "", httpapi.HandlerMeta{
+		Service: "Reports",
+		Method:  "GetSummaryText",
+	}),
+)
+
+// Binary route (typed; included as application/octet-stream)
+router.HandleTyped(
+	"GET /api/v1/reports/{id}/raw",
+	httpapi.WrapFunc(GetReportRawBytes, nil, []byte{}, httpapi.HandlerMeta{
+		Service: "Reports",
+		Method:  "GetRaw",
+	}),
+)
+
+// Custom media route (typed; included as image/png)
+router.HandleTyped(
+	"GET /api/v1/reports/{id}/preview.png",
+	httpapi.WrapFunc(ServeReportPreviewPNG, nil, nil, httpapi.HandlerMeta{
+		Service: "Reports",
+		Method:  "GetPreview",
+		Responses: []httpapi.ResponseSpec{
+			{Status: 200, Body: []byte{}, MediaType: "image/png"},
+			{Status: 404, Body: ErrorResponse{}},
+		},
+	}),
+)
+
+// Fully untyped route (served at runtime, skipped from generated OpenAPI + clients)
+router.Handle("GET /internal/debug/raw", http.HandlerFunc(ServeDebugDump))
+```
+
+## Source of truth and slash policy
+
+- During migration, router registration is source of truth for path + method.
+- If Swaggo annotations disagree with runtime registration, trust the registered route.
+- Preserve trailing-slash behavior intentionally. Register the exact path shape you want clients and docs to reflect.
+
 ## Route-by-route checklist
 
 1. Keep or create typed request/response structs.
@@ -175,7 +296,7 @@ Use this prompt for migration automation:
 You are migrating a Go API from Swaggo annotations to Virtuous.
 
 Goal:
-- Pin the target Virtuous version from `VERSION` and report it explicitly (current: `0.0.21`).
+- Read the target Virtuous version from `VERSION` and report it explicitly.
 - Replace annotation-driven docs with Virtuous runtime docs/clients.
 - For Swaggo migrations, migrate routes to httpapi first.
 - Use RPC as an explicit phase-2 optimization after compatibility is preserved.
@@ -203,5 +324,6 @@ Deliverables:
 - RPC does not currently provide Swaggo-style per-operation comment metadata (`@Summary`, `@Description`) as direct handler annotations.
 - RPC always documents the same response schema for 200, 422, and 500.
 - Query-tag behavior is intentionally limited and exists for migration, not new design.
+- Generated clients currently expose one auth input even when multiple guards are attached.
 
 If those are hard requirements for a route, keep that route on `httpapi` until constraints can be relaxed.

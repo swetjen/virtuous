@@ -25,6 +25,7 @@ Rules:
 - 200 indicates success.
 - 422 indicates a user or validation error.
 - 500 indicates a server error.
+- 401 may also appear in OpenAPI for guarded routes, but handlers still return only 200/422/500.
 
 Any other status is treated as 500.
 

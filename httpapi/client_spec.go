@@ -25,8 +25,11 @@ type clientMethod struct {
 	Path         string
 	PathParams   []string
 	HasBody      bool
+	BodyOptional bool
 	HasQuery     bool
 	QueryParams  []clientQueryParam
+	AcceptType   string
+	ResponseMode string
 	HasAuth      bool
 	Auth         GuardSpec
 	AuthParam    string
@@ -46,19 +49,20 @@ type clientQueryParam struct {
 func buildClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
 	return buildClientSpecWith(routes, overrides, func(registry *schema.Registry) func(reflect.Type) string {
 		return registry.JSTypeOf
-	})
+	}, "Uint8Array")
 }
 
 func buildPythonClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
 	return buildClientSpecWith(routes, overrides, func(registry *schema.Registry) func(reflect.Type) string {
 		return registry.PyTypeOf
-	})
+	}, "bytes")
 }
 
 func buildClientSpecWith(
 	routes []Route,
 	overrides map[string]TypeOverride,
 	typeFnFactory func(*schema.Registry) func(reflect.Type) string,
+	byteType string,
 ) (clientSpec, error) {
 	serviceMap := make(map[string]*clientService)
 	registry := schema.NewRegistry(overrides)
@@ -77,15 +81,14 @@ func buildClientSpecWith(
 			cs = &clientService{Name: service}
 			serviceMap[service] = cs
 		}
-		reqType := route.Handler.RequestType()
-		respType := route.Handler.ResponseType()
-		hasBody := reqType != nil
+		reqInfo := resolveRequestType(route.Handler.RequestType())
+		hasBody := reqInfo.Present
 		hasQuery := false
 		var queryParams []clientQueryParam
 		requestType := ""
 		responseType := ""
-		if reqType != nil {
-			reqReflect := reflect.TypeOf(reqType)
+		if reqInfo.Present {
+			reqReflect := reqInfo.Type
 			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
 				registry.PreferNameOf(reqReflect, preferred)
 			}
@@ -111,16 +114,31 @@ func buildClientSpecWith(
 				requestType = typeFn(reqReflect)
 			}
 		}
-		if respType != nil {
-			respReflect := reflect.TypeOf(respType)
-			if !isNoResponse(respReflect, reflect.TypeOf(NoResponse200{})) &&
+		primaryResp, hasPrimaryResponse, err := primaryClientResponse(route)
+		if err != nil {
+			return clientSpec{}, err
+		}
+		acceptType := "application/json"
+		responseMode := "none"
+		if hasPrimaryResponse {
+			respReflect := primaryResp.BodyType
+			if primaryResp.MediaType != "" {
+				acceptType = primaryResp.MediaType
+			}
+			responseMode = responseModeForType(respReflect)
+			if respReflect != nil &&
+				!isNoResponse(respReflect, reflect.TypeOf(NoResponse200{})) &&
 				!isNoResponse(respReflect, reflect.TypeOf(NoResponse204{})) &&
 				!isNoResponse(respReflect, reflect.TypeOf(NoResponse500{})) {
-				if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" {
-					registry.PreferNameOf(respReflect, preferred)
+				if isByteSliceResponse(respReflect) {
+					responseType = byteType
+				} else {
+					if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" {
+						registry.PreferNameOf(respReflect, preferred)
+					}
+					registry.AddTypeOf(respReflect)
+					responseType = typeFn(respReflect)
 				}
-				registry.AddTypeOf(respReflect)
-				responseType = typeFn(respReflect)
 			}
 		}
 		method := clientMethod{
@@ -130,12 +148,17 @@ func buildClientSpecWith(
 			Path:         route.Path,
 			PathParams:   route.PathParams,
 			HasBody:      hasBody,
+			BodyOptional: reqInfo.Optional && hasBody,
 			HasQuery:     hasQuery,
 			QueryParams:  queryParams,
+			AcceptType:   acceptType,
+			ResponseMode: responseMode,
 			RequestType:  requestType,
 			ResponseType: responseType,
 		}
 		if len(route.Guards) > 0 {
+			// Current client templates expose a single auth input, so they bind
+			// to the first declared guard for the route.
 			method.HasAuth = true
 			method.Auth = route.Guards[0]
 			method.AuthParam = authParamName(route.Guards[0].Name)
@@ -169,4 +192,29 @@ func authParamName(name string) string {
 		return "auth"
 	}
 	return candidate
+}
+
+func responseModeFor(respType any) string {
+	if respType == nil {
+		return "none"
+	}
+	return responseModeForType(reflect.TypeOf(respType))
+}
+
+func responseModeForType(t reflect.Type) string {
+	if t == nil {
+		return "none"
+	}
+	if isNoResponse(t, reflect.TypeOf(NoResponse200{})) ||
+		isNoResponse(t, reflect.TypeOf(NoResponse204{})) ||
+		isNoResponse(t, reflect.TypeOf(NoResponse500{})) {
+		return "none"
+	}
+	if isStringResponse(t) {
+		return "text"
+	}
+	if isByteSliceResponse(t) {
+		return "bytes"
+	}
+	return "json"
 }

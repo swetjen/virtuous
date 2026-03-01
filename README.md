@@ -13,11 +13,12 @@ Virtuous is an **agent-first, typed RPC API framework for Go** with **self-gener
 
 ## Table of contents
 
-- [Why RPC (default)](#why-rpc-default)
-- [RPC (recommended)](#rpc-recommended)
-- [httpapi (compatibility)](#httpapi-compatibility)
+- [RPC](#rpc)
+- [HTTP API (httpapi)](#http-api-httpapi)
 - [Combined (migration demo)](#combined-migration-demo)
+- [Why RPC?](#why-rpc)
 - [Docs](#docs)
+- [Requirements](#requirements)
 
 ## Why RPC (default)
 
@@ -27,12 +28,12 @@ What this means in practice:
 
 - Inputs/outputs are Go structs; they *are* the contract and generate OpenAPI + SDKs automatically.
 - Routes derive from package + function names, so naming stays consistent without manual path design.
-- A minimal status model (200/401/422/500) keeps error handling explicit and uniform.
+- A minimal handler status model (200/422/500) keeps error handling explicit and uniform.
 - Docs and clients are emitted from the running server, so they cannot drift from the code.
 
 `httpapi` stays in the toolbox for teams migrating existing handlers or preserving exact legacy responses.
 
-## RPC (recommended)
+## RPC
 
 RPC uses plain Go functions with typed requests and responses.  
 Routes, schemas, and clients are inferred from package and function names.
@@ -105,6 +106,130 @@ Run it:
 go run .
 ```
 
+### Advanced patterns
+
+#### 1) One guard for a collection of routes (group-level)
+
+Use a dedicated router for the guarded group, then mount both routers on one mux.
+
+```go
+admin := rpc.NewRouter(
+	rpc.WithPrefix("/rpc/admin"),
+	rpc.WithGuards(sessionGuard{}), // applies to every admin route
+)
+admin.HandleRPC(adminusers.GetMany)
+admin.HandleRPC(adminusers.Disable)
+
+public := rpc.NewRouter(rpc.WithPrefix("/rpc/public"))
+public.HandleRPC(publichealth.Check)
+
+mux := http.NewServeMux()
+mux.Handle("/rpc/admin/", admin)
+mux.Handle("/rpc/public/", public)
+```
+
+If you wrap a mux subtree with middleware directly, that works for transport security, but `rpc.WithGuards(...)` is the docs/client-aware path because it emits OpenAPI security metadata.
+
+#### 2) Multiple documentation sets (Public Service, Secret Service)
+
+Today, one router emits one OpenAPI document for all routes on that router.
+For separate docs, split routes across routers.
+
+```go
+publicAPI := rpc.NewRouter(rpc.WithPrefix("/rpc/public"))
+publicAPI.HandleRPC(publicsvc.GetCatalog)
+publicAPI.ServeAllDocs(
+	rpc.WithDocsOptions(
+		rpc.WithDocsPath("/rpc/public/docs"),
+		rpc.WithOpenAPIPath("/rpc/public/openapi.json"),
+	),
+	rpc.WithClientJSPath("/rpc/public/client.gen.js"),
+	rpc.WithClientTSPath("/rpc/public/client.gen.ts"),
+	rpc.WithClientPYPath("/rpc/public/client.gen.py"),
+)
+
+secretAPI := rpc.NewRouter(
+	rpc.WithPrefix("/rpc/secret"),
+	rpc.WithGuards(internalTokenGuard{}),
+)
+secretAPI.HandleRPC(secretsvc.RotateKeys)
+secretAPI.ServeAllDocs(
+	rpc.WithDocsOptions(
+		rpc.WithDocsPath("/rpc/secret/docs"),
+		rpc.WithOpenAPIPath("/rpc/secret/openapi.json"),
+	),
+	rpc.WithClientJSPath("/rpc/secret/client.gen.js"),
+	rpc.WithClientTSPath("/rpc/secret/client.gen.ts"),
+	rpc.WithClientPYPath("/rpc/secret/client.gen.py"),
+)
+
+mux := http.NewServeMux()
+mux.Handle("/rpc/public/", publicAPI)
+mux.Handle("/rpc/secret/", secretAPI)
+```
+
+#### 3) Basic auth on the docs route
+
+Protect docs/OpenAPI paths at the top-level mux.
+
+```go
+func docsBasicAuth(user, pass string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok || u != user || p != pass {
+			// Sends a Basic Auth challenge so browsers show a username/password prompt.
+			w.Header().Set("WWW-Authenticate", `Basic realm="Virtuous Docs"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
+router.HandleRPC(states.GetMany)
+router.ServeAllDocs()
+
+mux := http.NewServeMux()
+mux.Handle("/rpc/", router) // API routes
+mux.Handle("/rpc/openapi.json", docsBasicAuth("docs", "secret", router))
+mux.Handle("/rpc/docs", docsBasicAuth("docs", "secret", router))
+mux.Handle("/rpc/docs/", docsBasicAuth("docs", "secret", router))
+```
+
+Note: there is no first-class docs auth option yet; mux-level middleware is the current path.
+
+#### 4) OR auth semantics (accept either of two schemes)
+
+When a route should accept either credential type, express that logic in one composite guard and attach it once.
+
+```go
+type bearerOrAPIKeyGuard struct {
+	bearer bearerGuard
+	apiKey apiKeyGuard
+}
+
+func (g bearerOrAPIKeyGuard) Spec() guard.Spec {
+	return guard.Spec{
+		Name:  "BearerOrApiKey",
+		In:    "header",
+		Param: "Authorization",
+	}
+}
+
+func (g bearerOrAPIKeyGuard) Middleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if g.bearer.authenticate(r) || g.apiKey.authenticate(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		})
+	}
+}
+```
+
 ### Handler signature
 
 RPC handlers must follow one of these forms:
@@ -121,9 +246,10 @@ RPC handlers return an HTTP status code directly.
 Supported statuses:
 
 - `200` — success
-- `401` — unauthorized (guard)
 - `422` — invalid input
 - `500` — server error
+
+Guarded routes may also return `401` when middleware rejects the request.
 
 Docs and SDKs are served at:
 
@@ -131,14 +257,19 @@ Docs and SDKs are served at:
 - `/rpc/client.gen.*`
 - Responses should include a canonical `error` field (string or struct) when errors occur.
 
-## httpapi (compatibility)
+## HTTP API (httpapi)
 
-`httpapi` wraps classic `net/http` handlers and preserves existing request/response shapes.  It also implements automatic OpenAPI 3.0 specs for all handlers wrapped in this way.
+`httpapi` wraps classic `net/http` handlers and preserves existing request/response shapes. It also emits OpenAPI 3.0 specs for typed handlers.
 
 Use this when:
 - Migrating an existing API to Virtuous
-- Developing rich http APIs.
+- Developing rich HTTP APIs
 - Maintaining compatibility with established OpenAPI contracts
+
+### Quick start
+
+Method-prefixed patterns (`GET /path`) are required for docs and client generation.
+Typed `httpapi` routes are JSON-focused for generated docs/clients. `string` and `[]byte` responses are supported directly, and `HandlerMeta.Responses` can declare custom media types and multiple statuses.
 
 ```go
 router := httpapi.NewRouter()
@@ -150,6 +281,188 @@ router.HandleTyped(
 	}),
 )
 router.ServeAllDocs()
+```
+
+### Advanced patterns
+
+#### 1) One guard for a collection of routes (group-level intent)
+
+`httpapi` does not have a router-wide `WithGuards(...)` option today.
+Use a shared guard slice and pass it to each route in the collection.
+
+```go
+adminGuards := []httpapi.Guard{sessionGuard{}}
+
+router := httpapi.NewRouter()
+router.HandleTyped(
+	"GET /api/admin/users",
+	httpapi.WrapFunc(AdminUsersGetMany, nil, UsersResponse{}, httpapi.HandlerMeta{
+		Service: "AdminUsers",
+		Method:  "GetMany",
+	}),
+	adminGuards...,
+)
+router.HandleTyped(
+	"POST /api/admin/users/disable",
+	httpapi.WrapFunc(AdminUsersDisable, nil, DisableUserResponse{}, httpapi.HandlerMeta{
+		Service: "AdminUsers",
+		Method:  "Disable",
+	}),
+	adminGuards...,
+)
+```
+
+If you apply middleware only at mux level, requests are still protected, but auth metadata is not emitted in OpenAPI unless guards are attached to typed routes.
+
+#### 2) Multiple documentation sets (Public Service, Secret Service)
+
+Use separate routers, each with its own docs/OpenAPI/client paths.
+
+```go
+publicAPI := httpapi.NewRouter()
+publicAPI.HandleTyped(
+	"GET /public/health",
+	httpapi.WrapFunc(PublicHealth, nil, HealthResponse{}, httpapi.HandlerMeta{
+		Service: "PublicService",
+		Method:  "Health",
+	}),
+)
+publicAPI.ServeAllDocs(
+	httpapi.WithDocsOptions(
+		httpapi.WithDocsPath("/public/docs"),
+		httpapi.WithOpenAPIPath("/public/openapi.json"),
+	),
+	httpapi.WithClientJSPath("/public/client.gen.js"),
+	httpapi.WithClientTSPath("/public/client.gen.ts"),
+	httpapi.WithClientPYPath("/public/client.gen.py"),
+)
+
+secretGuards := []httpapi.Guard{internalTokenGuard{}}
+secretAPI := httpapi.NewRouter()
+secretAPI.HandleTyped(
+	"POST /secret/rotate-keys",
+	httpapi.WrapFunc(RotateKeys, nil, RotateKeysResponse{}, httpapi.HandlerMeta{
+		Service: "SecretService",
+		Method:  "RotateKeys",
+	}),
+	secretGuards...,
+)
+secretAPI.ServeAllDocs(
+	httpapi.WithDocsOptions(
+		httpapi.WithDocsPath("/secret/docs"),
+		httpapi.WithOpenAPIPath("/secret/openapi.json"),
+	),
+	httpapi.WithClientJSPath("/secret/client.gen.js"),
+	httpapi.WithClientTSPath("/secret/client.gen.ts"),
+	httpapi.WithClientPYPath("/secret/client.gen.py"),
+)
+
+mux := http.NewServeMux()
+mux.Handle("/public/", publicAPI)
+mux.Handle("/secret/", secretAPI)
+```
+
+#### 3) Basic auth on the docs route
+
+Protect docs/OpenAPI paths at the top-level mux.
+
+```go
+func docsBasicAuth(user, pass string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok || u != user || p != pass {
+			// Sends a Basic Auth challenge so browsers show a username/password prompt.
+			w.Header().Set("WWW-Authenticate", `Basic realm="Virtuous Docs"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+router := httpapi.NewRouter()
+router.HandleTyped(
+	"GET /api/v1/lookup/states/{code}",
+	httpapi.WrapFunc(StateByCode, nil, StateResponse{}, httpapi.HandlerMeta{
+		Service: "States",
+		Method:  "GetByCode",
+	}),
+)
+router.ServeAllDocs()
+
+mux := http.NewServeMux()
+mux.Handle("/", router) // API routes
+mux.Handle("/openapi.json", docsBasicAuth("docs", "secret", router))
+mux.Handle("/docs", docsBasicAuth("docs", "secret", router))
+mux.Handle("/docs/", docsBasicAuth("docs", "secret", router))
+```
+
+Note: there is no first-class docs auth option yet; mux-level middleware is the current path.
+
+#### 4) OR auth semantics (accept either of two schemes)
+
+When a route should accept either credential type, express that logic in one composite guard and attach it once.
+
+```go
+type bearerOrAPIKeyGuard struct {
+	bearer bearerGuard
+	apiKey apiKeyGuard
+}
+
+func (g bearerOrAPIKeyGuard) Spec() guard.Spec {
+	return guard.Spec{
+		Name:  "BearerOrApiKey",
+		In:    "header",
+		Param: "Authorization",
+	}
+}
+
+func (g bearerOrAPIKeyGuard) Middleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if g.bearer.authenticate(r) || g.apiKey.authenticate(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		})
+	}
+}
+```
+
+#### 5) Optional request body contract
+
+Request bodies are required by default when you pass a typed request.
+Use `httpapi.Optional` when a route should accept either no body or a JSON body.
+
+```go
+router := httpapi.NewRouter()
+router.HandleTyped(
+	"POST /api/v1/search",
+	httpapi.WrapFunc(Search, httpapi.Optional[SearchRequest](), SearchResponse{}, httpapi.HandlerMeta{
+		Service: "Search",
+		Method:  "Run",
+	}),
+)
+```
+
+#### 6) Explicit response specs
+
+Use `HandlerMeta.Responses` when a route needs multiple statuses or a custom response media type.
+
+```go
+router := httpapi.NewRouter()
+router.HandleTyped(
+	"GET /api/v1/assets/{id}/preview.png",
+	httpapi.WrapFunc(ServePreviewPNG, nil, nil, httpapi.HandlerMeta{
+		Service: "Assets",
+		Method:  "GetPreview",
+		Responses: []httpapi.ResponseSpec{
+			{Status: 200, Body: []byte{}, MediaType: "image/png"},
+			{Status: 404, Body: ErrorResponse{}},
+		},
+	}),
+)
 ```
 
 ## Combined (migration demo)

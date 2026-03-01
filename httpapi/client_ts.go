@@ -25,10 +25,12 @@ export function createClient(basepath: string = "/") {
 {{- range $service := .Services }}
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
-			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: { {{- range $param := $method.PathParams }}{{ $param }}: string; {{- end }} }, {{ end }}{{ if $method.HasBody }}request: {{ $method.RequestType }}, {{ end }}{{ if $method.HasQuery }}query?: { {{- range $param := $method.QueryParams }}{{ $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ if $param.IsArray }}string[]{{ else }}string{{ end }}; {{- end }} }, {{ end }}options?: AuthOptions): Promise<{{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}void{{ end }}> {
+			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: { {{- range $param := $method.PathParams }}{{ $param }}: string; {{- end }} }, {{ end }}{{ if $method.HasBody }}request{{ if $method.BodyOptional }}?{{ end }}: {{ $method.RequestType }}, {{ end }}{{ if $method.HasQuery }}query?: { {{- range $param := $method.QueryParams }}{{ $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ if $param.IsArray }}string[]{{ else }}string{{ end }}; {{- end }} }, {{ end }}options?: AuthOptions): Promise<{{ if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}> {
 				const headers: Record<string, string> = {
-					"Accept": "application/json",
+					"Accept": "{{ $method.AcceptType }}",
+{{- if $method.HasBody }}
 					"Content-Type": "application/json",
+{{- end }}
 				}
 				let url = basepath + "{{ $method.Path }}"
 {{- if $method.PathParams }}
@@ -102,9 +104,14 @@ export function createClient(basepath: string = "/") {
 {{- end }}
 {{- end }}
 {{- if $method.HasBody }}
+{{- if $method.BodyOptional }}
+					body: request === undefined || request === null ? undefined : JSON.stringify(request),
+{{- else }}
 					body: JSON.stringify(request || {}),
 {{- end }}
+{{- end }}
 				})
+{{- if eq $method.ResponseMode "json" }}
 				const text = await response.text()
 				let json: {{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}Record<string, unknown>{{ end }} | null = null
 				if (text) {
@@ -124,7 +131,25 @@ export function createClient(basepath: string = "/") {
 					}
 					throw new Error(response.status + " " + response.statusText)
 				}
-				return json as {{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}void{{ end }}
+				return json as {{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}
+{{- else if eq $method.ResponseMode "text" }}
+				const text = await response.text()
+				if (!response.ok) {
+					throw new Error(text || (response.status + " " + response.statusText))
+				}
+				return text as {{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}string{{ end }}
+{{- else if eq $method.ResponseMode "bytes" }}
+				const raw = await response.arrayBuffer()
+				if (!response.ok) {
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return new Uint8Array(raw) as {{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}Uint8Array{{ end }}
+{{- else }}
+				if (!response.ok) {
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return
+{{- end }}
 			},
 {{- end }}
 		},

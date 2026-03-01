@@ -15,7 +15,7 @@ Virtuous is designed to be deterministic for agents. Keep project layout and han
 
 ```text
 You are implementing a Virtuous RPC API.
-- Target Virtuous version: read `VERSION` in the repo and pin it in the output (current: `0.0.21`).
+- Target Virtuous version: read `VERSION` in the repo and pin it in the output.
 - Create router.go with rpc.NewRouter(rpc.WithPrefix("/rpc")).
 - Put handlers in package folders (states, users, admin).
 - Use func(ctx, req) (Resp, int).
@@ -27,7 +27,7 @@ You are implementing a Virtuous RPC API.
 
 ```text
 Migrate Swaggo routes to Virtuous using the canonical guide at docs/tutorials/migrate-swaggo.md.
-- Target Virtuous version: read `VERSION` in the repo and pin it in the output (current: `0.0.21`).
+- Target Virtuous version: read `VERSION` in the repo and pin it in the output.
 - For Swaggo migrations, use httpapi first.
 - Use rpc only for explicit phase-2 moves.
 - Move field docs to doc struct tags.
@@ -47,3 +47,4 @@ That tutorial is the canonical transformation guide, including mapping rules, mi
 
 - Use `doc:"..."` tags on struct fields to populate OpenAPI and client docs.
 - Keep section names consistent across documents for reliable agent parsing.
+- During migrations, treat runtime router registration as source of truth over stale annotations.

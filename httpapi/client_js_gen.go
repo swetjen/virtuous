@@ -44,7 +44,7 @@ export function createClient(basepath = "/") {
 			 * @param {Object} pathParams
 {{- end }}
 {{- if $method.HasBody }}
-			 * @param { {{- if $method.RequestType }}{{ $method.RequestType }}{{ else }}any{{ end }} } [request]
+			 * @param { {{- if $method.RequestType }}{{ $method.RequestType }}{{ else }}any{{ end }} }{{ if $method.BodyOptional }} [request]{{ else }} request{{ end }}
 {{- end }}
 {{- if $method.HasQuery }}
 			 * @param {Object} [query]
@@ -53,12 +53,14 @@ export function createClient(basepath = "/") {
 {{- end }}
 {{- end }}
 			 * @param {AuthOptions} [options]
-			 * @returns {Promise<{{- if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}any{{ end }}>}
-			 */
-			async {{ $method.Name }}({{ if $method.PathParams }}pathParams, {{ end }}{{ if $method.HasBody }}request, {{ end }}{{ if $method.HasQuery }}query, {{ end }}options) {
-				const headers = {
-					"Accept": "application/json",
-					"Content-Type": "application/json",
+			 * @returns {Promise<{{- if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}any{{ end }}>}
+				 */
+				async {{ $method.Name }}({{ if $method.PathParams }}pathParams, {{ end }}{{ if $method.HasBody }}request, {{ end }}{{ if $method.HasQuery }}query, {{ end }}options) {
+					const headers = {
+						"Accept": "{{ $method.AcceptType }}",
+{{- if $method.HasBody }}
+						"Content-Type": "application/json",
+{{- end }}
 				}
 				let url = basepath + "{{ $method.Path }}"
 {{- if $method.PathParams }}
@@ -132,9 +134,14 @@ export function createClient(basepath = "/") {
 {{- end }}
 {{- end }}
 {{- if $method.HasBody }}
+{{- if $method.BodyOptional }}
+					body: request === undefined || request === null ? undefined : JSON.stringify(request),
+{{- else }}
 					body: JSON.stringify(request || {}),
 {{- end }}
+{{- end }}
 				})
+{{- if eq $method.ResponseMode "json" }}
 				const text = await response.text()
 				let json = null
 				if (text) {
@@ -154,6 +161,24 @@ export function createClient(basepath = "/") {
 					throw new Error(response.status + " " + response.statusText)
 				}
 				return json || {}
+{{- else if eq $method.ResponseMode "text" }}
+				const text = await response.text()
+				if (!response.ok) {
+					throw new Error(text || (response.status + " " + response.statusText))
+				}
+				return text
+{{- else if eq $method.ResponseMode "bytes" }}
+				const raw = await response.arrayBuffer()
+				if (!response.ok) {
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return new Uint8Array(raw)
+{{- else }}
+				if (!response.ok) {
+					throw new Error(response.status + " " + response.statusText)
+				}
+				return
+{{- end }}
 			},
 {{- end }}
 		},

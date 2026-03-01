@@ -44,10 +44,12 @@ class _{{ $service.Name }}Service:
         self._basepath = basepath
 
 {{- range $method := $service.Methods }}
-    def {{ $method.Name }}(self{{- if $method.PathParams }}{{- range $param := $method.PathParams }}, {{ $param }}: str{{- end }}{{- end }}{{- if $method.HasBody }}, body: Optional[{{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}] = None{{- end }}{{- if $method.HasQuery }}, query: Optional[dict[str, Any]] = None{{- end }}{{- if $method.HasAuth }}, {{ $method.AuthParam }}: Optional[str] = None{{- end }}) -> {{- if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}None{{- end }}:
+    def {{ $method.Name }}(self{{- if $method.PathParams }}{{- range $param := $method.PathParams }}, {{ $param }}: str{{- end }}{{- end }}{{- if $method.HasBody }}, body: Optional[{{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}] = None{{- end }}{{- if $method.HasQuery }}, query: Optional[dict[str, Any]] = None{{- end }}{{- if $method.HasAuth }}, {{ $method.AuthParam }}: Optional[str] = None{{- end }}) -> {{- if eq $method.ResponseMode "none" }}None{{- else if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}Any{{- end }}:
         headers = {
-            "Accept": "application/json",
+            "Accept": "{{ $method.AcceptType }}",
+{{- if $method.HasBody }}
             "Content-Type": "application/json",
+{{- end }}
         }
         url = self._basepath + "{{ $method.Path }}"
 {{- if $method.PathParams }}
@@ -104,29 +106,45 @@ class _{{ $service.Name }}Service:
 {{- end }}
         req = request.Request(url, data=data, method="{{ $method.HTTPMethod }}", headers=headers)
         status = 0
-        text = ""
+        payload = b""
         try:
             with request.urlopen(req) as resp:
                 status = resp.getcode()
-                text = resp.read().decode("utf-8")
+                payload = resp.read()
         except error.HTTPError as err:
             status = err.code
-            text = err.read().decode("utf-8")
-        body = None
+            payload = err.read()
+{{- if eq $method.ResponseMode "json" }}
+        text = payload.decode("utf-8") if payload else ""
+        decoded = None
         if text:
             try:
-                body = json.loads(text)
+                decoded = json.loads(text)
             except json.JSONDecodeError as err:
                 if status >= 400:
                     raise RuntimeError(f"{status} {_status_text(status)}") from err
                 raise
         if status >= 400:
-            if isinstance(body, dict) and "error" in body:
-                raise RuntimeError(str(body["error"]))
+            if isinstance(decoded, dict) and "error" in decoded:
+                raise RuntimeError(str(decoded["error"]))
             raise RuntimeError(f"{status} {_status_text(status)}")
 {{- if $method.ResponseType }}
-        return _decode_value({{ $method.ResponseType }}, body)
+        return _decode_value({{ $method.ResponseType }}, decoded)
 {{- else }}
+        return None
+{{- end }}
+{{- else if eq $method.ResponseMode "text" }}
+        text = payload.decode("utf-8") if payload else ""
+        if status >= 400:
+            raise RuntimeError(text or f"{status} {_status_text(status)}")
+        return text
+{{- else if eq $method.ResponseMode "bytes" }}
+        if status >= 400:
+            raise RuntimeError(f"{status} {_status_text(status)}")
+        return payload
+{{- else }}
+        if status >= 400:
+            raise RuntimeError(f"{status} {_status_text(status)}")
         return None
 {{- end }}
 

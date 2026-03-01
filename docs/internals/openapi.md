@@ -15,4 +15,5 @@ Virtuous generates OpenAPI 3.0.3 documents at runtime by reflecting registered h
 
 - RPC operations are always POST.
 - httpapi operations use the HTTP method from the route pattern.
-- For guarded routes, a 401 response is included in OpenAPI.
+- RPC guarded routes include a documented 401 response entry.
+- httpapi guarded routes emit security requirements; 401 response entries are not auto-added today.

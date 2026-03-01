@@ -23,6 +23,7 @@ _ = server.ListenAndServe()
 
 - RPC handlers are plain functions: `func(ctx, req) (resp, status)`.
 - Status must be 200, 422, or 500.
+- Guarded routes may also surface 401 when middleware rejects requests.
 - `HandleRPC` infers the path from package + function name.
 - Use a canonical `error` field in response payloads (string or struct) when errors occur.
 
@@ -61,6 +62,12 @@ func (bearerGuard) Middleware() func(http.Handler) http.Handler {
 - Method-prefixed patterns like `GET /path` are required for docs/clients.
 - Use `Wrap` or `WrapFunc` so request/response types attach to handlers.
 - `HandlerMeta.Service` and `HandlerMeta.Method` control client method names.
+- Typed `httpapi` docs/clients are JSON-focused.
+- Typed `string`/`[]byte` responses map to `text/plain`/`application/octet-stream`.
+- Use `httpapi.HandlerMeta.Responses` for multi-status routes or custom response media types.
+- Use `httpapi.Optional[Req]()` for optional JSON request bodies on typed routes.
+- Keep other non-JSON routes untyped (`Handle`) during migration.
+- Router registration is source of truth when legacy annotations drift.
 
 ## Query params (legacy)
 

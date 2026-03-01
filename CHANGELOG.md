@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.25
+
+- Add typed `httpapi` response media support for `string` (`text/plain`) and `[]byte` (`application/octet-stream`) in OpenAPI and generated JS/TS/PY clients.
+- Add `httpapi.Optional[Req]()` request marker to model optional JSON request bodies in OpenAPI and generated clients.
+- Add `httpapi.HandlerMeta.Responses` / `httpapi.ResponseSpec` for explicit multi-status and custom-media response contracts.
+- Add migration and guard documentation examples for composite OR auth semantics and typed/non-typed non-JSON migration patterns.
+
 ## 0.0.24
 
 - Fix README license badge link to target the canonical GitHub `LICENSE` file URL.

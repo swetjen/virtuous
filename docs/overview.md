@@ -17,7 +17,7 @@ This is the canonical overview for Virtuous. It is RPC-first by design, with leg
 Virtuous models APIs as **typed functions** running over HTTP. Requests and responses are Go structs; they *are* the contract that drives OpenAPI and SDK generation. This keeps surface area small, prevents drift, and makes the system agent-friendly.
 
 In practice this means:
-- Plain Go functions with explicit inputs/outputs and a narrow status model (200/401/422/500).
+- Plain Go functions with explicit inputs/outputs and a narrow handler status model (200/422/500).
 - Routes derive from package + function names—no manual path design to maintain.
 - Docs and clients are emitted from the running server, ensuring runtime truth.
 - `httpapi` exists only for compatibility when you cannot yet move a handler to RPC.
@@ -44,6 +44,7 @@ func(context.Context) (Resp, int)
 
 - Return `(Resp, status)` from handlers.
 - Status must be 200, 422, or 500.
+- Guarded routes may also surface 401 when middleware rejects a request.
  - Responses should include a canonical `error` field (string or struct) when errors occur.
 
 ### Router wiring
@@ -72,6 +73,15 @@ Example:
 ## httpapi (legacy)
 
 Use `httpapi` when you need to retain classic `net/http` handlers or preserve an existing OpenAPI shape. This is a compatibility layer, not the canonical path for new APIs.
+
+Notes:
+
+- Typed `httpapi` routes are JSON-focused for generated OpenAPI and clients.
+- Typed `string`/`[]byte` responses map to `text/plain`/`application/octet-stream`.
+- Use `httpapi.HandlerMeta.Responses` for multi-status routes or custom response media types.
+- Use `httpapi.Optional[Req]()` when a typed route should accept an optional JSON body.
+- Untyped routes can still be served for other non-JSON endpoints during migration.
+- Runtime route registration is source of truth if legacy annotations drift.
 
 Example:
 
@@ -131,7 +141,7 @@ deps/
 
 ```text
 You are implementing a Virtuous RPC API.
-- Target Virtuous version: read `VERSION` in the repo and pin it in the output (current: `0.0.21`).
+- Target Virtuous version: read `VERSION` in the repo and pin it in the output.
 - Create router.go with rpc.NewRouter(rpc.WithPrefix("/rpc")).
 - Put handlers in package folders (states, users, admin).
 - Use func(ctx, req) (Resp, int).
@@ -143,7 +153,7 @@ You are implementing a Virtuous RPC API.
 
 ```text
 Use the canonical Swaggo migration prompt in docs/tutorials/migrate-swaggo.md.
-- Target Virtuous version: read `VERSION` in the repo and pin it in the output (current: `0.0.21`).
+- Target Virtuous version: read `VERSION` in the repo and pin it in the output.
 - Default to httpapi for Swaggo routes.
 - Use rpc only for phase-2 moves.
 - Validate against the migration Definition of Done in that guide.
@@ -173,7 +183,7 @@ Agent prompt (porting legacy handlers):
 
 ```text
 Port legacy handlers into Virtuous.
-- Target Virtuous version: read `VERSION` in the repo and pin it in the output (current: `0.0.21`).
+- Target Virtuous version: read `VERSION` in the repo and pin it in the output.
 - For each handler, decide: RPC (new) or httpapi (legacy).
 - For legacy: wrap http.HandlerFunc with httpapi.WrapFunc and register a method-prefixed route.
 - For new: create an RPC handler and register with router.HandleRPC.

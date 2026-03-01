@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
-	"net/http"
 	"os"
 	"reflect"
 	"sort"
@@ -46,9 +44,9 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			op.Security = secReq
 		}
 
-		reqType := route.Handler.RequestType()
-		if reqType != nil {
-			reqReflect := reflect.TypeOf(reqType)
+		reqInfo := resolveRequestType(route.Handler.RequestType())
+		if reqInfo.Present {
+			reqReflect := reqInfo.Type
 			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
 				gen.PreferNameOf(reqReflect, preferred)
 			}
@@ -72,7 +70,7 @@ func (r *Router) OpenAPI() ([]byte, error) {
 				reqSchema := requestBodySchema(gen, reqReflect, queryInfo.QueryFieldSet)
 				if reqSchema != nil {
 					op.RequestBody = &openAPIRequestBody{
-						Required: true,
+						Required: !reqInfo.Optional,
 						Content: map[string]openAPIMedia{
 							"application/json": {Schema: reqSchema},
 						},
@@ -81,25 +79,27 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			}
 		}
 
-		respType := route.Handler.ResponseType()
-		if respType == nil {
-			return nil, errors.New("response type is required for " + route.Pattern)
+		responses, err := routeResponseSpecs(route)
+		if err != nil {
+			return nil, err
 		}
-		respReflect := reflect.TypeOf(respType)
-		if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" {
-			gen.PreferNameOf(respReflect, preferred)
-		}
-		status, respSchema := responseSchema(gen, respReflect)
-		op.Responses[status] = openAPIResponse{
-			Description: http.StatusText(parseStatus(status)),
-			Content: map[string]openAPIMedia{
-				"application/json": {Schema: respSchema},
-			},
-		}
-		if status == "204" || respSchema == nil {
-			op.Responses[status] = openAPIResponse{
-				Description: http.StatusText(parseStatus(status)),
+		for _, resp := range responses {
+			preferResponseSchemaName(gen, route.Meta, resp.BodyType)
+			respSchema := responseBodySchema(gen, resp.BodyType)
+			response := op.Responses[resp.Status]
+			if response.Description == "" {
+				response.Description = resp.Description
 			}
+			if resp.Description != "" {
+				response.Description = resp.Description
+			}
+			if respSchema != nil {
+				if response.Content == nil {
+					response.Content = map[string]openAPIMedia{}
+				}
+				response.Content[resp.MediaType] = openAPIMedia{Schema: respSchema}
+			}
+			op.Responses[resp.Status] = response
 		}
 
 		for _, param := range route.PathParams {
@@ -152,33 +152,17 @@ func (r *Router) WriteOpenAPIFile(path string) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-func responseSchema(gen *schema.Generator, t reflect.Type) (string, *schema.OpenAPISchema) {
+func responseMediaType(t reflect.Type) string {
 	if t == nil {
-		return "500", nil
+		return "application/json"
 	}
-	if isNoResponse(t, reflect.TypeOf(NoResponse200{})) {
-		return "200", nil
+	if isByteSliceResponse(t) {
+		return "application/octet-stream"
 	}
-	if isNoResponse(t, reflect.TypeOf(NoResponse204{})) {
-		return "204", nil
+	if isStringResponse(t) {
+		return "text/plain"
 	}
-	if isNoResponse(t, reflect.TypeOf(NoResponse500{})) {
-		return "500", nil
-	}
-	return "200", gen.SchemaForType(t)
-}
-
-func parseStatus(status string) int {
-	switch status {
-	case "200":
-		return http.StatusOK
-	case "204":
-		return http.StatusNoContent
-	case "500":
-		return http.StatusInternalServerError
-	default:
-		return http.StatusOK
-	}
+	return "application/json"
 }
 
 func isNoResponse(t, target reflect.Type) bool {
@@ -186,6 +170,34 @@ func isNoResponse(t, target reflect.Type) bool {
 		t = t.Elem()
 	}
 	return t == target
+}
+
+func isStringResponse(t reflect.Type) bool {
+	t = reflectutil.DerefType(t)
+	return t != nil && t.Kind() == reflect.String
+}
+
+func isByteSliceResponse(t reflect.Type) bool {
+	t = reflectutil.DerefType(t)
+	return t != nil &&
+		t.Kind() == reflect.Slice &&
+		t.Elem().Kind() == reflect.Uint8
+}
+
+func preferResponseSchemaName(gen *schema.Generator, meta HandlerMeta, t reflect.Type) {
+	if t == nil {
+		return
+	}
+	if isNoResponse(t, reflect.TypeOf(NoResponse200{})) ||
+		isNoResponse(t, reflect.TypeOf(NoResponse204{})) ||
+		isNoResponse(t, reflect.TypeOf(NoResponse500{})) ||
+		isStringResponse(t) ||
+		isByteSliceResponse(t) {
+		return
+	}
+	if preferred := preferredSchemaName(meta, t); preferred != "" {
+		gen.PreferNameOf(t, preferred)
+	}
 }
 
 func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]struct{}) *schema.OpenAPISchema {

@@ -2,10 +2,10 @@
 
 ## Overview
 
-Virtuous keeps the canonical specs in the repo root:
+Historical design specs live under `_design/`:
 
-- `SPEC-RPC.md`: RPC runtime spec.
-- `SPEC-RPC-SIMPLE.md`: proposed simplified signature spec.
-- `SPEC.md`: legacy httpapi spec.
+- `_design/SPEC-RPC.md`: RPC runtime design.
+- `_design/SPEC-RPC-SIMPLE.md`: simplified RPC design.
+- `_design/SPEC.md`: legacy httpapi design.
 
-These documents are authoritative for behavior guarantees and edge cases.
+For current behavior guarantees, prefer package docs and source in `rpc/` and `httpapi/`.

@@ -15,6 +15,15 @@ type HandlerMeta struct {
 	Summary     string
 	Description string
 	Tags        []string
+	Responses   []ResponseSpec
+}
+
+// ResponseSpec describes an explicit response contract for a typed route.
+type ResponseSpec struct {
+	Status      int
+	Body        any
+	MediaType   string
+	Description string
 }
 
 // TypedHandler is an http.Handler with type metadata.

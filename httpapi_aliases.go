@@ -10,6 +10,7 @@ import (
 type Guard = httpapi.Guard
 type GuardSpec = httpapi.GuardSpec
 type HandlerMeta = httpapi.HandlerMeta
+type ResponseSpec = httpapi.ResponseSpec
 type TypedHandler = httpapi.TypedHandler
 type TypedHandlerFunc = httpapi.TypedHandlerFunc
 type Route = httpapi.Route
@@ -48,6 +49,10 @@ func Wrap(handler http.Handler, req any, resp any, meta HandlerMeta) TypedHandle
 
 func WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta HandlerMeta) TypedHandler {
 	return httpapi.WrapFunc(handler, req, resp, meta)
+}
+
+func Optional[T any](req ...T) any {
+	return httpapi.Optional(req...)
 }
 
 func Encode(w http.ResponseWriter, r *http.Request, status int, v any) {

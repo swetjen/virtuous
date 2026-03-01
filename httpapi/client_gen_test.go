@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -29,6 +30,14 @@ type testQueryRequest struct {
 	Name  string   `json:"name"`
 }
 
+type optionalClientRequest struct {
+	Name string `json:"name"`
+}
+
+type responseSpecClientError struct {
+	Error string `json:"error"`
+}
+
 type testHandler struct{}
 
 func (testHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
@@ -36,6 +45,80 @@ func (testHandler) RequestType() any                                 { return te
 func (testHandler) ResponseType() any                                { return testResponse{} }
 func (testHandler) Metadata() HandlerMeta {
 	return HandlerMeta{Service: "States", Method: "GetByCode"}
+}
+
+type textClientHandler struct{}
+
+func (textClientHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (textClientHandler) RequestType() any                                 { return nil }
+func (textClientHandler) ResponseType() any                                { return "" }
+func (textClientHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Assets", Method: "GetText"}
+}
+
+type bytesClientHandler struct{}
+
+func (bytesClientHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (bytesClientHandler) RequestType() any                                 { return nil }
+func (bytesClientHandler) ResponseType() any                                { return []byte{} }
+func (bytesClientHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Assets", Method: "GetBytes"}
+}
+
+type optionalBodyClientHandler struct{}
+
+func (optionalBodyClientHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (optionalBodyClientHandler) RequestType() any                                 { return Optional[optionalClientRequest]() }
+func (optionalBodyClientHandler) ResponseType() any                                { return testResponse{} }
+func (optionalBodyClientHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "States", Method: "OptionalCreate"}
+}
+
+type responseSpecClientHandler struct{}
+
+func (responseSpecClientHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (responseSpecClientHandler) RequestType() any                                 { return nil }
+func (responseSpecClientHandler) ResponseType() any                                { return nil }
+func (responseSpecClientHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service: "Assets",
+		Method:  "GetPreview",
+		Responses: []ResponseSpec{
+			{Status: 200, Body: []byte{}, MediaType: "image/png"},
+			{Status: 404, Body: responseSpecClientError{}},
+		},
+	}
+}
+
+type responseSpecMultiMediaClientHandler struct{}
+
+func (responseSpecMultiMediaClientHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (responseSpecMultiMediaClientHandler) RequestType() any                                 { return nil }
+func (responseSpecMultiMediaClientHandler) ResponseType() any                                { return nil }
+func (responseSpecMultiMediaClientHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service: "Assets",
+		Method:  "GetArtifact",
+		Responses: []ResponseSpec{
+			{Status: 200, Body: "", MediaType: "text/plain"},
+			{Status: 200, Body: []byte{}, MediaType: "application/pdf"},
+		},
+	}
+}
+
+type responseSpecPointerClientHandler struct{}
+
+func (responseSpecPointerClientHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (responseSpecPointerClientHandler) RequestType() any                                 { return nil }
+func (responseSpecPointerClientHandler) ResponseType() any                                { return nil }
+func (responseSpecPointerClientHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service: "Assets",
+		Method:  "GetPointerPayload",
+		Responses: []ResponseSpec{
+			{Status: 200, Body: &responseSpecPayload{}},
+		},
+	}
 }
 
 func TestGeneratedClientsAreValid(t *testing.T) {
@@ -106,6 +189,143 @@ func TestOpenAPIIsValidJSON(t *testing.T) {
 	}
 	if _, ok := doc["paths"]; !ok {
 		t.Fatalf("OpenAPI missing paths field")
+	}
+}
+
+func TestGeneratedClientsSupportTextAndBytesResponses(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/text", textClientHandler{})
+	router.HandleTyped("GET /assets/blob", bytesClientHandler{})
+
+	js := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientJS(buf) })
+	ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+
+	jsText := string(js)
+	if !strings.Contains(jsText, `"Accept": "text/plain"`) {
+		t.Fatalf("js client missing text/plain accept header")
+	}
+	if !strings.Contains(jsText, `"Accept": "application/octet-stream"`) {
+		t.Fatalf("js client missing octet-stream accept header")
+	}
+	if !strings.Contains(jsText, "new Uint8Array(raw)") {
+		t.Fatalf("js client missing Uint8Array binary decode")
+	}
+
+	tsText := string(ts)
+	if !strings.Contains(tsText, "Promise<Uint8Array>") {
+		t.Fatalf("ts client missing Uint8Array return type")
+	}
+	if !strings.Contains(tsText, `"Accept": "application/octet-stream"`) {
+		t.Fatalf("ts client missing octet-stream accept header")
+	}
+
+	pyText := string(py)
+	if !strings.Contains(pyText, "def getBytes") || !strings.Contains(pyText, "return payload") {
+		t.Fatalf("python client missing bytes response handling")
+	}
+	if !strings.Contains(pyText, `"Accept": "text/plain"`) {
+		t.Fatalf("python client missing text/plain accept header")
+	}
+}
+
+func TestGeneratedClientsSupportOptionalRequestBody(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("POST /states/optional", optionalBodyClientHandler{})
+
+	js := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientJS(buf) })
+	ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
+
+	jsText := string(js)
+	if !strings.Contains(jsText, "request === undefined || request === null ? undefined : JSON.stringify(request)") {
+		t.Fatalf("js client missing optional request body handling")
+	}
+
+	tsText := string(ts)
+	if !strings.Contains(tsText, "async optionalCreate(request?: ") {
+		t.Fatalf("ts client missing optional request argument")
+	}
+	if !strings.Contains(tsText, "request === undefined || request === null ? undefined : JSON.stringify(request)") {
+		t.Fatalf("ts client missing optional request body handling")
+	}
+}
+
+func TestGeneratedClientsUsePrimaryResponseSpec(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/preview/{id}", responseSpecClientHandler{})
+
+	js := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientJS(buf) })
+	ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+
+	jsText := string(js)
+	if !strings.Contains(jsText, `"Accept": "image/png"`) {
+		t.Fatalf("js client missing custom media type accept header")
+	}
+	if !strings.Contains(jsText, "new Uint8Array(raw)") {
+		t.Fatalf("js client missing binary decode for response spec")
+	}
+
+	tsText := string(ts)
+	if !strings.Contains(tsText, `"Accept": "image/png"`) {
+		t.Fatalf("ts client missing custom media type accept header")
+	}
+	if !strings.Contains(tsText, "Promise<Uint8Array>") {
+		t.Fatalf("ts client missing binary return type for response spec")
+	}
+
+	pyText := string(py)
+	if !strings.Contains(pyText, `"Accept": "image/png"`) {
+		t.Fatalf("python client missing custom media type accept header")
+	}
+	if !strings.Contains(pyText, "return payload") {
+		t.Fatalf("python client missing bytes return for response spec")
+	}
+}
+
+func TestGeneratedClientsUseFirstListedMediaForSameStatus(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/artifact/{id}", responseSpecMultiMediaClientHandler{})
+
+	js := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientJS(buf) })
+	ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+
+	jsText := string(js)
+	if !strings.Contains(jsText, `"Accept": "text/plain"`) {
+		t.Fatalf("js client should use first listed media type for same-status response specs")
+	}
+
+	tsText := string(ts)
+	if !strings.Contains(tsText, `"Accept": "text/plain"`) {
+		t.Fatalf("ts client should use first listed media type for same-status response specs")
+	}
+	if !strings.Contains(tsText, "Promise<string>") {
+		t.Fatalf("ts client should use text return type for first listed media type")
+	}
+
+	pyText := string(py)
+	if !strings.Contains(pyText, `"Accept": "text/plain"`) {
+		t.Fatalf("python client should use first listed media type for same-status response specs")
+	}
+}
+
+func TestGeneratedClientsSupportPointerResponseSpecTypes(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/pointer/{id}", responseSpecPointerClientHandler{})
+
+	ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+
+	expectedType := preferredSchemaName(HandlerMeta{Service: "Assets"}, reflect.TypeOf(responseSpecPayload{}))
+	tsText := string(ts)
+	if !strings.Contains(tsText, "Promise<"+expectedType+">") {
+		t.Fatalf("ts client missing pointer response spec type %q", expectedType)
+	}
+
+	pyText := string(py)
+	if !strings.Contains(pyText, "->\""+expectedType+"\"") || !strings.Contains(pyText, "_decode_value(\""+expectedType+"\"") {
+		t.Fatalf("python client missing pointer response spec type %q", expectedType)
 	}
 }
 

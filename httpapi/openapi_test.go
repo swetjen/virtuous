@@ -112,6 +112,40 @@ type queryRequestMixed struct {
 	Name  string `json:"name"`
 }
 
+type optionalBodyRequest struct {
+	Name string `json:"name"`
+}
+
+type responseSpecError struct {
+	Error string `json:"error"`
+}
+
+type responseSpecPayload struct {
+	ID string `json:"id"`
+}
+
+type responseSpecAltPayload struct {
+	Name string `json:"name"`
+}
+
+type textResponseHandler struct{}
+
+func (textResponseHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (textResponseHandler) RequestType() any                                 { return nil }
+func (textResponseHandler) ResponseType() any                                { return "" }
+func (textResponseHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Files", Method: "GetText"}
+}
+
+type bytesResponseHandler struct{}
+
+func (bytesResponseHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (bytesResponseHandler) RequestType() any                                 { return nil }
+func (bytesResponseHandler) ResponseType() any                                { return []byte{} }
+func (bytesResponseHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Files", Method: "GetBytes"}
+}
+
 type queryHandlerOnly struct{}
 
 func (queryHandlerOnly) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
@@ -128,6 +162,93 @@ func (queryHandlerMixed) RequestType() any                                 { ret
 func (queryHandlerMixed) ResponseType() any                                { return nullableResponse{} }
 func (queryHandlerMixed) Metadata() HandlerMeta {
 	return HandlerMeta{Service: "Test", Method: "QueryMixed"}
+}
+
+type optionalBodyHandler struct{}
+
+func (optionalBodyHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (optionalBodyHandler) RequestType() any                                 { return Optional[optionalBodyRequest]() }
+func (optionalBodyHandler) ResponseType() any                                { return nullableResponse{} }
+func (optionalBodyHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Test", Method: "OptionalBody"}
+}
+
+type responseSpecHandler struct{}
+
+func (responseSpecHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (responseSpecHandler) RequestType() any                                 { return nil }
+func (responseSpecHandler) ResponseType() any                                { return nil }
+func (responseSpecHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service: "Assets",
+		Method:  "GetPreview",
+		Responses: []ResponseSpec{
+			{Status: 200, Body: []byte{}, MediaType: "image/png"},
+			{Status: 404, Body: responseSpecError{}},
+		},
+	}
+}
+
+type responseSpecDescriptionHandler struct{}
+
+func (responseSpecDescriptionHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (responseSpecDescriptionHandler) RequestType() any                                 { return nil }
+func (responseSpecDescriptionHandler) ResponseType() any                                { return nil }
+func (responseSpecDescriptionHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service: "Assets",
+		Method:  "DescribeFailure",
+		Responses: []ResponseSpec{
+			{Status: 404, Body: responseSpecError{}, Description: "preview asset missing"},
+		},
+	}
+}
+
+type responseSpecMultiMediaHandler struct{}
+
+func (responseSpecMultiMediaHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (responseSpecMultiMediaHandler) RequestType() any                                 { return nil }
+func (responseSpecMultiMediaHandler) ResponseType() any                                { return nil }
+func (responseSpecMultiMediaHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service: "Assets",
+		Method:  "GetArtifact",
+		Responses: []ResponseSpec{
+			{Status: 200, Body: "", MediaType: "text/plain"},
+			{Status: 200, Body: []byte{}, MediaType: "application/pdf"},
+		},
+	}
+}
+
+type responseSpecNamedSchemasHandler struct{}
+
+func (responseSpecNamedSchemasHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (responseSpecNamedSchemasHandler) RequestType() any                                 { return nil }
+func (responseSpecNamedSchemasHandler) ResponseType() any                                { return nil }
+func (responseSpecNamedSchemasHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service: "Assets",
+		Method:  "GetNamedSchemas",
+		Responses: []ResponseSpec{
+			{Status: 200, Body: responseSpecPayload{}},
+			{Status: 404, Body: responseSpecAltPayload{}},
+		},
+	}
+}
+
+type responseSpecPointerHandler struct{}
+
+func (responseSpecPointerHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (responseSpecPointerHandler) RequestType() any                                 { return nil }
+func (responseSpecPointerHandler) ResponseType() any                                { return nil }
+func (responseSpecPointerHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service: "Assets",
+		Method:  "GetPointerPayload",
+		Responses: []ResponseSpec{
+			{Status: 200, Body: &responseSpecPayload{}},
+		},
+	}
 }
 
 func TestOpenAPIQueryParamsOnly(t *testing.T) {
@@ -186,6 +307,206 @@ func TestOpenAPIQueryParamsMixed(t *testing.T) {
 	param := getMapFromList(t, params, 0)
 	if param["required"] != false {
 		t.Fatalf("query param should be optional")
+	}
+}
+
+func TestOpenAPIResponseMediaTypesForTextAndBytes(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/readme", textResponseHandler{})
+	router.HandleTyped("GET /assets/blob", bytesResponseHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+
+	paths := getMap(t, doc, "paths")
+
+	readmePath := getMap(t, paths, "/assets/readme")
+	readmeGet := getMap(t, readmePath, "get")
+	readmeResponses := getMap(t, readmeGet, "responses")
+	readme200 := getMap(t, readmeResponses, "200")
+	readmeContent := getMap(t, readme200, "content")
+	textPlain := getMap(t, readmeContent, "text/plain")
+	textSchema := getMap(t, textPlain, "schema")
+	if textSchema["type"] != "string" {
+		t.Fatalf("text/plain schema type = %v, want string", textSchema["type"])
+	}
+
+	blobPath := getMap(t, paths, "/assets/blob")
+	blobGet := getMap(t, blobPath, "get")
+	blobResponses := getMap(t, blobGet, "responses")
+	blob200 := getMap(t, blobResponses, "200")
+	blobContent := getMap(t, blob200, "content")
+	octet := getMap(t, blobContent, "application/octet-stream")
+	octetSchema := getMap(t, octet, "schema")
+	if octetSchema["type"] != "string" {
+		t.Fatalf("binary schema type = %v, want string", octetSchema["type"])
+	}
+	if octetSchema["format"] != "binary" {
+		t.Fatalf("binary schema format = %v, want binary", octetSchema["format"])
+	}
+}
+
+func TestOpenAPIOptionalRequestBody(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("POST /optional", optionalBodyHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+
+	paths := getMap(t, doc, "paths")
+	optionalPath := getMap(t, paths, "/optional")
+	postOp := getMap(t, optionalPath, "post")
+	requestBody := getMap(t, postOp, "requestBody")
+	if requestBody["required"] != false {
+		t.Fatalf("optional request body should be marked required=false")
+	}
+}
+
+func TestOpenAPIResponseSpecsSupportMultiStatusAndCustomMedia(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/preview/{id}", responseSpecHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+
+	paths := getMap(t, doc, "paths")
+	previewPath := getMap(t, paths, "/assets/preview/{id}")
+	getOp := getMap(t, previewPath, "get")
+	responses := getMap(t, getOp, "responses")
+
+	okResp := getMap(t, responses, "200")
+	okContent := getMap(t, okResp, "content")
+	png := getMap(t, okContent, "image/png")
+	pngSchema := getMap(t, png, "schema")
+	if pngSchema["type"] != "string" || pngSchema["format"] != "binary" {
+		t.Fatalf("expected binary image/png response schema")
+	}
+
+	notFound := getMap(t, responses, "404")
+	notFoundContent := getMap(t, notFound, "content")
+	jsonMedia := getMap(t, notFoundContent, "application/json")
+	jsonSchema := getMap(t, jsonMedia, "schema")
+	if _, ok := jsonSchema["$ref"]; !ok {
+		t.Fatalf("expected 404 response to use JSON schema ref")
+	}
+}
+
+func TestOpenAPIResponseSpecCustomDescription(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/missing/{id}", responseSpecDescriptionHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+
+	paths := getMap(t, doc, "paths")
+	missingPath := getMap(t, paths, "/assets/missing/{id}")
+	getOp := getMap(t, missingPath, "get")
+	responses := getMap(t, getOp, "responses")
+	notFound := getMap(t, responses, "404")
+	if notFound["description"] != "preview asset missing" {
+		t.Fatalf("custom description = %v, want preview asset missing", notFound["description"])
+	}
+}
+
+func TestOpenAPIResponseSpecsMergeMultipleMediaForSameStatus(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/artifact/{id}", responseSpecMultiMediaHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+
+	paths := getMap(t, doc, "paths")
+	artifactPath := getMap(t, paths, "/assets/artifact/{id}")
+	getOp := getMap(t, artifactPath, "get")
+	responses := getMap(t, getOp, "responses")
+	okResp := getMap(t, responses, "200")
+	content := getMap(t, okResp, "content")
+	if _, ok := content["text/plain"]; !ok {
+		t.Fatalf("expected text/plain media for 200 response")
+	}
+	if _, ok := content["application/pdf"]; !ok {
+		t.Fatalf("expected application/pdf media for 200 response")
+	}
+}
+
+func TestOpenAPIResponseSpecsUseStableSchemaNames(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/named/{id}", responseSpecNamedSchemasHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+
+	components := getMap(t, doc, "components")
+	schemas := getMap(t, components, "schemas")
+	okName := preferredSchemaName(HandlerMeta{Service: "Assets"}, reflect.TypeOf(responseSpecPayload{}))
+	errName := preferredSchemaName(HandlerMeta{Service: "Assets"}, reflect.TypeOf(responseSpecAltPayload{}))
+	if _, ok := schemas[okName]; !ok {
+		t.Fatalf("missing response schema %q", okName)
+	}
+	if _, ok := schemas[errName]; !ok {
+		t.Fatalf("missing response schema %q", errName)
+	}
+}
+
+func TestOpenAPIResponseSpecPointerBodyUsesSchemaRef(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /assets/pointer/{id}", responseSpecPointerHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+
+	paths := getMap(t, doc, "paths")
+	pointerPath := getMap(t, paths, "/assets/pointer/{id}")
+	getOp := getMap(t, pointerPath, "get")
+	responses := getMap(t, getOp, "responses")
+	okResp := getMap(t, responses, "200")
+	content := getMap(t, okResp, "content")
+	jsonMedia := getMap(t, content, "application/json")
+	jsonSchema := getMap(t, jsonMedia, "schema")
+	if _, ok := jsonSchema["$ref"]; !ok {
+		t.Fatalf("expected pointer response body to use schema ref")
 	}
 }
 

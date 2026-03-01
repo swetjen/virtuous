@@ -2,7 +2,11 @@
 
 ## Overview
 
-This is a quick index of the primary entry points used in Virtuous apps. For full details, see the specs in `SPEC-RPC.md` and `SPEC.md`.
+This is a quick index of the primary entry points used in Virtuous apps. For fuller behavior details, see:
+
+- `docs/overview.md`
+- `docs/tutorials/migrate-swaggo.md`
+- `docs/specs/overview.md`
 
 ## RPC package
 
@@ -28,6 +32,8 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `(*httpapi.Router).HandleTyped(pattern string, h httpapi.TypedHandler, guards ...httpapi.Guard)`
 - `httpapi.Wrap(handler http.Handler, req any, resp any, meta httpapi.HandlerMeta)`
 - `httpapi.WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta httpapi.HandlerMeta)`
+- `httpapi.Optional[T any](req ...T)`
+- `httpapi.ResponseSpec`
 - `(*httpapi.Router).ServeDocs(opts ...httpapi.DocOpt)`
 - `(*httpapi.Router).ServeAllDocs(opts ...httpapi.ServeAllDocsOpt)`
 - `(*httpapi.Router).AttachLogger(next http.Handler)`

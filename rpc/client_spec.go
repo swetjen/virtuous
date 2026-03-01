@@ -86,6 +86,8 @@ func buildClientSpecWith(
 			ErrorType:    responseType,
 		}
 		if len(route.Guards) > 0 {
+			// Current client templates expose a single auth input, so they bind
+			// to the first declared guard for the route.
 			method.HasAuth = true
 			method.Auth = route.Guards[0]
 			method.AuthParam = authParamName(route.Guards[0].Name)
