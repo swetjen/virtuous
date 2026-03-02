@@ -19,6 +19,7 @@ func DefaultDocsHTML(openAPIPath string) string {
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
 		LoggingStatusURL: "./_admin/logging",
+		MetricsURL:       "/rpc/_virtuous/metrics",
 	})
 }
 
@@ -117,6 +118,18 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 	adminEventsPath := docsIndex + "_admin/events"
 	adminEventsStreamPath := docsIndex + "_admin/events.stream"
 	adminLoggingPath := docsIndex + "_admin/logging"
+	observabilityPath, observabilityAliases := r.observabilityPaths()
+	metricsPath, metricsAliases := r.metricsPaths()
+
+	docsHTML = adminui.DocsShellHTML(adminui.DocsShellOptions{
+		Title:            "Virtuous RPC Docs",
+		OpenAPIURL:       config.OpenAPIPath,
+		SQLCatalogURL:    "./_admin/sql",
+		EventsURL:        "./_admin/events",
+		EventsStreamURL:  "./_admin/events.stream",
+		LoggingStatusURL: "./_admin/logging",
+		MetricsURL:       metricsPath,
+	})
 
 	r.mux.Handle("GET "+docsBase, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, docsIndex, http.StatusMovedPermanently)
@@ -153,8 +166,20 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(payload)
 	}))
+	r.mux.Handle("GET "+metricsPath, http.HandlerFunc(r.observability.ServeJSON))
+	for _, alias := range metricsAliases {
+		r.mux.Handle("GET "+alias, http.HandlerFunc(r.observability.ServeJSON))
+	}
+	redirectObservability := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, docsIndex+"#observability", http.StatusFound)
+	})
+	r.mux.Handle("GET "+observabilityPath, redirectObservability)
+	for _, alias := range observabilityAliases {
+		r.mux.Handle("GET "+alias, redirectObservability)
+	}
 
 	r.events.RecordSystem("docs online: " + docsIndex)
+	r.events.RecordSystem("observability online: " + observabilityPath)
 	r.logger.Info(
 		"rpc docs online",
 		"path", docsIndex,
@@ -163,5 +188,33 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		"events", adminEventsPath,
 		"stream", adminEventsStreamPath,
 		"logging", adminLoggingPath,
+		"observability", observabilityPath,
+		"metrics", metricsPath,
 	)
+}
+
+func (r *Router) observabilityPaths() (string, []string) {
+	primary := ensureLeadingSlash(strings.TrimSuffix(normalizePrefix(r.prefix), "/") + "/_virtuous/observability")
+	return primary, alternateObservabilityPaths(primary, "/_virtuous/observability")
+}
+
+func (r *Router) metricsPaths() (string, []string) {
+	primary := ensureLeadingSlash(strings.TrimSuffix(normalizePrefix(r.prefix), "/") + "/_virtuous/metrics")
+	return primary, alternateObservabilityPaths(primary, "/_virtuous/metrics")
+}
+
+func alternateObservabilityPaths(primary string, aliases ...string) []string {
+	seen := map[string]struct{}{
+		primary: {},
+	}
+	out := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		alias = ensureLeadingSlash(alias)
+		if _, ok := seen[alias]; ok {
+			continue
+		}
+		seen[alias] = struct{}{}
+		out = append(out, alias)
+	}
+	return out
 }

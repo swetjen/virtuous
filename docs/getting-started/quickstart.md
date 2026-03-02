@@ -51,6 +51,10 @@ By default, `ServeAllDocs()` registers:
 - JS client at `/rpc/client.gen.js`
 - TS client at `/rpc/client.gen.ts`
 - Python client at `/rpc/client.gen.py`
+- Observability redirect at `/rpc/_virtuous/observability`
+- Metrics JSON at `/rpc/_virtuous/metrics`
+
+Basic per-RPC request metrics are tracked in memory automatically. Add `rpc.WithAdvancedObservability()` when you also want grouped 5xx errors, guard allow/deny metrics, and sampled traces in the docs dashboard.
 
 ## Next steps
 

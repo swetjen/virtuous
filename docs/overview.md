@@ -69,6 +69,14 @@ Example:
 - Docs: `/rpc/docs/`
 - OpenAPI: `/rpc/openapi.json`
 - Clients: `/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`
+- Observability dashboard: `/rpc/_virtuous/observability`
+- Metrics JSON: `/rpc/_virtuous/metrics`
+
+### Observability
+
+- Basic per-RPC request counts, status classes, and latency windows are tracked in memory by default.
+- Use `rpc.WithAdvancedObservability()` to enable grouped 5xx fingerprints, guard allow/deny metrics, and sampled trace capture.
+- The docs shell includes an `Observability` tab alongside API reference, SQL, and live logs.
 
 ## httpapi (legacy)
 

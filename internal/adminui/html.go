@@ -14,6 +14,7 @@ type DocsShellOptions struct {
 	EventsURL        string
 	EventsStreamURL  string
 	LoggingStatusURL string
+	MetricsURL       string
 }
 
 // DocsShellHTML renders the docs/admin shell HTML.
@@ -42,6 +43,10 @@ func DocsShellHTML(opts DocsShellOptions) string {
 	if loggingStatusURL == "" {
 		loggingStatusURL = "./_admin/logging"
 	}
+	metricsURL := strings.TrimSpace(opts.MetricsURL)
+	if metricsURL == "" {
+		metricsURL = "/rpc/_virtuous/metrics"
+	}
 
 	replacer := strings.NewReplacer(
 		"__TITLE__", html.EscapeString(title),
@@ -50,6 +55,7 @@ func DocsShellHTML(opts DocsShellOptions) string {
 		"__EVENTS_URL__", strconv.Quote(eventsURL),
 		"__EVENTS_STREAM_URL__", strconv.Quote(eventsStreamURL),
 		"__LOGGING_STATUS_URL__", strconv.Quote(loggingStatusURL),
+		"__METRICS_URL__", strconv.Quote(metricsURL),
 	)
 	return replacer.Replace(docsShellTemplate)
 }
@@ -365,8 +371,101 @@ const docsShellTemplate = `<!DOCTYPE html>
 			overflow: hidden;
 		}
 
+		.card-head {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 10px;
+			padding: 12px 14px;
+			border-bottom: 1px solid #e5edf4;
+			background: #f8fbfe;
+		}
+
+		.card-head h3 {
+			margin: 0;
+			font-size: 14px;
+		}
+
+		.card-head p {
+			margin: 4px 0 0;
+			font-size: 12px;
+			color: var(--muted);
+		}
+
+		.metric-pill {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 4px 8px;
+			border-radius: 999px;
+			background: #e6eef5;
+			color: #30495f;
+			font-size: 11px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			white-space: nowrap;
+		}
+
+		.metric-pill.advanced {
+			background: #dff5ea;
+			color: #0b7b4a;
+		}
+
+		.metric-pill.basic {
+			background: #edf1f5;
+			color: #52677a;
+		}
+
 		#scalar-root {
 			min-height: 680px;
+		}
+
+		.observability-grid {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 12px;
+		}
+
+		.observability-card-body {
+			padding: 0;
+		}
+
+		.observability-card-body table {
+			font-size: 12px;
+		}
+
+		.observability-card-body tbody td {
+			white-space: nowrap;
+		}
+
+		.observability-card-body tbody td.rpc {
+			max-width: 260px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			font-weight: 600;
+			color: #17324a;
+		}
+
+		.observability-card-body tbody td.message {
+			max-width: 420px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.observability-empty {
+			padding: 18px 16px;
+			font-size: 13px;
+			color: var(--muted);
+		}
+
+		.observability-note {
+			margin: 0;
+			padding: 12px 14px;
+			font-size: 12px;
+			color: var(--muted);
+			border-top: 1px solid #e5edf4;
+			background: #fbfdff;
 		}
 
 		.sql-layout {
@@ -659,6 +758,10 @@ const docsShellTemplate = `<!DOCTYPE html>
 				min-height: 0;
 			}
 
+			.observability-grid {
+				grid-template-columns: 1fr;
+			}
+
 			#scalar-root {
 				min-height: 420px;
 			}
@@ -673,10 +776,11 @@ const docsShellTemplate = `<!DOCTYPE html>
 	<header class="topbar">
 		<div class="brand-block">
 			<div class="brand">Virtuous Console</div>
-			<div class="brand-sub">docs + sql + runtime logs</div>
+			<div class="brand-sub">docs + observability + sql + runtime logs</div>
 		</div>
 		<nav class="nav" aria-label="Docs sections">
 			<button class="active" data-panel="reference">API Reference</button>
+			<button data-panel="observability">Observability</button>
 			<button data-panel="database">Database</button>
 			<button data-panel="logs">Live Logs</button>
 		</nav>
@@ -716,6 +820,149 @@ const docsShellTemplate = `<!DOCTYPE html>
 					</div>
 					<div class="card">
 						<div id="scalar-root"></div>
+					</div>
+				</section>
+
+				<section id="panel-observability" class="panel">
+					<div class="section-head">
+						<div>
+							<h2>Observability</h2>
+							<p>RPC-native request, error, guard, and latency summaries.</p>
+						</div>
+						<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+							<span id="obs-mode" class="metric-pill basic">basic</span>
+							<span id="obs-updated" class="stream-state">waiting</span>
+						</div>
+					</div>
+
+					<div class="observability-grid">
+						<div class="card">
+							<div class="card-head">
+								<div>
+									<h3>Error Summary</h3>
+									<p>Server/client error pressure by RPC over the last 24 hours.</p>
+								</div>
+							</div>
+							<div class="observability-card-body">
+								<table>
+									<thead>
+										<tr>
+											<th>RPC</th>
+											<th>Server Err</th>
+											<th>Client Err</th>
+											<th>Error Rate</th>
+										</tr>
+									</thead>
+									<tbody id="obs-error-summary-rows">
+										<tr><td colspan="4" class="observability-empty">Loading metrics...</td></tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div class="card">
+							<div class="card-head">
+								<div>
+									<h3>Current Load</h3>
+									<p>Per-RPC traffic and latency over 1 minute, 1 hour, and 24 hours.</p>
+								</div>
+							</div>
+							<div class="observability-card-body">
+								<table>
+									<thead>
+										<tr>
+											<th>RPC</th>
+											<th>Req/min</th>
+											<th>Req/24h</th>
+											<th>Avg ms</th>
+											<th>P95 ms</th>
+											<th>Traces</th>
+										</tr>
+									</thead>
+									<tbody id="obs-load-rows">
+										<tr><td colspan="6" class="observability-empty">Loading metrics...</td></tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+
+					<div class="observability-grid">
+						<div class="card">
+							<div class="card-head">
+								<div>
+									<h3>Application Errors</h3>
+									<p>Repeated 5xx failures grouped by message and stack signature.</p>
+								</div>
+								<span id="obs-sample-rate" class="stream-state">sampling --</span>
+							</div>
+							<div class="observability-card-body">
+								<table>
+									<thead>
+										<tr>
+											<th>RPC</th>
+											<th>Error</th>
+											<th>Count</th>
+											<th>Sparkline</th>
+										</tr>
+									</thead>
+									<tbody id="obs-errors-rows">
+										<tr><td colspan="4" class="observability-empty">Advanced observability is disabled.</td></tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div class="card">
+							<div class="card-head">
+								<div>
+									<h3>Guard Metrics</h3>
+									<p>Allow/deny outcomes for evaluated guards across the last 24 hours.</p>
+								</div>
+							</div>
+							<div class="observability-card-body">
+								<table>
+									<thead>
+										<tr>
+											<th>RPC</th>
+											<th>Guard</th>
+											<th>Denied</th>
+											<th>Denial %</th>
+										</tr>
+									</thead>
+									<tbody id="obs-guards-rows">
+										<tr><td colspan="4" class="observability-empty">Advanced observability is disabled.</td></tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+
+					<div class="card">
+						<div class="card-head">
+							<div>
+								<h3>Recent Traces</h3>
+								<p>Sampled request snapshots. Full timeline drilldown is deferred in this MVP.</p>
+							</div>
+						</div>
+						<div class="observability-card-body">
+							<table>
+								<thead>
+									<tr>
+										<th>Time</th>
+										<th>RPC</th>
+										<th>Status</th>
+										<th>Duration</th>
+										<th>Guard</th>
+										<th>Error</th>
+									</tr>
+								</thead>
+								<tbody id="obs-traces-rows">
+									<tr><td colspan="6" class="observability-empty">Advanced observability is disabled.</td></tr>
+								</tbody>
+							</table>
+						</div>
+						<p class="observability-note">Trace capture stores a bounded in-memory sample and is cleared on restart.</p>
 					</div>
 				</section>
 
@@ -789,6 +1036,7 @@ const docsShellTemplate = `<!DOCTYPE html>
 		const EVENTS_URL = __EVENTS_URL__
 		const EVENTS_STREAM_URL = __EVENTS_STREAM_URL__
 		const LOGGING_STATUS_URL = __LOGGING_STATUS_URL__
+		const METRICS_URL = __METRICS_URL__
 		const MAX_EVENTS = 600
 		const events = []
 		let latestEventID = 0
@@ -799,10 +1047,12 @@ const docsShellTemplate = `<!DOCTYPE html>
 		let selected = { kind: "", index: 0 }
 		let sqlCatalog = { schemas: [], queries: [] }
 		let loggingStatus = { enabled: false, active: false, snippet: "" }
+		let metricsSnapshot = null
 
 		const navButtons = Array.from(document.querySelectorAll(".nav button"))
 		const panels = {
 			reference: document.getElementById("panel-reference"),
+			observability: document.getElementById("panel-observability"),
 			database: document.getElementById("panel-database"),
 			logs: document.getElementById("panel-logs"),
 		}
@@ -847,7 +1097,7 @@ const docsShellTemplate = `<!DOCTYPE html>
 
 		function activePanelFromHash() {
 			const hash = (window.location.hash || "").replace("#", "")
-			if (hash === "database" || hash === "logs" || hash === "reference") {
+			if (hash === "database" || hash === "logs" || hash === "reference" || hash === "observability") {
 				return hash
 			}
 			return "reference"
@@ -1003,6 +1253,15 @@ const docsShellTemplate = `<!DOCTYPE html>
 			return date.toLocaleTimeString()
 		}
 
+		function escapeHTML(value) {
+			return String(value || "")
+				.replace(/&/g, "&amp;")
+				.replace(/</g, "&lt;")
+				.replace(/>/g, "&gt;")
+				.replace(/"/g, "&quot;")
+				.replace(/'/g, "&#39;")
+		}
+
 		function formatBytes(raw) {
 			if (!raw || raw < 1024) {
 				return String(raw || 0)
@@ -1059,6 +1318,165 @@ const docsShellTemplate = `<!DOCTYPE html>
 
 				tbody.appendChild(tr)
 			})
+		}
+
+		function formatMetricTime(raw) {
+			if (!raw) {
+				return "waiting"
+			}
+			const date = new Date(raw)
+			if (Number.isNaN(date.getTime())) {
+				return raw
+			}
+			return "updated " + date.toLocaleTimeString()
+		}
+
+		function formatLatency(raw) {
+			const value = Number(raw || 0)
+			if (!Number.isFinite(value) || value <= 0) {
+				return "0"
+			}
+			return value.toFixed(value >= 100 ? 0 : 1)
+		}
+
+		function formatPercent(raw) {
+			const value = Number(raw || 0)
+			if (!Number.isFinite(value) || value <= 0) {
+				return "0.0%"
+			}
+			return value.toFixed(1) + "%"
+		}
+
+		function routeErrorRate(route) {
+			const requests = Number(route && route.requestsLast24h || 0)
+			if (requests <= 0) {
+				return 0
+			}
+			const totalErrors = Number(route.serverErrorsLast24h || 0) + Number(route.clientErrorsLast24h || 0)
+			return (totalErrors / requests) * 100
+		}
+
+		function sparklineHTML(points) {
+			if (!Array.isArray(points) || points.length === 0) {
+				return "<span class='empty'>-</span>"
+			}
+			const max = points.reduce(function (current, point) {
+				return Math.max(current, Number(point || 0))
+			}, 0)
+			return "<div class='sparkline'>" + points.map(function (point) {
+				const value = Number(point || 0)
+				const height = max <= 0 ? 3 : Math.max(3, Math.round((value / max) * 18))
+				return "<span class='spark-bar err' style='height:" + String(height) + "px'></span>"
+			}).join("") + "</div>"
+		}
+
+		function renderTableRows(targetID, emptyColspan, items, buildRow, emptyText) {
+			const tbody = document.getElementById(targetID)
+			if (!Array.isArray(items) || items.length === 0) {
+				tbody.innerHTML = "<tr><td colspan='" + String(emptyColspan) + "' class='observability-empty'>" + emptyText + "</td></tr>"
+				return
+			}
+			tbody.innerHTML = items.map(buildRow).join("")
+		}
+
+		function renderObservability() {
+			const snapshot = metricsSnapshot
+			const mode = document.getElementById("obs-mode")
+			const updated = document.getElementById("obs-updated")
+			const sampleRate = document.getElementById("obs-sample-rate")
+			if (!snapshot) {
+				mode.textContent = "offline"
+				mode.className = "metric-pill basic"
+				updated.textContent = "offline"
+				sampleRate.textContent = "sampling --"
+				renderTableRows("obs-error-summary-rows", 4, [], function () { return "" }, "Metrics endpoint unavailable.")
+				renderTableRows("obs-load-rows", 6, [], function () { return "" }, "Metrics endpoint unavailable.")
+				renderTableRows("obs-errors-rows", 4, [], function () { return "" }, "Metrics endpoint unavailable.")
+				renderTableRows("obs-guards-rows", 4, [], function () { return "" }, "Metrics endpoint unavailable.")
+				renderTableRows("obs-traces-rows", 6, [], function () { return "" }, "Metrics endpoint unavailable.")
+				return
+			}
+
+			mode.textContent = snapshot.advanced ? "advanced" : "basic"
+			mode.className = "metric-pill " + (snapshot.advanced ? "advanced" : "basic")
+			updated.textContent = formatMetricTime(snapshot.generatedAt)
+			sampleRate.textContent = snapshot.advanced ? ("sampling " + Number((snapshot.sampleRate || 0) * 100).toFixed(0) + "%") : "sampling off"
+
+			const routes = Array.isArray(snapshot.routes) ? snapshot.routes : []
+			renderTableRows("obs-error-summary-rows", 4, routes.slice(0, 12), function (route) {
+				return "<tr>" +
+					"<td class='rpc'>" + escapeHTML(route.rpcName || "-") + "</td>" +
+					"<td>" + String(route.serverErrorsLast24h || 0) + "</td>" +
+					"<td>" + String(route.clientErrorsLast24h || 0) + "</td>" +
+					"<td>" + formatPercent(routeErrorRate(route)) + "</td>" +
+				"</tr>"
+			}, "No request data captured yet.")
+
+			renderTableRows("obs-load-rows", 6, routes.slice(0, 12), function (route) {
+				return "<tr>" +
+					"<td class='rpc'>" + escapeHTML(route.rpcName || "-") + "</td>" +
+					"<td>" + String(route.requestsLastMinute || 0) + "</td>" +
+					"<td>" + String(route.requestsLast24h || 0) + "</td>" +
+					"<td>" + formatLatency(route.avgLatencyLastHourMs) + "</td>" +
+					"<td>" + formatLatency(route.p95LatencyLastHourMs) + "</td>" +
+					"<td>" + String(route.traceSamplesLast24h || 0) + "</td>" +
+				"</tr>"
+			}, "No request data captured yet.")
+
+			if (!snapshot.advanced) {
+				renderTableRows("obs-errors-rows", 4, [], function () { return "" }, "Enable WithAdvancedObservability() to group repeated application errors.")
+				renderTableRows("obs-guards-rows", 4, [], function () { return "" }, "Enable WithAdvancedObservability() to capture per-guard allow and deny outcomes.")
+				renderTableRows("obs-traces-rows", 6, [], function () { return "" }, "Enable WithAdvancedObservability() to capture sampled traces.")
+				return
+			}
+
+			renderTableRows("obs-errors-rows", 4, snapshot.errors || [], function (item) {
+				const message = item.errorMessage || item.stackSignature || "-"
+				return "<tr>" +
+					"<td class='rpc'>" + escapeHTML(item.rpcName || "-") + "</td>" +
+					"<td class='message' title='" + escapeHTML(message) + "'>" + escapeHTML(message) + "</td>" +
+					"<td>" + String(item.countLast24h || 0) + "</td>" +
+					"<td>" + sparklineHTML(item.sparkline) + "</td>" +
+				"</tr>"
+			}, "No application errors captured in the last 24 hours.")
+
+			renderTableRows("obs-guards-rows", 4, snapshot.guards || [], function (item) {
+				return "<tr>" +
+					"<td class='rpc'>" + escapeHTML(item.rpcName || "-") + "</td>" +
+					"<td>" + escapeHTML(item.guardName || "-") + "</td>" +
+					"<td>" + String(item.deniedCount || 0) + "</td>" +
+					"<td>" + formatPercent(item.denialRatePercent) + "</td>" +
+				"</tr>"
+			}, "No guard decisions captured in the last 24 hours.")
+
+			renderTableRows("obs-traces-rows", 6, (snapshot.recentTraces || []).slice(0, 16), function (item) {
+				return "<tr>" +
+					"<td>" + escapeHTML(formatTime(item.timestamp)) + "</td>" +
+					"<td class='rpc'>" + escapeHTML(item.rpcName || "-") + "</td>" +
+					"<td>" + String(item.statusCode || 0) + "</td>" +
+					"<td>" + String(item.durationMs || 0) + " ms</td>" +
+					"<td>" + escapeHTML(item.guardOutcome || "-") + "</td>" +
+					"<td class='message' title='" + escapeHTML(item.errorMessage || "-") + "'>" + escapeHTML(item.errorMessage || "-") + "</td>" +
+				"</tr>"
+			}, "No sampled traces captured yet.")
+		}
+
+		function fetchObservability() {
+			return fetch(METRICS_URL)
+				.then(function (response) {
+					if (!response.ok) {
+						throw new Error("status " + response.status)
+					}
+					return response.json()
+				})
+				.then(function (payload) {
+					metricsSnapshot = payload || null
+					renderObservability()
+				})
+				.catch(function () {
+					metricsSnapshot = null
+					renderObservability()
+				})
 		}
 
 		function formatFileMeta(file) {
@@ -1265,6 +1683,8 @@ const docsShellTemplate = `<!DOCTYPE html>
 
 		showPanel(activePanelFromHash())
 		mountScalar()
+		fetchObservability()
+		window.setInterval(fetchObservability, 5000)
 		loadSQLCatalog()
 		loadLoggingStatus().then(function () {
 			if (!loggingStatus.enabled) {

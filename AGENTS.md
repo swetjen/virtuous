@@ -36,6 +36,7 @@ These instructions describe how to understand and work with this repository.
 - Prefer RPC for new APIs; use `httpapi` only for legacy routes or migration.
 - RPC handlers return `(resp, status)` with status limited to 200, 422, or 500.
 - Use `rpc.NewRouter(rpc.WithPrefix("/rpc"))` and `HandleRPC` for RPC handlers.
+- Basic RPC observability is in-memory and automatic; use `rpc.WithAdvancedObservability()` for grouped errors, guard metrics, and sampled traces.
 - Prefer method-prefixed patterns (`GET /path`) to ensure docs/clients are emitted.
 - Use `Wrap` to attach request/response types to handlers.
 - For optional `httpapi` request bodies, wrap request type with `httpapi.Optional[Req]()`.

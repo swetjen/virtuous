@@ -31,6 +31,14 @@ _ = server.ListenAndServe()
 
 - `ServeDocs()` registers `/rpc/docs` and `/rpc/openapi.json`.
 - `ServeAllDocs()` registers docs/OpenAPI plus `/rpc/client.gen.js`, `/rpc/client.gen.ts`, and `/rpc/client.gen.py`.
+- `/rpc/_virtuous/observability` redirects into the docs observability panel.
+- `/rpc/_virtuous/metrics` serves live JSON aggregates.
+
+## Observability
+
+- Basic in-memory per-RPC request metrics are on by default.
+- Use `rpc.WithAdvancedObservability()` for grouped 5xx errors, guard outcomes, and sampled traces.
+- Use `rpc.WithObservabilitySampling(rate)` to tune trace capture in advanced mode.
 
 ## Guards
 

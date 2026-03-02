@@ -4,6 +4,7 @@
 
 - Update `make publish` to require `main`, enforce a clean tree, push the version tag, and create the matching GitHub release from the current `CHANGELOG.md` entry.
 - Document the `gh` CLI requirement in the agent release SOP.
+- Add an RPC-native observability dashboard and metrics endpoint with in-memory per-RPC aggregation, grouped 5xx fingerprints, guard allow/deny metrics, and sampled trace snapshots.
 
 ## 0.0.25
 

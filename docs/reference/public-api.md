@@ -13,6 +13,8 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.NewRouter(opts ...rpc.RouterOption)`
 - `rpc.WithPrefix(prefix string)`
 - `rpc.WithGuards(guards ...rpc.Guard)`
+- `rpc.WithAdvancedObservability(opts ...rpc.AdvancedObservabilityOption)`
+- `rpc.WithObservabilitySampling(rate float64)`
 - `(*rpc.Router).HandleRPC(fn any, guards ...rpc.Guard)`
 - `(*rpc.Router).ServeDocs(opts ...rpc.DocOpt)`
 - `(*rpc.Router).ServeAllDocs(opts ...rpc.ServeAllDocsOpt)`

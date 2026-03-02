@@ -20,6 +20,8 @@ type RPCOpenAPITag = rpc.OpenAPITag
 type RPCOpenAPIContact = rpc.OpenAPIContact
 type RPCOpenAPILicense = rpc.OpenAPILicense
 type RPCOpenAPIExternalDocs = rpc.OpenAPIExternalDocs
+type RPCAdvancedObservabilityOptions = rpc.AdvancedObservabilityOptions
+type RPCAdvancedObservabilityOption = rpc.AdvancedObservabilityOption
 
 const (
 	RPCStatusOK      = rpc.StatusOK
@@ -38,6 +40,14 @@ func RPCWithPrefix(prefix string) rpc.RouterOption {
 
 func RPCWithGuards(guards ...rpc.Guard) rpc.RouterOption {
 	return rpc.WithGuards(guards...)
+}
+
+func RPCWithAdvancedObservability(opts ...rpc.AdvancedObservabilityOption) rpc.RouterOption {
+	return rpc.WithAdvancedObservability(opts...)
+}
+
+func RPCWithObservabilitySampling(rate float64) rpc.AdvancedObservabilityOption {
+	return rpc.WithObservabilitySampling(rate)
 }
 
 func RPCDefaultDocsHTML(openAPIPath string) string {

@@ -123,6 +123,7 @@ func isStructType(t reflect.Type) bool {
 func buildRPCHandler(spec handlerSpec) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
+			setTraceError(r.Context(), "method not allowed")
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -132,6 +133,7 @@ func buildRPCHandler(spec handlerSpec) http.Handler {
 		if spec.reqType != nil {
 			reqVal, err := decodeRequest(r, spec.reqType)
 			if err != nil {
+				setTraceError(r.Context(), "invalid request body")
 				writeJSON(w, StatusInvalid, reflect.Zero(spec.respType))
 				return
 			}
@@ -143,7 +145,11 @@ func buildRPCHandler(spec handlerSpec) http.Handler {
 		statusVal := out[1]
 		status := int(statusVal.Int())
 		if status != StatusOK && status != StatusInvalid && status != StatusError {
+			setTraceError(r.Context(), "invalid rpc status")
 			status = StatusError
+		}
+		if status >= 400 {
+			setTraceError(r.Context(), extractResponseErrorMessage(respVal))
 		}
 		writeJSON(w, status, respVal)
 	})
