@@ -281,6 +281,37 @@ This enables:
 - `/rpc/_virtuous/observability` as a redirect into the docs dashboard
 - the `Observability` tab in `/rpc/docs/`
 
+### DB Explorer
+
+Virtuous can attach a read-only runtime DB explorer to the `Database` tab in `/rpc/docs/`.
+
+```go
+router := rpc.NewRouter(
+	rpc.WithPrefix("/rpc"),
+	rpc.WithDBExplorer(
+		rpc.NewPGXDBExplorer(pool),
+	),
+)
+```
+
+SQLite:
+
+```go
+router := rpc.NewRouter(
+	rpc.WithPrefix("/rpc"),
+	rpc.WithDBExplorer(
+		rpc.NewSQLDBExplorer(pool),
+	),
+)
+```
+
+The explorer uses the same runtime credentials/pool and enforces:
+
+- read-only `SELECT`/`WITH` queries
+- single statement only
+- hard timeout (default `5s`)
+- hard row cap (default `1000`)
+
 ## HTTP API (httpapi)
 
 `httpapi` wraps classic `net/http` handlers and preserves existing request/response shapes. It also emits OpenAPI 3.0 specs for typed handlers.

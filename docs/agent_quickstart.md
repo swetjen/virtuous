@@ -33,6 +33,7 @@ _ = server.ListenAndServe()
 - `ServeAllDocs()` registers docs/OpenAPI plus `/rpc/client.gen.js`, `/rpc/client.gen.ts`, and `/rpc/client.gen.py`.
 - `/rpc/_virtuous/observability` redirects into the docs observability panel.
 - `/rpc/_virtuous/metrics` serves live JSON aggregates.
+- `/rpc/docs/_admin/db` + `/rpc/docs/_admin/db/query` power the docs database explorer when `rpc.WithDBExplorer(...)` is configured.
 
 ## Observability
 

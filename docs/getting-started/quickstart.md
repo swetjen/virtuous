@@ -56,6 +56,8 @@ By default, `ServeAllDocs()` registers:
 
 Basic per-RPC request metrics are tracked in memory automatically. Add `rpc.WithAdvancedObservability()` when you also want grouped 5xx errors, guard allow/deny metrics, and sampled traces in the docs dashboard.
 
+Attach `rpc.WithDBExplorer(...)` to enable the read-only `Database` workbench inside `/rpc/docs/`.
+
 ## Next steps
 
 - Define request and response structs for each handler.

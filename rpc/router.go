@@ -16,6 +16,7 @@ type Router struct {
 	logger         *slog.Logger
 	events         *adminui.EventFeed
 	observability  *adminui.ObservabilityTracker
+	dbExplorer     DBExplorer
 	loggerAttached uint32
 	loggerActive   uint32
 	typeOverrides  map[string]TypeOverride
@@ -27,6 +28,7 @@ type RouterOptions struct {
 	Prefix                string
 	Guards                []Guard
 	AdvancedObservability *AdvancedObservabilityOptions
+	DBExplorer            DBExplorer
 }
 
 // RouterOption mutates RouterOptions.
@@ -64,6 +66,7 @@ func NewRouter(opts ...RouterOption) *Router {
 			Advanced:   config.AdvancedObservability != nil,
 			SampleRate: observabilitySampleRate(config.AdvancedObservability),
 		}),
+		dbExplorer: config.DBExplorer,
 	}
 }
 

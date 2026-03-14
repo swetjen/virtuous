@@ -1,6 +1,13 @@
 package virtuous
 
-import "github.com/swetjen/virtuous/rpc"
+import (
+	"database/sql"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/swetjen/virtuous/rpc"
+)
 
 // RPC type aliases for convenience.
 type RPCGuard = rpc.Guard
@@ -22,6 +29,16 @@ type RPCOpenAPILicense = rpc.OpenAPILicense
 type RPCOpenAPIExternalDocs = rpc.OpenAPIExternalDocs
 type RPCAdvancedObservabilityOptions = rpc.AdvancedObservabilityOptions
 type RPCAdvancedObservabilityOption = rpc.AdvancedObservabilityOption
+type RPCDBExplorer = rpc.DBExplorer
+type RPCDBExplorerOptions = rpc.DBExplorerOptions
+type RPCDBExplorerOption = rpc.DBExplorerOption
+type RPCDBExplorerState = rpc.DBExplorerState
+type RPCDBSchema = rpc.DBSchema
+type RPCDBTable = rpc.DBTable
+type RPCDBPreviewInput = rpc.DBPreviewInput
+type RPCDBRunQueryInput = rpc.DBRunQueryInput
+type RPCDBQueryResult = rpc.DBQueryResult
+type RPCDBQueryColumn = rpc.DBQueryColumn
 
 const (
 	RPCStatusOK      = rpc.StatusOK
@@ -48,6 +65,34 @@ func RPCWithAdvancedObservability(opts ...rpc.AdvancedObservabilityOption) rpc.R
 
 func RPCWithObservabilitySampling(rate float64) rpc.AdvancedObservabilityOption {
 	return rpc.WithObservabilitySampling(rate)
+}
+
+func RPCWithDBExplorer(explorer rpc.DBExplorer) rpc.RouterOption {
+	return rpc.WithDBExplorer(explorer)
+}
+
+func RPCWithDBExplorerTimeout(timeout time.Duration) rpc.DBExplorerOption {
+	return rpc.WithDBExplorerTimeout(timeout)
+}
+
+func RPCWithDBExplorerMaxRows(maxRows int) rpc.DBExplorerOption {
+	return rpc.WithDBExplorerMaxRows(maxRows)
+}
+
+func RPCWithDBExplorerPreviewRows(previewRows int) rpc.DBExplorerOption {
+	return rpc.WithDBExplorerPreviewRows(previewRows)
+}
+
+func RPCWithDBExplorerSystemSchemas(enabled bool) rpc.DBExplorerOption {
+	return rpc.WithDBExplorerSystemSchemas(enabled)
+}
+
+func RPCNewSQLDBExplorer(db *sql.DB, opts ...rpc.DBExplorerOption) rpc.DBExplorer {
+	return rpc.NewSQLDBExplorer(db, opts...)
+}
+
+func RPCNewPGXDBExplorer(pool *pgxpool.Pool, opts ...rpc.DBExplorerOption) rpc.DBExplorer {
+	return rpc.NewPGXDBExplorer(pool, opts...)
 }
 
 func RPCDefaultDocsHTML(openAPIPath string) string {

@@ -37,6 +37,7 @@ These instructions describe how to understand and work with this repository.
 - RPC handlers return `(resp, status)` with status limited to 200, 422, or 500.
 - Use `rpc.NewRouter(rpc.WithPrefix("/rpc"))` and `HandleRPC` for RPC handlers.
 - Basic RPC observability is in-memory and automatic; use `rpc.WithAdvancedObservability()` for grouped errors, guard metrics, and sampled traces.
+- Use `rpc.WithDBExplorer(rpc.NewSQLDBExplorer(pool))` or `rpc.WithDBExplorer(rpc.NewPGXDBExplorer(pool))` to enable the docs `Database` workbench against the app's runtime pool.
 - Prefer method-prefixed patterns (`GET /path`) to ensure docs/clients are emitted.
 - Use `Wrap` to attach request/response types to handlers.
 - For optional `httpapi` request bodies, wrap request type with `httpapi.Optional[Req]()`.

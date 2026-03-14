@@ -71,6 +71,7 @@ Example:
 - Clients: `/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`
 - Observability dashboard: `/rpc/_virtuous/observability`
 - Metrics JSON: `/rpc/_virtuous/metrics`
+- Database explorer APIs (docs shell): `/rpc/docs/_admin/db`, `/rpc/docs/_admin/db/preview`, `/rpc/docs/_admin/db/query`
 
 ### Observability
 

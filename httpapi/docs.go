@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/swetjen/virtuous/internal/adminui"
 	"github.com/swetjen/virtuous/internal/textutil"
@@ -17,9 +18,13 @@ func DefaultDocsHTML(openAPIPath string) string {
 		Title:            "Virtuous API Docs",
 		OpenAPIURL:       openAPIPath,
 		SQLCatalogURL:    "./_admin/sql",
+		DBExplorerURL:    "./_admin/db",
+		DBPreviewURL:     "./_admin/db/preview",
+		DBQueryURL:       "./_admin/db/query",
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
 		LoggingStatusURL: "./_admin/logging",
+		MetricsURL:       "./_admin/metrics",
 	})
 }
 
@@ -115,6 +120,10 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 	}
 	docsIndex := docsBase + "/"
 	adminSQLPath := docsIndex + "_admin/sql"
+	adminDBPath := docsIndex + "_admin/db"
+	adminDBPreviewPath := docsIndex + "_admin/db/preview"
+	adminDBQueryPath := docsIndex + "_admin/db/query"
+	adminMetricsPath := docsIndex + "_admin/metrics"
 	adminEventsPath := docsIndex + "_admin/events"
 	adminEventsStreamPath := docsIndex + "_admin/events.stream"
 	adminLoggingPath := docsIndex + "_admin/logging"
@@ -137,6 +146,51 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		catalog := adminui.LoadSQLCatalog(config.SQLRoot)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(catalog)
+	}))
+	r.mux.Handle("GET "+adminDBPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		payload := struct {
+			Enabled bool   `json:"enabled"`
+			Snippet string `json:"snippet"`
+		}{
+			Enabled: false,
+			Snippet: "Live DB explorer is currently available on rpc.NewRouter with rpc.WithDBExplorer(...).",
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	rejectDBMutation := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		payload := struct {
+			Error string `json:"error"`
+		}{
+			Error: "db explorer query endpoints are not available on httpapi router",
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(payload)
+	})
+	r.mux.Handle("POST "+adminDBPreviewPath, rejectDBMutation)
+	r.mux.Handle("POST "+adminDBQueryPath, rejectDBMutation)
+	r.mux.Handle("GET "+adminMetricsPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		payload := struct {
+			GeneratedAt  time.Time `json:"generatedAt"`
+			Advanced     bool      `json:"advanced"`
+			SampleRate   float64   `json:"sampleRate"`
+			Totals       struct{}  `json:"totals"`
+			Routes       []any     `json:"routes"`
+			Errors       []any     `json:"errors"`
+			Guards       []any     `json:"guards"`
+			RecentTraces []any     `json:"recentTraces"`
+		}{
+			GeneratedAt:  time.Now().UTC(),
+			Advanced:     false,
+			SampleRate:   0,
+			Routes:       []any{},
+			Errors:       []any{},
+			Guards:       []any{},
+			RecentTraces: []any{},
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(payload)
 	}))
 
 	r.mux.Handle("GET "+adminEventsPath, http.HandlerFunc(r.events.ServeJSON))
@@ -161,6 +215,10 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		"path", docsIndex,
 		"openapi", config.OpenAPIPath,
 		"sql", adminSQLPath,
+		"db", adminDBPath,
+		"db_preview", adminDBPreviewPath,
+		"db_query", adminDBQueryPath,
+		"metrics", adminMetricsPath,
 		"events", adminEventsPath,
 		"stream", adminEventsStreamPath,
 		"logging", adminLoggingPath,

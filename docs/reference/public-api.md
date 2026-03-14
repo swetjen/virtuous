@@ -15,6 +15,13 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.WithGuards(guards ...rpc.Guard)`
 - `rpc.WithAdvancedObservability(opts ...rpc.AdvancedObservabilityOption)`
 - `rpc.WithObservabilitySampling(rate float64)`
+- `rpc.WithDBExplorer(explorer rpc.DBExplorer)`
+- `rpc.WithDBExplorerTimeout(timeout time.Duration)`
+- `rpc.WithDBExplorerMaxRows(maxRows int)`
+- `rpc.WithDBExplorerPreviewRows(previewRows int)`
+- `rpc.WithDBExplorerSystemSchemas(enabled bool)`
+- `rpc.NewSQLDBExplorer(db *sql.DB, opts ...rpc.DBExplorerOption)`
+- `rpc.NewPGXDBExplorer(pool *pgxpool.Pool, opts ...rpc.DBExplorerOption)`
 - `(*rpc.Router).HandleRPC(fn any, guards ...rpc.Guard)`
 - `(*rpc.Router).ServeDocs(opts ...rpc.DocOpt)`
 - `(*rpc.Router).ServeAllDocs(opts ...rpc.ServeAllDocsOpt)`

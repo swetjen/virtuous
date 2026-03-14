@@ -1,11 +1,14 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/swetjen/virtuous/internal/adminui"
 )
@@ -115,6 +118,9 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 	}
 	docsIndex := docsBase + "/"
 	adminSQLPath := docsIndex + "_admin/sql"
+	adminDBPath := docsIndex + "_admin/db"
+	adminDBPreviewPath := docsIndex + "_admin/db/preview"
+	adminDBQueryPath := docsIndex + "_admin/db/query"
 	adminEventsPath := docsIndex + "_admin/events"
 	adminEventsStreamPath := docsIndex + "_admin/events.stream"
 	adminLoggingPath := docsIndex + "_admin/logging"
@@ -125,6 +131,9 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		Title:            "Virtuous RPC Docs",
 		OpenAPIURL:       config.OpenAPIPath,
 		SQLCatalogURL:    "./_admin/sql",
+		DBExplorerURL:    "./_admin/db",
+		DBPreviewURL:     "./_admin/db/preview",
+		DBQueryURL:       "./_admin/db/query",
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
 		LoggingStatusURL: "./_admin/logging",
@@ -149,6 +158,45 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		catalog := adminui.LoadSQLCatalog(config.SQLRoot)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(catalog)
+	}))
+	r.mux.Handle("GET "+adminDBPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		payload := dbExplorerPayloadFor(r, req.Context())
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	r.mux.Handle("POST "+adminDBPreviewPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		started := time.Now()
+		var input DBPreviewInput
+		if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
+			result := DBQueryResult{Error: "invalid preview payload"}
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(StatusInvalid)
+			_ = json.NewEncoder(w).Encode(result)
+			r.recordDBExplorerMetric("PreviewTable", req.URL.Path, req.Method, StatusInvalid, time.Since(started), result.Error)
+			return
+		}
+		result, status, errMessage := r.runDBPreview(req.Context(), input)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(result)
+		r.recordDBExplorerMetric("PreviewTable", req.URL.Path, req.Method, status, time.Since(started), errMessage)
+	}))
+	r.mux.Handle("POST "+adminDBQueryPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		started := time.Now()
+		var input DBRunQueryInput
+		if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
+			result := DBQueryResult{Error: "invalid query payload"}
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(StatusInvalid)
+			_ = json.NewEncoder(w).Encode(result)
+			r.recordDBExplorerMetric("RunQuery", req.URL.Path, req.Method, StatusInvalid, time.Since(started), result.Error)
+			return
+		}
+		result, status, errMessage := r.runDBQuery(req.Context(), input)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(result)
+		r.recordDBExplorerMetric("RunQuery", req.URL.Path, req.Method, status, time.Since(started), errMessage)
 	}))
 
 	r.mux.Handle("GET "+adminEventsPath, http.HandlerFunc(r.events.ServeJSON))
@@ -185,12 +233,78 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		"path", docsIndex,
 		"openapi", config.OpenAPIPath,
 		"sql", adminSQLPath,
+		"db", adminDBPath,
+		"db_preview", adminDBPreviewPath,
+		"db_query", adminDBQueryPath,
 		"events", adminEventsPath,
 		"stream", adminEventsStreamPath,
 		"logging", adminLoggingPath,
 		"observability", observabilityPath,
 		"metrics", metricsPath,
 	)
+}
+
+func (r *Router) runDBPreview(ctx context.Context, input DBPreviewInput) (DBQueryResult, int, string) {
+	if r == nil || r.dbExplorer == nil {
+		message := "db explorer is not configured"
+		return DBQueryResult{Error: message}, http.StatusNotFound, message
+	}
+	result, err := r.dbExplorer.PreviewTable(ctx, input)
+	if err != nil {
+		status := dbExplorerErrorStatus(err)
+		return DBQueryResult{Error: err.Error()}, status, err.Error()
+	}
+	return result, http.StatusOK, ""
+}
+
+func (r *Router) runDBQuery(ctx context.Context, input DBRunQueryInput) (DBQueryResult, int, string) {
+	if r == nil || r.dbExplorer == nil {
+		message := "db explorer is not configured"
+		return DBQueryResult{Error: message}, http.StatusNotFound, message
+	}
+	result, err := r.dbExplorer.RunQuery(ctx, input)
+	if err != nil {
+		status := dbExplorerErrorStatus(err)
+		return DBQueryResult{Error: err.Error()}, status, err.Error()
+	}
+	return result, http.StatusOK, ""
+}
+
+func dbExplorerErrorStatus(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case errors.Is(err, errDBExplorerDisabled):
+		return http.StatusNotFound
+	case strings.Contains(message, "required"),
+		strings.Contains(message, "not allowed"),
+		strings.Contains(message, "only select"),
+		strings.Contains(message, "disallowed"):
+		return StatusInvalid
+	default:
+		return StatusError
+	}
+}
+
+func (r *Router) recordDBExplorerMetric(operation, path, method string, status int, duration time.Duration, errorMessage string) {
+	if r == nil || r.observability == nil {
+		return
+	}
+	operation = strings.TrimSpace(operation)
+	if operation != "" {
+		errorMessage = strings.TrimSpace(operation + ": " + errorMessage)
+	}
+	r.observability.RecordRequest(adminui.RequestEvent{
+		RPCName:      "Admin.DBExplorer",
+		Path:         path,
+		HTTPMethod:   method,
+		StatusCode:   status,
+		DurationMS:   duration.Milliseconds(),
+		Timestamp:    time.Now().UTC(),
+		ErrorMessage: errorMessage,
+	}, nil)
 }
 
 func (r *Router) observabilityPaths() (string, []string) {
