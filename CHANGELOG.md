@@ -1,9 +1,21 @@
 # Changelog
 
+## 0.0.27
+
+- Add explicit docs module toggles (`api`, `database`, `observability`) for both RPC and `httpapi` via `WithModules(...)`.
+- Add mountable docs handlers (`DocsHandler(...)`) so applications can mount docs under custom routes and wrap them with guards/middleware.
+- Group the integrated docs UI under `API`, `Database`, and `Observability`, and hide disabled modules from nav/panels.
+- Keep zero-state guidance for attached-but-missing runtime dependencies (e.g., logger and DB explorer snippets) when a module is enabled.
+- Add docs tests for module gating and guarded custom mount behavior in both RPC and `httpapi`.
+- Codify the `run release playbook` trigger sequence in `AGENTS.md`.
+
 ## 0.0.26
 
 - Update `make publish` to require `main`, enforce a clean tree, push the version tag, and create the matching GitHub release from the current `CHANGELOG.md` entry.
 - Document the `gh` CLI requirement in the agent release SOP.
+- Add an RPC-native observability dashboard and metrics endpoint with in-memory per-RPC aggregation, grouped 5xx fingerprints, guard allow/deny metrics, and sampled trace snapshots.
+- Add a read-only admin DB explorer workbench in docs with schema/table discovery, table preview, SELECT-only query execution, timeout/row caps, and runtime pool adapters for `database/sql` and `pgxpool`.
+- Switch API reference rendering in the integrated docs shell from Scalar back to Swagger UI (OpenAPI default) for both RPC and `httpapi`.
 
 ## 0.0.25
 

@@ -88,9 +88,9 @@ func GetState(_ context.Context, req GetStateRequest) (StateResponse, int) {
 }
 
 func main() {
-	router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
-	router.HandleRPC(GetState)
-	router.ServeAllDocs()
+router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
+router.HandleRPC(GetState)
+router.ServeAllDocs()
 
 	server := &http.Server{Addr: ":8000", Handler: router}
 	fmt.Println("Listening on :8000")
@@ -255,7 +255,62 @@ Docs and SDKs are served at:
 
 - `/rpc/docs`
 - `/rpc/client.gen.*`
+- Observability dashboard: `/rpc/_virtuous/observability` or the `Observability` tab inside `/rpc/docs/`
+- Metrics JSON: `/rpc/_virtuous/metrics`
 - Responses should include a canonical `error` field (string or struct) when errors occur.
+
+### Observability
+
+Basic per-RPC request metrics are tracked in memory by default. Advanced error grouping, guard metrics, and sampled traces are opt-in.
+
+```go
+router := rpc.NewRouter(
+	rpc.WithPrefix("/rpc"),
+	rpc.WithAdvancedObservability(
+		rpc.WithObservabilitySampling(0.25),
+	),
+)
+
+router.HandleRPC(states.GetMany, auth.BearerGuard{})
+router.ServeAllDocs()
+```
+
+This enables:
+
+- `/rpc/_virtuous/metrics` for JSON metrics
+- `/rpc/_virtuous/observability` as a redirect into the docs dashboard
+- the `Observability` tab in `/rpc/docs/`
+
+### DB Explorer
+
+Virtuous can attach a read-only runtime DB explorer to the `Database` tab in `/rpc/docs/`.
+
+```go
+router := rpc.NewRouter(
+	rpc.WithPrefix("/rpc"),
+	rpc.WithDBExplorer(
+		rpc.NewPGXDBExplorer(pool),
+	),
+)
+```
+
+SQLite:
+
+```go
+router := rpc.NewRouter(
+	rpc.WithPrefix("/rpc"),
+	rpc.WithDBExplorer(
+		rpc.NewSQLDBExplorer(pool),
+	),
+)
+```
+
+The explorer uses the same runtime credentials/pool and enforces:
+
+- read-only `SELECT`/`WITH` queries
+- single statement only
+- hard timeout (default `5s`)
+- hard row cap (default `1000`)
 
 ## HTTP API (httpapi)
 

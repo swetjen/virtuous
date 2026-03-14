@@ -24,6 +24,7 @@ type TypeOverride = httpapi.TypeOverride
 
 type DocsOptions = httpapi.DocsOptions
 type DocOpt = httpapi.DocOpt
+type Module = httpapi.Module
 
 type CORSOptions = httpapi.CORSOptions
 type CORSOption = httpapi.CORSOption
@@ -37,6 +38,12 @@ type OpenAPITag = httpapi.OpenAPITag
 type OpenAPIContact = httpapi.OpenAPIContact
 type OpenAPILicense = httpapi.OpenAPILicense
 type OpenAPIExternalDocs = httpapi.OpenAPIExternalDocs
+
+const (
+	ModuleAPI           = httpapi.ModuleAPI
+	ModuleDatabase      = httpapi.ModuleDatabase
+	ModuleObservability = httpapi.ModuleObservability
+)
 
 // Function shims for backwards compatibility.
 func NewRouter() *Router {
@@ -85,6 +92,10 @@ func WithOpenAPIPath(path string) DocOpt {
 
 func WithOpenAPIFile(path string) DocOpt {
 	return httpapi.WithOpenAPIFile(path)
+}
+
+func WithModules(modules ...httpapi.Module) DocOpt {
+	return httpapi.WithModules(modules...)
 }
 
 func WithAllowedOrigins(origins ...string) CORSOption {

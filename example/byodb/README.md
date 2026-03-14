@@ -4,6 +4,15 @@ A more complete Virtuous example with admin routes, states endpoints, CORS middl
 
 ## Run
 
+Prerequisite: initialize the database schema first:
+
+```bash
+make init-db
+make up
+```
+
+Then start the API:
+
 ```bash
 go run ./cmd/api/main.go
 ```

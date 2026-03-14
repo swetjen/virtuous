@@ -15,6 +15,8 @@ type Router struct {
 	guards         []Guard
 	logger         *slog.Logger
 	events         *adminui.EventFeed
+	observability  *adminui.ObservabilityTracker
+	dbExplorer     DBExplorer
 	loggerAttached uint32
 	loggerActive   uint32
 	typeOverrides  map[string]TypeOverride
@@ -23,8 +25,10 @@ type Router struct {
 
 // RouterOptions configures a Router.
 type RouterOptions struct {
-	Prefix string
-	Guards []Guard
+	Prefix                string
+	Guards                []Guard
+	AdvancedObservability *AdvancedObservabilityOptions
+	DBExplorer            DBExplorer
 }
 
 // RouterOption mutates RouterOptions.
@@ -58,6 +62,11 @@ func NewRouter(opts ...RouterOption) *Router {
 		guards: append([]Guard(nil), config.Guards...),
 		logger: slog.Default(),
 		events: adminui.NewEventFeed(600),
+		observability: adminui.NewObservabilityTracker(adminui.ObservabilityOptions{
+			Advanced:   config.AdvancedObservability != nil,
+			SampleRate: observabilitySampleRate(config.AdvancedObservability),
+		}),
+		dbExplorer: config.DBExplorer,
 	}
 }
 
@@ -121,7 +130,7 @@ func (r *Router) HandleRPC(fn any, guards ...Guard) {
 	allGuards = append(allGuards, guards...)
 
 	handler := buildRPCHandler(spec)
-	handler = wrapWithGuards(handler, allGuards)
+	handler = r.wrapRPCHandler(spec, handler, allGuards)
 	r.mux.Handle(spec.path, handler)
 
 	route := Route{

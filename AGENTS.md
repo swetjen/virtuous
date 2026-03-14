@@ -36,6 +36,8 @@ These instructions describe how to understand and work with this repository.
 - Prefer RPC for new APIs; use `httpapi` only for legacy routes or migration.
 - RPC handlers return `(resp, status)` with status limited to 200, 422, or 500.
 - Use `rpc.NewRouter(rpc.WithPrefix("/rpc"))` and `HandleRPC` for RPC handlers.
+- Basic RPC observability is in-memory and automatic; use `rpc.WithAdvancedObservability()` for grouped errors, guard metrics, and sampled traces.
+- Use `rpc.WithDBExplorer(rpc.NewSQLDBExplorer(pool))` or `rpc.WithDBExplorer(rpc.NewPGXDBExplorer(pool))` to enable the docs `Database` workbench against the app's runtime pool.
 - Prefer method-prefixed patterns (`GET /path`) to ensure docs/clients are emitted.
 - Use `Wrap` to attach request/response types to handlers.
 - For optional `httpapi` request bodies, wrap request type with `httpapi.Optional[Req]()`.
@@ -55,6 +57,16 @@ These instructions describe how to understand and work with this repository.
 - From a clean tree on `main`, run `make publish` to create/push tag `v$(cat VERSION)` and create the GitHub release entry from `CHANGELOG.md`.
 - Ensure `gh` CLI is installed and authenticated before running `make publish`.
 - Confirm the new tag exists in GitHub tags and that the GitHub release/version badge reflects it.
+
+### Run Release Playbook (trigger phrase)
+When the user says `run release playbook`, interpret it as this exact sequence:
+1. Update `CHANGELOG.md` with the release changes.
+2. Bump version files (`VERSION`, `python_loader/pyproject.toml`, and any linked version references) to the release version.
+3. Run all tests, confirm they pass, and fix code/issues until green.
+4. Perform housekeeping: clean leftover artifacts, remove dead code, and do general release cleanup.
+5. Commit all release-related changes.
+6. Merge to `main`.
+7. Push remote (`main` and associated release/tag refs as applicable).
 
 ## Extension Points
 - Router-level type overrides via `SetTypeOverrides`.
