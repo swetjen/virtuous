@@ -182,7 +182,7 @@ func TestRPCServeDocsRegistersObservabilityEndpoints(t *testing.T) {
 	if !strings.Contains(body, "data-panel=\"observability\"") {
 		t.Fatalf("expected observability nav in docs HTML")
 	}
-	if !strings.Contains(body, "__METRICS_URL__") && !strings.Contains(body, "/rpc/_virtuous/metrics") {
+	if !strings.Contains(body, "./_admin/metrics") {
 		t.Fatalf("expected metrics url in docs HTML")
 	}
 }

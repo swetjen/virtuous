@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.27
+
+- Add explicit docs module toggles (`api`, `database`, `observability`) for both RPC and `httpapi` via `WithModules(...)`.
+- Add mountable docs handlers (`DocsHandler(...)`) so applications can mount docs under custom routes and wrap them with guards/middleware.
+- Group the integrated docs UI under `API`, `Database`, and `Observability`, and hide disabled modules from nav/panels.
+- Keep zero-state guidance for attached-but-missing runtime dependencies (e.g., logger and DB explorer snippets) when a module is enabled.
+- Add docs tests for module gating and guarded custom mount behavior in both RPC and `httpapi`.
+- Codify the `run release playbook` trigger sequence in `AGENTS.md`.
+
 ## 0.0.26
 
 - Update `make publish` to require `main`, enforce a clean tree, push the version tag, and create the matching GitHub release from the current `CHANGELOG.md` entry.

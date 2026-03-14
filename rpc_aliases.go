@@ -18,6 +18,7 @@ type RPCTypeOverride = rpc.TypeOverride
 
 type RPCDocsOptions = rpc.DocsOptions
 type RPCDocOpt = rpc.DocOpt
+type RPCModule = rpc.Module
 type RPCServeAllDocsOptions = rpc.ServeAllDocsOptions
 type RPCServeAllDocsOpt = rpc.ServeAllDocsOpt
 
@@ -41,6 +42,10 @@ type RPCDBQueryResult = rpc.DBQueryResult
 type RPCDBQueryColumn = rpc.DBQueryColumn
 
 const (
+	RPCModuleAPI           = rpc.ModuleAPI
+	RPCModuleDatabase      = rpc.ModuleDatabase
+	RPCModuleObservability = rpc.ModuleObservability
+
 	RPCStatusOK      = rpc.StatusOK
 	RPCStatusInvalid = rpc.StatusInvalid
 	RPCStatusError   = rpc.StatusError
@@ -117,6 +122,10 @@ func RPCWithOpenAPIPath(path string) RPCDocOpt {
 
 func RPCWithOpenAPIFile(path string) RPCDocOpt {
 	return rpc.WithOpenAPIFile(path)
+}
+
+func RPCWithModules(modules ...rpc.Module) RPCDocOpt {
+	return rpc.WithModules(modules...)
 }
 
 func RPCWithDocsOptions(opts ...rpc.DocOpt) RPCServeAllDocsOpt {

@@ -58,6 +58,16 @@ These instructions describe how to understand and work with this repository.
 - Ensure `gh` CLI is installed and authenticated before running `make publish`.
 - Confirm the new tag exists in GitHub tags and that the GitHub release/version badge reflects it.
 
+### Run Release Playbook (trigger phrase)
+When the user says `run release playbook`, interpret it as this exact sequence:
+1. Update `CHANGELOG.md` with the release changes.
+2. Bump version files (`VERSION`, `python_loader/pyproject.toml`, and any linked version references) to the release version.
+3. Run all tests, confirm they pass, and fix code/issues until green.
+4. Perform housekeeping: clean leftover artifacts, remove dead code, and do general release cleanup.
+5. Commit all release-related changes.
+6. Merge to `main`.
+7. Push remote (`main` and associated release/tag refs as applicable).
+
 ## Extension Points
 - Router-level type overrides via `SetTypeOverrides`.
 - Custom guards for auth schemes and middleware.

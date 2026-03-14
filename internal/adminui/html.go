@@ -10,6 +10,7 @@ import (
 type DocsShellOptions struct {
 	Title            string
 	OpenAPIURL       string
+	Modules          []string
 	SQLCatalogURL    string
 	DBExplorerURL    string
 	DBPreviewURL     string
@@ -62,10 +63,29 @@ func DocsShellHTML(opts DocsShellOptions) string {
 	if metricsURL == "" {
 		metricsURL = "/rpc/_virtuous/metrics"
 	}
+	moduleAPI := true
+	moduleDatabase := true
+	moduleObservability := true
+	if len(opts.Modules) > 0 {
+		modules := make(map[string]struct{}, len(opts.Modules))
+		for _, module := range opts.Modules {
+			module = strings.ToLower(strings.TrimSpace(module))
+			if module == "" {
+				continue
+			}
+			modules[module] = struct{}{}
+		}
+		_, moduleAPI = modules["api"]
+		_, moduleDatabase = modules["database"]
+		_, moduleObservability = modules["observability"]
+	}
 
 	replacer := strings.NewReplacer(
 		"__TITLE__", html.EscapeString(title),
 		"__OPENAPI_URL__", strconv.Quote(openAPIURL),
+		"__MODULE_API__", strconv.FormatBool(moduleAPI),
+		"__MODULE_DATABASE__", strconv.FormatBool(moduleDatabase),
+		"__MODULE_OBSERVABILITY__", strconv.FormatBool(moduleObservability),
 		"__SQL_CATALOG_URL__", strconv.Quote(sqlCatalogURL),
 		"__DB_EXPLORER_URL__", strconv.Quote(dbExplorerURL),
 		"__DB_PREVIEW_URL__", strconv.Quote(dbPreviewURL),
@@ -994,10 +1014,9 @@ const docsShellTemplate = `<!DOCTYPE html>
 			<div class="brand-sub">docs + observability + sql + runtime logs</div>
 		</div>
 		<nav class="nav" aria-label="Docs sections">
-			<button class="active" data-panel="reference">API Reference</button>
-			<button data-panel="observability">Observability</button>
-			<button data-panel="database">Database</button>
-			<button data-panel="logs">Live Logs</button>
+			<button class="active" data-panel="reference" data-module="api">API</button>
+			<button data-panel="database" data-module="database">Database</button>
+			<button data-panel="observability" data-module="observability">Observability</button>
 		</nav>
 	</header>
 
@@ -1319,6 +1338,9 @@ const docsShellTemplate = `<!DOCTYPE html>
 	<script>
 	(function () {
 		const OPENAPI_URL = __OPENAPI_URL__
+		const MODULE_API = __MODULE_API__
+		const MODULE_DATABASE = __MODULE_DATABASE__
+		const MODULE_OBSERVABILITY = __MODULE_OBSERVABILITY__
 		const SQL_CATALOG_URL = __SQL_CATALOG_URL__
 		const DB_EXPLORER_URL = __DB_EXPLORER_URL__
 		const DB_PREVIEW_URL = __DB_PREVIEW_URL__
@@ -1349,6 +1371,45 @@ const docsShellTemplate = `<!DOCTYPE html>
 			logs: document.getElementById("panel-logs"),
 		}
 
+		function moduleEnabled(moduleName) {
+			if (moduleName === "api") {
+				return MODULE_API
+			}
+			if (moduleName === "database") {
+				return MODULE_DATABASE
+			}
+			if (moduleName === "observability") {
+				return MODULE_OBSERVABILITY
+			}
+			return false
+		}
+
+		function panelEnabled(panelName) {
+			if (panelName === "reference") {
+				return MODULE_API
+			}
+			if (panelName === "database") {
+				return MODULE_DATABASE
+			}
+			if (panelName === "observability" || panelName === "logs") {
+				return MODULE_OBSERVABILITY
+			}
+			return false
+		}
+
+		function firstEnabledPanel() {
+			if (MODULE_API) {
+				return "reference"
+			}
+			if (MODULE_DATABASE) {
+				return "database"
+			}
+			if (MODULE_OBSERVABILITY) {
+				return "observability"
+			}
+			return "reference"
+		}
+
 		function setStreamState(state) {
 			const node = document.getElementById("stream-state")
 			node.textContent = state
@@ -1367,14 +1428,21 @@ const docsShellTemplate = `<!DOCTYPE html>
 		}
 
 		function showPanel(name) {
+			if (name === "logs") {
+				name = "observability"
+			}
+			if (!panelEnabled(name)) {
+				name = firstEnabledPanel()
+			}
 			navButtons.forEach(function (button) {
 				button.classList.toggle("active", button.getAttribute("data-panel") === name)
 			})
 			Object.keys(panels).forEach(function (key) {
-				panels[key].classList.toggle("active", key === name)
+				const active = key === name || (name === "observability" && key === "logs")
+				panels[key].classList.toggle("active", active)
 			})
 			document.body.classList.toggle("reference-mode", name === "reference")
-			document.body.classList.toggle("logs-mode", name === "logs")
+			document.body.classList.remove("logs-mode")
 			if (name === "reference") {
 				mountReference()
 			}
@@ -1382,17 +1450,68 @@ const docsShellTemplate = `<!DOCTYPE html>
 		}
 
 		navButtons.forEach(function (button) {
+			if (!moduleEnabled(button.getAttribute("data-module") || "")) {
+				button.hidden = true
+				return
+			}
 			button.addEventListener("click", function () {
 				showPanel(button.getAttribute("data-panel"))
 			})
 		})
+		if (!MODULE_API) {
+			panels.reference.hidden = true
+		}
+		if (!MODULE_DATABASE) {
+			panels.database.hidden = true
+		}
+		if (!MODULE_OBSERVABILITY) {
+			panels.observability.hidden = true
+			panels.logs.hidden = true
+		}
 
 		function activePanelFromHash() {
-			const hash = (window.location.hash || "").replace("#", "")
-			if (hash === "database" || hash === "logs" || hash === "reference" || hash === "observability") {
-				return hash
+			let hash = (window.location.hash || "").replace("#", "")
+			if (hash === "logs") {
+				hash = "observability"
 			}
-			return "reference"
+			if (hash === "database" || hash === "reference" || hash === "observability") {
+				if (panelEnabled(hash)) {
+					return hash
+				}
+			}
+			return firstEnabledPanel()
+		}
+
+		if (!MODULE_API && !MODULE_DATABASE && !MODULE_OBSERVABILITY) {
+			navButtons.forEach(function (button) {
+				button.hidden = true
+			})
+			Object.keys(panels).forEach(function (key) {
+				panels[key].hidden = true
+			})
+			panels.reference.hidden = false
+			panels.reference.classList.add("active")
+			document.getElementById("scalar-root").innerHTML = "<div class='empty'>No docs modules are enabled.</div>"
+		}
+
+		function shouldLoadReference() {
+			return MODULE_API
+		}
+
+		function shouldLoadDatabase() {
+			return MODULE_DATABASE
+		}
+
+		function shouldLoadObservability() {
+			return MODULE_OBSERVABILITY
+		}
+
+		function activePanelOrFallback() {
+			const panel = activePanelFromHash()
+			if (panelEnabled(panel)) {
+				return panel
+			}
+			return firstEnabledPanel()
 		}
 
 		function buildPrefixMap(spec) {
@@ -2201,34 +2320,44 @@ const docsShellTemplate = `<!DOCTYPE html>
 			}
 		}
 
-		document.getElementById("db-run-btn").addEventListener("click", function () {
-			runDBQuery()
-		})
-		document.getElementById("db-clear-btn").addEventListener("click", function () {
-			document.getElementById("db-query-editor").value = ""
-			renderDBResult(null)
-		})
-		document.getElementById("db-query-editor").addEventListener("keydown", function (event) {
-			if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-				event.preventDefault()
+		if (shouldLoadDatabase()) {
+			document.getElementById("db-run-btn").addEventListener("click", function () {
 				runDBQuery()
-			}
-		})
-
-		showPanel(activePanelFromHash())
-		mountReference()
-		fetchObservability()
-		window.setInterval(fetchObservability, 5000)
-		loadDBExplorer()
-		loadSQLCatalog()
-		loadLoggingStatus().then(function () {
-			if (!loggingStatus.enabled) {
-				return
-			}
-			loadEventSnapshot().finally(function () {
-				startEventStream()
 			})
-		})
+			document.getElementById("db-clear-btn").addEventListener("click", function () {
+				document.getElementById("db-query-editor").value = ""
+				renderDBResult(null)
+			})
+			document.getElementById("db-query-editor").addEventListener("keydown", function (event) {
+				if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+					event.preventDefault()
+					runDBQuery()
+				}
+			})
+		}
+
+		showPanel(activePanelOrFallback())
+		if (shouldLoadReference()) {
+			mountReference()
+		}
+		if (shouldLoadObservability()) {
+			fetchObservability()
+			window.setInterval(fetchObservability, 5000)
+			loadLoggingStatus().then(function () {
+				if (!loggingStatus.enabled) {
+					return
+				}
+				loadEventSnapshot().finally(function () {
+					startEventStream()
+				})
+			})
+		} else {
+			setStreamState("disabled")
+		}
+		if (shouldLoadDatabase()) {
+			loadDBExplorer()
+			loadSQLCatalog()
+		}
 	})()
 	</script>
 </body>

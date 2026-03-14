@@ -13,16 +13,31 @@ import (
 	"github.com/swetjen/virtuous/internal/adminui"
 )
 
+// Module identifies one top-level docs console module.
+type Module string
+
+const (
+	ModuleAPI           Module = "api"
+	ModuleDatabase      Module = "database"
+	ModuleObservability Module = "observability"
+)
+
+var allModules = []Module{ModuleAPI, ModuleDatabase, ModuleObservability}
+
 // DefaultDocsHTML returns the integrated docs/admin UI HTML.
 func DefaultDocsHTML(openAPIPath string) string {
 	return adminui.DocsShellHTML(adminui.DocsShellOptions{
 		Title:            "Virtuous RPC Docs",
 		OpenAPIURL:       openAPIPath,
+		Modules:          enabledModuleNames(defaultDocsOptions().enabledModules()),
 		SQLCatalogURL:    "./_admin/sql",
+		DBExplorerURL:    "./_admin/db",
+		DBPreviewURL:     "./_admin/db/preview",
+		DBQueryURL:       "./_admin/db/query",
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
 		LoggingStatusURL: "./_admin/logging",
-		MetricsURL:       "/rpc/_virtuous/metrics",
+		MetricsURL:       "./_admin/metrics",
 	})
 }
 
@@ -38,6 +53,8 @@ type DocsOptions struct {
 	OpenAPIPath string
 	OpenAPIFile string
 	SQLRoot     string
+	Modules     []Module
+	modulesSet  bool
 }
 
 // DocOpt mutates DocsOptions.
@@ -88,48 +105,111 @@ func WithSQLRoot(path string) DocOpt {
 	}
 }
 
-// ServeDocs registers default docs and OpenAPI routes on the router.
-func (r *Router) ServeDocs(opts ...DocOpt) {
-	config := DocsOptions{
+// WithModules enables the docs modules shown in the UI.
+func WithModules(modules ...Module) DocOpt {
+	return func(o *DocsOptions) {
+		o.modulesSet = true
+		o.Modules = append([]Module(nil), modules...)
+	}
+}
+
+func defaultDocsOptions() DocsOptions {
+	return DocsOptions{
 		DocsPath:    "/rpc/docs",
 		DocsFile:    "docs.html",
 		OpenAPIPath: "/rpc/openapi.json",
 		OpenAPIFile: "openapi.json",
 		SQLRoot:     "db/sql",
 	}
+}
 
+func applyDocOpts(opts ...DocOpt) DocsOptions {
+	config := defaultDocsOptions()
 	for _, opt := range opts {
 		opt(&config)
 	}
+	return config
+}
+
+func (o DocsOptions) enabledModules() map[Module]bool {
+	enabled := map[Module]bool{
+		ModuleAPI:           false,
+		ModuleDatabase:      false,
+		ModuleObservability: false,
+	}
+	if !o.modulesSet {
+		enabled[ModuleAPI] = true
+		enabled[ModuleDatabase] = true
+		enabled[ModuleObservability] = true
+		return enabled
+	}
+	for _, module := range o.Modules {
+		normalized := normalizeModule(module)
+		if normalized == "" {
+			continue
+		}
+		enabled[normalized] = true
+	}
+	return enabled
+}
+
+func normalizeModule(module Module) Module {
+	switch strings.ToLower(strings.TrimSpace(string(module))) {
+	case string(ModuleAPI):
+		return ModuleAPI
+	case string(ModuleDatabase):
+		return ModuleDatabase
+	case string(ModuleObservability):
+		return ModuleObservability
+	default:
+		return ""
+	}
+}
+
+func enabledModuleNames(modules map[Module]bool) []string {
+	names := make([]string, 0, len(allModules))
+	for _, module := range allModules {
+		if modules[module] {
+			names = append(names, string(module))
+		}
+	}
+	return names
+}
+
+func docsAssetFile(path, fallback string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		path = fallback
+	}
+	return strings.TrimPrefix(path, "/")
+}
+
+func docsAssetURL(path string) string {
+	path = strings.TrimPrefix(strings.TrimSpace(path), "/")
+	if path == "" {
+		return "./"
+	}
+	return "./" + path
+}
+
+// DocsHandler returns a mountable docs/admin handler with subtree-local endpoints.
+func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
+	config := applyDocOpts(opts...)
+	modules := config.enabledModules()
 
 	if r.events == nil {
 		r.events = adminui.NewEventFeed(600)
 	}
 
-	docsHTML := DefaultDocsHTML(config.OpenAPIPath)
 	openAPI, err := r.OpenAPI()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	docsBase := strings.TrimSuffix(config.DocsPath, "/")
-	if docsBase == "" {
-		docsBase = "/rpc/docs"
-	}
-	docsIndex := docsBase + "/"
-	adminSQLPath := docsIndex + "_admin/sql"
-	adminDBPath := docsIndex + "_admin/db"
-	adminDBPreviewPath := docsIndex + "_admin/db/preview"
-	adminDBQueryPath := docsIndex + "_admin/db/query"
-	adminEventsPath := docsIndex + "_admin/events"
-	adminEventsStreamPath := docsIndex + "_admin/events.stream"
-	adminLoggingPath := docsIndex + "_admin/logging"
-	observabilityPath, observabilityAliases := r.observabilityPaths()
-	metricsPath, metricsAliases := r.metricsPaths()
-
-	docsHTML = adminui.DocsShellHTML(adminui.DocsShellOptions{
+	openAPIFile := docsAssetFile(config.OpenAPIFile, "openapi.json")
+	docsHTML := adminui.DocsShellHTML(adminui.DocsShellOptions{
 		Title:            "Virtuous RPC Docs",
-		OpenAPIURL:       config.OpenAPIPath,
+		OpenAPIURL:       docsAssetURL(openAPIFile),
+		Modules:          enabledModuleNames(modules),
 		SQLCatalogURL:    "./_admin/sql",
 		DBExplorerURL:    "./_admin/db",
 		DBPreviewURL:     "./_admin/db/preview",
@@ -137,110 +217,146 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
 		LoggingStatusURL: "./_admin/logging",
-		MetricsURL:       metricsPath,
+		MetricsURL:       "./_admin/metrics",
 	})
+
+	handler := http.NewServeMux()
+	handler.Handle("GET /{$}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(docsHTML))
+	}))
+
+	if modules[ModuleAPI] {
+		handler.Handle("GET /"+openAPIFile, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_, _ = w.Write(openAPI)
+		}))
+	}
+
+	if modules[ModuleDatabase] {
+		handler.Handle("GET /_admin/sql", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			catalog := adminui.LoadSQLCatalog(config.SQLRoot)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_ = json.NewEncoder(w).Encode(catalog)
+		}))
+		handler.Handle("GET /_admin/db", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			payload := dbExplorerPayloadFor(r, req.Context())
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_ = json.NewEncoder(w).Encode(payload)
+		}))
+		handler.Handle("POST /_admin/db/preview", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			started := time.Now()
+			var input DBPreviewInput
+			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
+				result := DBQueryResult{Error: "invalid preview payload"}
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(StatusInvalid)
+				_ = json.NewEncoder(w).Encode(result)
+				r.recordDBExplorerMetric("PreviewTable", req.URL.Path, req.Method, StatusInvalid, time.Since(started), result.Error)
+				return
+			}
+			result, status, errMessage := r.runDBPreview(req.Context(), input)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(result)
+			r.recordDBExplorerMetric("PreviewTable", req.URL.Path, req.Method, status, time.Since(started), errMessage)
+		}))
+		handler.Handle("POST /_admin/db/query", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			started := time.Now()
+			var input DBRunQueryInput
+			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
+				result := DBQueryResult{Error: "invalid query payload"}
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(StatusInvalid)
+				_ = json.NewEncoder(w).Encode(result)
+				r.recordDBExplorerMetric("RunQuery", req.URL.Path, req.Method, StatusInvalid, time.Since(started), result.Error)
+				return
+			}
+			result, status, errMessage := r.runDBQuery(req.Context(), input)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(result)
+			r.recordDBExplorerMetric("RunQuery", req.URL.Path, req.Method, status, time.Since(started), errMessage)
+		}))
+	}
+
+	if modules[ModuleObservability] {
+		handler.Handle("GET /_admin/events", http.HandlerFunc(r.events.ServeJSON))
+		handler.Handle("GET /_admin/events.stream", http.HandlerFunc(r.events.ServeStream))
+		handler.Handle("GET /_admin/logging", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			payload := struct {
+				Enabled bool   `json:"enabled"`
+				Active  bool   `json:"active"`
+				Snippet string `json:"snippet"`
+			}{
+				Enabled: r.loggingEnabled(),
+				Active:  r.loggingActive(),
+				Snippet: rpcLoggerSnippet(),
+			}
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_ = json.NewEncoder(w).Encode(payload)
+		}))
+		handler.Handle("GET /_admin/metrics", http.HandlerFunc(r.observability.ServeJSON))
+	}
+
+	return handler
+}
+
+// ServeDocs registers default docs and OpenAPI routes on the router.
+func (r *Router) ServeDocs(opts ...DocOpt) {
+	config := applyDocOpts(opts...)
+	modules := config.enabledModules()
+
+	if r.events == nil {
+		r.events = adminui.NewEventFeed(600)
+	}
+
+	docsBase := strings.TrimSuffix(config.DocsPath, "/")
+	if docsBase == "" {
+		docsBase = "/rpc/docs"
+	}
+	docsIndex := docsBase + "/"
 
 	r.mux.Handle("GET "+docsBase, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, docsIndex, http.StatusMovedPermanently)
 	}))
+	r.mux.Handle(docsIndex, http.StripPrefix(docsBase, r.DocsHandler(opts...)))
 
-	r.mux.Handle("GET "+docsIndex, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(docsHTML))
-	}))
-
-	r.mux.Handle("GET "+config.OpenAPIPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.Write(openAPI)
-	}))
-
-	r.mux.Handle("GET "+adminSQLPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		catalog := adminui.LoadSQLCatalog(config.SQLRoot)
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(catalog)
-	}))
-	r.mux.Handle("GET "+adminDBPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		payload := dbExplorerPayloadFor(r, req.Context())
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(payload)
-	}))
-	r.mux.Handle("POST "+adminDBPreviewPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		started := time.Now()
-		var input DBPreviewInput
-		if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
-			result := DBQueryResult{Error: "invalid preview payload"}
+	openAPIPath := ensureLeadingSlash(config.OpenAPIPath)
+	if modules[ModuleAPI] && openAPIPath != "" {
+		openAPI, err := r.OpenAPI()
+		if err != nil {
+			log.Fatal(err)
+		}
+		r.mux.Handle("GET "+openAPIPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(StatusInvalid)
-			_ = json.NewEncoder(w).Encode(result)
-			r.recordDBExplorerMetric("PreviewTable", req.URL.Path, req.Method, StatusInvalid, time.Since(started), result.Error)
-			return
-		}
-		result, status, errMessage := r.runDBPreview(req.Context(), input)
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(result)
-		r.recordDBExplorerMetric("PreviewTable", req.URL.Path, req.Method, status, time.Since(started), errMessage)
-	}))
-	r.mux.Handle("POST "+adminDBQueryPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		started := time.Now()
-		var input DBRunQueryInput
-		if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
-			result := DBQueryResult{Error: "invalid query payload"}
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(StatusInvalid)
-			_ = json.NewEncoder(w).Encode(result)
-			r.recordDBExplorerMetric("RunQuery", req.URL.Path, req.Method, StatusInvalid, time.Since(started), result.Error)
-			return
-		}
-		result, status, errMessage := r.runDBQuery(req.Context(), input)
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(result)
-		r.recordDBExplorerMetric("RunQuery", req.URL.Path, req.Method, status, time.Since(started), errMessage)
-	}))
-
-	r.mux.Handle("GET "+adminEventsPath, http.HandlerFunc(r.events.ServeJSON))
-	r.mux.Handle("GET "+adminEventsStreamPath, http.HandlerFunc(r.events.ServeStream))
-	r.mux.Handle("GET "+adminLoggingPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		payload := struct {
-			Enabled bool   `json:"enabled"`
-			Active  bool   `json:"active"`
-			Snippet string `json:"snippet"`
-		}{
-			Enabled: r.loggingEnabled(),
-			Active:  r.loggingActive(),
-			Snippet: rpcLoggerSnippet(),
-		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(payload)
-	}))
-	r.mux.Handle("GET "+metricsPath, http.HandlerFunc(r.observability.ServeJSON))
-	for _, alias := range metricsAliases {
-		r.mux.Handle("GET "+alias, http.HandlerFunc(r.observability.ServeJSON))
+			_, _ = w.Write(openAPI)
+		}))
 	}
-	redirectObservability := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		http.Redirect(w, req, docsIndex+"#observability", http.StatusFound)
-	})
-	r.mux.Handle("GET "+observabilityPath, redirectObservability)
-	for _, alias := range observabilityAliases {
-		r.mux.Handle("GET "+alias, redirectObservability)
+
+	if modules[ModuleObservability] {
+		observabilityPath, observabilityAliases := r.observabilityPaths()
+		metricsPath, metricsAliases := r.metricsPaths()
+		r.mux.Handle("GET "+metricsPath, http.HandlerFunc(r.observability.ServeJSON))
+		for _, alias := range metricsAliases {
+			r.mux.Handle("GET "+alias, http.HandlerFunc(r.observability.ServeJSON))
+		}
+		redirectObservability := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			http.Redirect(w, req, docsIndex+"#observability", http.StatusFound)
+		})
+		r.mux.Handle("GET "+observabilityPath, redirectObservability)
+		for _, alias := range observabilityAliases {
+			r.mux.Handle("GET "+alias, redirectObservability)
+		}
+		r.events.RecordSystem("observability online: " + observabilityPath)
 	}
 
 	r.events.RecordSystem("docs online: " + docsIndex)
-	r.events.RecordSystem("observability online: " + observabilityPath)
 	r.logger.Info(
 		"rpc docs online",
 		"path", docsIndex,
-		"openapi", config.OpenAPIPath,
-		"sql", adminSQLPath,
-		"db", adminDBPath,
-		"db_preview", adminDBPreviewPath,
-		"db_query", adminDBQueryPath,
-		"events", adminEventsPath,
-		"stream", adminEventsStreamPath,
-		"logging", adminLoggingPath,
-		"observability", observabilityPath,
-		"metrics", metricsPath,
+		"openapi", openAPIPath,
+		"modules", strings.Join(enabledModuleNames(modules), ","),
 	)
 }
 
