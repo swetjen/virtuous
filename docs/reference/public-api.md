@@ -15,6 +15,14 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.WithGuards(guards ...rpc.Guard)`
 - `rpc.WithAdvancedObservability(opts ...rpc.AdvancedObservabilityOption)`
 - `rpc.WithObservabilitySampling(rate float64)`
+- `type rpc.Module`
+- `rpc.ModuleAPI`
+- `rpc.ModuleDatabase`
+- `rpc.ModuleObservability`
+- `rpc.WithModules(modules ...rpc.Module)`
+- `rpc.WithDocsPath(path string)`
+- `rpc.WithOpenAPIPath(path string)`
+- `rpc.WithSQLRoot(path string)`
 - `rpc.WithDBExplorer(explorer rpc.DBExplorer)`
 - `rpc.WithDBExplorerTimeout(timeout time.Duration)`
 - `rpc.WithDBExplorerMaxRows(maxRows int)`
@@ -23,6 +31,7 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.NewSQLDBExplorer(db *sql.DB, opts ...rpc.DBExplorerOption)`
 - `rpc.NewPGXDBExplorer(pool *pgxpool.Pool, opts ...rpc.DBExplorerOption)`
 - `(*rpc.Router).HandleRPC(fn any, guards ...rpc.Guard)`
+- `(*rpc.Router).DocsHandler(opts ...rpc.DocOpt)`
 - `(*rpc.Router).ServeDocs(opts ...rpc.DocOpt)`
 - `(*rpc.Router).ServeAllDocs(opts ...rpc.ServeAllDocsOpt)`
 - `(*rpc.Router).AttachLogger(next http.Handler)`
@@ -43,6 +52,15 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta httpapi.HandlerMeta)`
 - `httpapi.Optional[T any](req ...T)`
 - `httpapi.ResponseSpec`
+- `type httpapi.Module`
+- `httpapi.ModuleAPI`
+- `httpapi.ModuleDatabase`
+- `httpapi.ModuleObservability`
+- `httpapi.WithModules(modules ...httpapi.Module)`
+- `httpapi.WithDocsPath(path string)`
+- `httpapi.WithOpenAPIPath(path string)`
+- `httpapi.WithSQLRoot(path string)`
+- `(*httpapi.Router).DocsHandler(opts ...httpapi.DocOpt)`
 - `(*httpapi.Router).ServeDocs(opts ...httpapi.DocOpt)`
 - `(*httpapi.Router).ServeAllDocs(opts ...httpapi.ServeAllDocsOpt)`
 - `(*httpapi.Router).AttachLogger(next http.Handler)`

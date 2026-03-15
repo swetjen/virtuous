@@ -29,17 +29,33 @@ _ = server.ListenAndServe()
 
 ## Docs and clients
 
-- `ServeDocs()` registers `/rpc/docs` and `/rpc/openapi.json`.
-- `ServeAllDocs()` registers docs/OpenAPI plus `/rpc/client.gen.js`, `/rpc/client.gen.ts`, and `/rpc/client.gen.py`.
+- `ServeDocs()` is the convenience path for default docs wiring (`/rpc/docs`, `/rpc/openapi.json`).
+- `ServeAllDocs()` adds generated clients (`/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`).
+- `WithModules(...)` controls visible docs modules: `api`, `database`, `observability`.
+- `DocsHandler(...)` returns a mountable docs subtree handler for custom route placement and docs-only middleware.
 - `/rpc/_virtuous/observability` redirects into the docs observability panel.
 - `/rpc/_virtuous/metrics` serves live JSON aggregates.
-- `/rpc/docs/_admin/db` + `/rpc/docs/_admin/db/query` power the docs database explorer when `rpc.WithDBExplorer(...)` is configured.
+- `/rpc/docs/_admin/db` and related endpoints power the docs database explorer when `rpc.WithDBExplorer(...)` is configured.
+
+Mountable docs example:
+
+```go
+docs := router.DocsHandler(
+	rpc.WithModules(rpc.ModuleAPI, rpc.ModuleObservability),
+)
+
+mux := http.NewServeMux()
+mux.Handle("/rpc/", router)
+mux.Handle("/admin/docs/", http.StripPrefix("/admin/docs", docs))
+```
 
 ## Observability
 
 - Basic in-memory per-RPC request metrics are on by default.
 - Use `rpc.WithAdvancedObservability()` for grouped 5xx errors, guard outcomes, and sampled traces.
 - Use `rpc.WithObservabilitySampling(rate)` to tune trace capture in advanced mode.
+- Attach live route/event logging once at mux boundary with `router.AttachLogger(next)`.
+- If logger attachment is missing, docs show a zero-state snippet instead of failing.
 
 ## Guards
 
@@ -103,3 +119,8 @@ Rules:
 4) Run `make gen-sdk`.
 5) Update frontend using the generated JS client.
 6) Run `make gen-web` (or `make gen-all`).
+
+## Common zero-state causes
+
+- `Database` module visible but no live data: attach `rpc.WithDBExplorer(...)` to the router.
+- `Observability` module visible but no live route feed: wrap top-level handler with `router.AttachLogger(...)`.

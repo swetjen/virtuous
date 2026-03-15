@@ -10,6 +10,7 @@ Virtuous is designed to be deterministic for agents. Keep project layout and han
 2) Implement RPC handlers.
 3) Register handlers on the RPC router.
 4) Serve docs and clients via `ServeAllDocs()`.
+5) If needed, mount docs with `DocsHandler(...)` for custom route/guard control.
 
 ## Agent prompt template (RPC)
 
@@ -20,6 +21,7 @@ You are implementing a Virtuous RPC API.
 - Put handlers in package folders (states, users, admin).
 - Use func(ctx, req) (Resp, int).
 - Register handlers in router.go and call router.ServeAllDocs().
+- If docs need a custom path/guard, use router.DocsHandler(...) and mount it on mux.
 - Use httpapi only for legacy handlers.
 ```
 
@@ -48,3 +50,5 @@ That tutorial is the canonical transformation guide, including mapping rules, mi
 - Use `doc:"..."` tags on struct fields to populate OpenAPI and client docs.
 - Keep section names consistent across documents for reliable agent parsing.
 - During migrations, treat runtime router registration as source of truth over stale annotations.
+- Use `WithModules(...)` when agent output must limit docs surface (`api`, `database`, `observability`).
+- Missing logger/DB attachments should produce docs zero-state messaging, not runtime panics.

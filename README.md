@@ -170,7 +170,7 @@ mux.Handle("/rpc/secret/", secretAPI)
 
 #### 3) Basic auth on the docs route
 
-Protect docs/OpenAPI paths at the top-level mux.
+Use a mountable docs handler so you can protect docs independently from API routes.
 
 ```go
 func docsBasicAuth(user, pass string, next http.Handler) http.Handler {
@@ -188,16 +188,24 @@ func docsBasicAuth(user, pass string, next http.Handler) http.Handler {
 
 router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
 router.HandleRPC(states.GetMany)
-router.ServeAllDocs()
+
+// Keep generated clients on default routes.
+router.ServeAllDocs(rpc.WithoutDocs())
+
+// Mount docs separately, with only selected modules enabled.
+docs := router.DocsHandler(
+	rpc.WithModules(rpc.ModuleAPI, rpc.ModuleObservability),
+)
 
 mux := http.NewServeMux()
 mux.Handle("/rpc/", router) // API routes
-mux.Handle("/rpc/openapi.json", docsBasicAuth("docs", "secret", router))
-mux.Handle("/rpc/docs", docsBasicAuth("docs", "secret", router))
-mux.Handle("/rpc/docs/", docsBasicAuth("docs", "secret", router))
+mux.Handle(
+	"/admin/docs/",
+	http.StripPrefix("/admin/docs", docsBasicAuth("docs", "secret", docs)),
+)
 ```
 
-Note: there is no first-class docs auth option yet; mux-level middleware is the current path.
+This mounts docs at `/admin/docs/`, with OpenAPI at `/admin/docs/openapi.json`.
 
 #### 4) OR auth semantics (accept either of two schemes)
 
@@ -230,6 +238,21 @@ func (g bearerOrAPIKeyGuard) Middleware() func(http.Handler) http.Handler {
 }
 ```
 
+#### 5) Minimal docs modules
+
+By default docs show all modules (`Api`, `Database`, `Observability`). Restrict the visible modules with `WithModules(...)`.
+
+```go
+router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
+router.HandleRPC(states.GetMany)
+router.ServeDocs(
+	rpc.WithModules(
+		rpc.ModuleAPI,
+		rpc.ModuleObservability,
+	),
+)
+```
+
 ### Handler signature
 
 RPC handlers must follow one of these forms:
@@ -251,13 +274,18 @@ Supported statuses:
 
 Guarded routes may also return `401` when middleware rejects the request.
 
-Docs and SDKs are served at:
+Docs and SDKs are served at runtime.
+
+Default `ServeAllDocs()` paths:
 
 - `/rpc/docs`
+- `/rpc/openapi.json`
 - `/rpc/client.gen.*`
 - Observability dashboard: `/rpc/_virtuous/observability` or the `Observability` tab inside `/rpc/docs/`
 - Metrics JSON: `/rpc/_virtuous/metrics`
 - Responses should include a canonical `error` field (string or struct) when errors occur.
+
+If you need custom placement or docs-only middleware, use `router.DocsHandler(...)` and mount it on your mux.
 
 ### Observability
 
@@ -280,6 +308,14 @@ This enables:
 - `/rpc/_virtuous/metrics` for JSON metrics
 - `/rpc/_virtuous/observability` as a redirect into the docs dashboard
 - the `Observability` tab in `/rpc/docs/`
+
+Live route/event logging is opt-in at mux boundary:
+
+```go
+handler := router.AttachLogger(mux) // attach once at top-level
+```
+
+If logger attachment is missing, the docs `Observability` view shows a zero-data setup snippet.
 
 ### DB Explorer
 
@@ -312,6 +348,8 @@ The explorer uses the same runtime credentials/pool and enforces:
 - hard timeout (default `5s`)
 - hard row cap (default `1000`)
 
+If DB explorer is not attached, the docs `Database` view stays available and shows a setup snippet.
+
 ## HTTP API (httpapi)
 
 `httpapi` wraps classic `net/http` handlers and preserves existing request/response shapes. It also emits OpenAPI 3.0 specs for typed handlers.
@@ -336,6 +374,14 @@ router.HandleTyped(
 	}),
 )
 router.ServeAllDocs()
+```
+
+Docs modules can be toggled the same way:
+
+```go
+router.ServeDocs(
+	httpapi.WithModules(httpapi.ModuleAPI),
+)
 ```
 
 ### Advanced patterns
@@ -419,7 +465,7 @@ mux.Handle("/secret/", secretAPI)
 
 #### 3) Basic auth on the docs route
 
-Protect docs/OpenAPI paths at the top-level mux.
+Use a mountable docs handler so you can protect docs separately from API routes.
 
 ```go
 func docsBasicAuth(user, pass string, next http.Handler) http.Handler {
@@ -443,16 +489,21 @@ router.HandleTyped(
 		Method:  "GetByCode",
 	}),
 )
-router.ServeAllDocs()
+
+router.ServeAllDocs(httpapi.WithoutDocs()) // keep generated clients
+docs := router.DocsHandler(
+	httpapi.WithModules(httpapi.ModuleAPI, httpapi.ModuleObservability),
+)
 
 mux := http.NewServeMux()
 mux.Handle("/", router) // API routes
-mux.Handle("/openapi.json", docsBasicAuth("docs", "secret", router))
-mux.Handle("/docs", docsBasicAuth("docs", "secret", router))
-mux.Handle("/docs/", docsBasicAuth("docs", "secret", router))
+mux.Handle(
+	"/admin/docs/",
+	http.StripPrefix("/admin/docs", docsBasicAuth("docs", "secret", docs)),
+)
 ```
 
-Note: there is no first-class docs auth option yet; mux-level middleware is the current path.
+This mounts docs at `/admin/docs/`, with OpenAPI at `/admin/docs/openapi.json`.
 
 #### 4) OR auth semantics (accept either of two schemes)
 

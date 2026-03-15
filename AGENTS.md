@@ -22,6 +22,7 @@ These instructions describe how to understand and work with this repository.
 - `httpapi/client_spec.go`: client spec builder shared by emitters.
 - `httpapi/client_js_gen.go`: JS client template and helpers.
 - `httpapi/client_ts.go`: TS client template and helpers.
+- `internal/adminui/html.go`: integrated docs/admin shell (Api, Database, Observability modules).
 - `example/`: reference app and generated outputs.
 
 ## Architecture Notes
@@ -37,7 +38,12 @@ These instructions describe how to understand and work with this repository.
 - RPC handlers return `(resp, status)` with status limited to 200, 422, or 500.
 - Use `rpc.NewRouter(rpc.WithPrefix("/rpc"))` and `HandleRPC` for RPC handlers.
 - Basic RPC observability is in-memory and automatic; use `rpc.WithAdvancedObservability()` for grouped errors, guard metrics, and sampled traces.
+- `ServeDocs()` enables all docs modules by default (`Api`, `Database`, `Observability`).
+- Use `WithModules(...)` to restrict docs module visibility when needed.
+- Prefer `DocsHandler(...)` when docs must be mounted on a custom route or wrapped with docs-only guards/middleware.
+- When mounting docs under a custom prefix, use `http.StripPrefix(...)` so subtree-local docs/admin endpoints resolve correctly.
 - Use `rpc.WithDBExplorer(rpc.NewSQLDBExplorer(pool))` or `rpc.WithDBExplorer(rpc.NewPGXDBExplorer(pool))` to enable the docs `Database` workbench against the app's runtime pool.
+- If `Database` or `Observability` modules are enabled but runtime attachment is missing (`WithDBExplorer(...)` or `AttachLogger(...)`), docs should render a zero-state setup snippet rather than hard-failing.
 - Prefer method-prefixed patterns (`GET /path`) to ensure docs/clients are emitted.
 - Use `Wrap` to attach request/response types to handlers.
 - For optional `httpapi` request bodies, wrap request type with `httpapi.Optional[Req]()`.

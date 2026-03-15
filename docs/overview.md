@@ -57,6 +57,18 @@ router.HandleRPC(states.Create)
 router.ServeAllDocs()
 ```
 
+To mount docs under a custom path (and optionally wrap docs-only auth/middleware), use `DocsHandler(...)`:
+
+```go
+docs := router.DocsHandler(
+	rpc.WithModules(rpc.ModuleAPI, rpc.ModuleObservability),
+)
+
+mux := http.NewServeMux()
+mux.Handle("/rpc/", router)
+mux.Handle("/admin/docs/", http.StripPrefix("/admin/docs", docs))
+```
+
 ### Paths
 
 `/rpc/{package}/{kebab(function)}`
@@ -66,18 +78,29 @@ Example:
 
 ### Runtime endpoints
 
+Default `ServeAllDocs()` endpoints:
+
 - Docs: `/rpc/docs/`
 - OpenAPI: `/rpc/openapi.json`
 - Clients: `/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`
 - Observability dashboard: `/rpc/_virtuous/observability`
 - Metrics JSON: `/rpc/_virtuous/metrics`
-- Database explorer APIs (docs shell): `/rpc/docs/_admin/db`, `/rpc/docs/_admin/db/preview`, `/rpc/docs/_admin/db/query`
+
+Docs module endpoints (under the mounted docs subtree):
+
+- `Api`: `/openapi.json`
+- `Database`: `/_admin/sql`, `/_admin/db`, `/_admin/db/preview`, `/_admin/db/query`
+- `Observability`: `/_admin/events`, `/_admin/events.stream`, `/_admin/logging`, `/_admin/metrics`
+
+Use `WithModules(...)` to toggle docs modules (`api`, `database`, `observability`). By default all are enabled.
 
 ### Observability
 
 - Basic per-RPC request counts, status classes, and latency windows are tracked in memory by default.
 - Use `rpc.WithAdvancedObservability()` to enable grouped 5xx fingerprints, guard allow/deny metrics, and sampled trace capture.
-- The docs shell includes an `Observability` tab alongside API reference, SQL, and live logs.
+- Attach live request/event feed once at mux boundary with `router.AttachLogger(next)`.
+- The docs shell includes an `Observability` tab alongside API reference and SQL workbench.
+- If logger or DB explorer is not attached, the corresponding docs module shows a setup snippet (zero-state) instead of failing.
 
 ## httpapi (legacy)
 
