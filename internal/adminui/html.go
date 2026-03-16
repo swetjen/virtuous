@@ -232,6 +232,10 @@ const docsShellTemplate = `<!DOCTYPE html>
 			display: none;
 		}
 
+		body.database-mode .tiles {
+			display: none;
+		}
+
 		body.reference-mode #panel-reference {
 			padding: 0;
 			gap: 0;
@@ -1442,6 +1446,7 @@ const docsShellTemplate = `<!DOCTYPE html>
 				panels[key].classList.toggle("active", active)
 			})
 			document.body.classList.toggle("reference-mode", name === "reference")
+			document.body.classList.toggle("database-mode", name === "database")
 			document.body.classList.remove("logs-mode")
 			if (name === "reference") {
 				mountReference()

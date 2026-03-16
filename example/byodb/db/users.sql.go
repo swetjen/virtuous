@@ -7,64 +7,223 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, name, role)
-VALUES ($1, $2, $3)
-RETURNING id, email, name, role
+const confirmUserByCode = `-- name: ConfirmUserByCode :one
+UPDATE users
+SET confirmed = TRUE,
+    confirm_code = '',
+    updated_at = now()
+WHERE upper(confirm_code) = upper($1)
+RETURNING id, email, name, role, password_hash, confirmed, confirm_code, disabled, created_at, updated_at
 `
 
-func (q *Queries) CreateUser(ctx context.Context, email string, name string, role string) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, email, name, role)
-	var i User
+type ConfirmUserByCodeRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	PasswordHash string             `json:"password_hash"`
+	Confirmed    bool               `json:"confirmed"`
+	ConfirmCode  string             `json:"confirm_code"`
+	Disabled     bool               `json:"disabled"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ConfirmUserByCode(ctx context.Context, upper interface{}) (ConfirmUserByCodeRow, error) {
+	row := q.db.QueryRow(ctx, confirmUserByCode, upper)
+	var i ConfirmUserByCodeRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
 		&i.Role,
+		&i.PasswordHash,
+		&i.Confirmed,
+		&i.ConfirmCode,
+		&i.Disabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (email, name, role)
+VALUES ($1, $2, $3)
+RETURNING id, email, name, role, disabled
+`
+
+type CreateUserRow struct {
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	Disabled bool   `json:"disabled"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, email string, name string, role string) (CreateUserRow, error) {
+	row := q.db.QueryRow(ctx, createUser, email, name, role)
+	var i CreateUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.Disabled,
+	)
+	return i, err
+}
+
+const createUserWithPassword = `-- name: CreateUserWithPassword :one
+INSERT INTO users (email, name, role, password_hash, confirmed, confirm_code)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, email, name, role, password_hash, confirmed, confirm_code, disabled, created_at, updated_at
+`
+
+type CreateUserWithPasswordParams struct {
+	Email        string `json:"email"`
+	Name         string `json:"name"`
+	Role         string `json:"role"`
+	PasswordHash string `json:"password_hash"`
+	Confirmed    bool   `json:"confirmed"`
+	ConfirmCode  string `json:"confirm_code"`
+}
+
+type CreateUserWithPasswordRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	PasswordHash string             `json:"password_hash"`
+	Confirmed    bool               `json:"confirmed"`
+	ConfirmCode  string             `json:"confirm_code"`
+	Disabled     bool               `json:"disabled"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateUserWithPassword(ctx context.Context, arg CreateUserWithPasswordParams) (CreateUserWithPasswordRow, error) {
+	row := q.db.QueryRow(ctx, createUserWithPassword,
+		arg.Email,
+		arg.Name,
+		arg.Role,
+		arg.PasswordHash,
+		arg.Confirmed,
+		arg.ConfirmCode,
+	)
+	var i CreateUserWithPasswordRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.PasswordHash,
+		&i.Confirmed,
+		&i.ConfirmCode,
+		&i.Disabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, role
+SELECT id, email, name, role, disabled
 FROM users
 WHERE id = $1
 `
 
-func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
+type GetUserRow struct {
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	Disabled bool   `json:"disabled"`
+}
+
+func (q *Queries) GetUser(ctx context.Context, id int64) (GetUserRow, error) {
 	row := q.db.QueryRow(ctx, getUser, id)
-	var i User
+	var i GetUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
 		&i.Role,
+		&i.Disabled,
+	)
+	return i, err
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, email, name, role, password_hash, confirmed, confirm_code, disabled, created_at, updated_at
+FROM users
+WHERE lower(email) = lower($1)
+`
+
+type GetUserByEmailRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	PasswordHash string             `json:"password_hash"`
+	Confirmed    bool               `json:"confirmed"`
+	ConfirmCode  string             `json:"confirm_code"`
+	Disabled     bool               `json:"disabled"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error) {
+	row := q.db.QueryRow(ctx, getUserByEmail, lower)
+	var i GetUserByEmailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.PasswordHash,
+		&i.Confirmed,
+		&i.ConfirmCode,
+		&i.Disabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, role
+SELECT id, email, name, role, disabled
 FROM users
 ORDER BY id
 `
 
-func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
+type ListUsersRow struct {
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	Disabled bool   `json:"disabled"`
+}
+
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 	rows, err := q.db.Query(ctx, listUsers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []User{}
+	items := []ListUsersRow{}
 	for rows.Next() {
-		var i User
+		var i ListUsersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Email,
 			&i.Name,
 			&i.Role,
+			&i.Disabled,
 		); err != nil {
 			return nil, err
 		}
@@ -74,4 +233,70 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const userByIDWithAuth = `-- name: UserByIDWithAuth :one
+SELECT id, email, name, role, password_hash, confirmed, confirm_code, disabled, created_at, updated_at
+FROM users
+WHERE id = $1
+`
+
+type UserByIDWithAuthRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	PasswordHash string             `json:"password_hash"`
+	Confirmed    bool               `json:"confirmed"`
+	ConfirmCode  string             `json:"confirm_code"`
+	Disabled     bool               `json:"disabled"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UserByIDWithAuth(ctx context.Context, id int64) (UserByIDWithAuthRow, error) {
+	row := q.db.QueryRow(ctx, userByIDWithAuth, id)
+	var i UserByIDWithAuthRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.PasswordHash,
+		&i.Confirmed,
+		&i.ConfirmCode,
+		&i.Disabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const userUpdateDisabled = `-- name: UserUpdateDisabled :one
+UPDATE users
+SET disabled = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, email, name, role, disabled
+`
+
+type UserUpdateDisabledRow struct {
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	Disabled bool   `json:"disabled"`
+}
+
+func (q *Queries) UserUpdateDisabled(ctx context.Context, iD int64, disabled bool) (UserUpdateDisabledRow, error) {
+	row := q.db.QueryRow(ctx, userUpdateDisabled, iD, disabled)
+	var i UserUpdateDisabledRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.Disabled,
+	)
+	return i, err
 }

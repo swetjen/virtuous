@@ -22,8 +22,11 @@ ADMIN_TABLE = $(shell printf '%s' "goose_db_version_admin_$(PG_DB)" | tr -c 'A-Z
 ADMIN_TEMPLATE := db/sql/admin_schemas/202602160001_reset_and_provision.sql.tmpl
 ADMIN_RENDERED_DIR := .generated/admin
 ADMIN_RENDERED_MIGRATION := $(ADMIN_RENDERED_DIR)/202602160001_reset_and_provision.sql
+WEB_DIR := frontend-web
+WEB_DEPS_STAMP := $(WEB_DIR)/node_modules/.bun-install-stamp
+RUN_WATCH_REGEX := (^|/)(cmd|config|db|deps|handlers|middleware|frontend-web/src)/.*\.(go|html|css|js|ts|tsx)$$|(^|/)(router|frontend_embed)\.go$$|(^|/)client_gen\.go$$|(^|/)\.env$$|(^|/)Makefile$$|(^|/)frontend-web/(package\.json|bun\.lock|tailwind\.config\.js|postcss\.config\.js)$$
 
-.PHONY: test deps gen gen-sdk gen-web gen-all run agent-run init-db up down clean-admin-render
+.PHONY: test deps gen gen-sdk web gen-web gen-all serve start run agent-run init-db up down clean-admin-render
 
 $(ADMIN_RENDERED_MIGRATION): $(ADMIN_TEMPLATE)
 	@mkdir -p $(ADMIN_RENDERED_DIR)
@@ -67,18 +70,32 @@ gen-sdk:
 	@echo "Generating SDKs"
 	go run ./cmd/clients
 
-gen-web:
+$(WEB_DEPS_STAMP): $(WEB_DIR)/package.json $(WEB_DIR)/bun.lock
+	@echo "Installing frontend dependencies"
+	@cd $(WEB_DIR) && bun install
+	@mkdir -p $(WEB_DIR)/node_modules
+	@touch $(WEB_DEPS_STAMP)
+
+web: $(WEB_DEPS_STAMP)
 	@echo "Building frontend assets"
-	cd frontend-web && bun install && bun run build
+	@cd $(WEB_DIR) && bun run build
+
+gen-web: web
 
 gen-all:
 	@echo "Generating sqlc output, SDKs, and frontend assets"
 	make gen
 	make gen-sdk
-	make gen-web
+	make web
+
+serve:
+	go run ./cmd/api/main.go
+
+start: web
+	@$(MAKE) --no-print-directory run
 
 run:
-	reflex -r '(^|/)(cmd|config|db|deps|handlers|middleware|frontend-web/src)/.*\.(go|html|js|ts|tsx)$$|(^|/)router\.go$$|(^|/)frontend_embed\.go$$|(^|/)client_gen\.go$$|(^|/)\.env$$' -s -- sh -c "go run ./cmd/api/main.go"
+	reflex -r '$(RUN_WATCH_REGEX)' -s -- sh -c "make --no-print-directory web && go run ./cmd/api/main.go"
 
 agent-run:
-	@bash -c ': > ERRORS; reflex -r '\''(^|/)(cmd|config|db|deps|handlers|middleware|frontend-web/src)/.*\.(go|html|js|ts|tsx)$$|(^|/)router\.go$$|(^|/)frontend_embed\.go$$|(^|/)client_gen\.go$$|(^|/)\.env$$'\'' -s -- sh -c "go run ./cmd/api/main.go" 2>&1 | tee ERRORS'
+	@bash -c ': > ERRORS; reflex -r '\''$(RUN_WATCH_REGEX)'\'' -s -- sh -c "make --no-print-directory web && go run ./cmd/api/main.go" 2>&1 | tee ERRORS'

@@ -30,9 +30,9 @@ func NewRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) http.
 
 func BuildRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) *rpc.Router {
 	slog.Info("byodb: building rpc router", "prefix", "/rpc")
-	application := deps.New(cfg, queries, pool)
-	handlerSet := handlers.New(application)
-	adminGuard := middleware.AdminBearerGuard{Token: cfg.AdminBearerToken}
+	authService := middleware.NewAuthService(cfg, queries)
+	deps := deps.New(cfg, queries, pool, authService)
+	handlerSet := handlers.New(deps)
 
 	routerOptions := []rpc.RouterOption{
 		rpc.WithPrefix("/rpc"),
@@ -49,9 +49,15 @@ func BuildRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) *rp
 	router.HandleRPC(handlerSet.States.StateByCode)
 	router.HandleRPC(handlerSet.States.StateCreate)
 
-	router.HandleRPC(handlerSet.Admin.UsersGetMany, adminGuard)
-	router.HandleRPC(handlerSet.Admin.UserByID, adminGuard)
-	router.HandleRPC(handlerSet.Admin.UserCreate, adminGuard)
+	router.HandleRPC(handlerSet.Users.UserRegister)
+	router.HandleRPC(handlerSet.Users.UserConfirm)
+	router.HandleRPC(handlerSet.Users.UserLogin)
+	router.HandleRPC(handlerSet.Users.UserMe, authService.HasSignedIn())
+
+	router.HandleRPC(handlerSet.Admin.UsersGetMany, authService.HasSignedInAdmin())
+	router.HandleRPC(handlerSet.Admin.UserByID, authService.HasSignedInAdmin())
+	router.HandleRPC(handlerSet.Admin.UserCreate, authService.HasSignedInAdmin())
+	router.HandleRPC(handlerSet.Admin.UserDisable, authService.HasSignedInAdmin())
 
 	if err := WriteFrontendClient(router); err != nil {
 		slog.Error("byodb: failed to write js client", "err", err)

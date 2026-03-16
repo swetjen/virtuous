@@ -4,6 +4,10 @@
 
 package db
 
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
 type State struct {
 	ID   int64  `json:"id"`
 	Code string `json:"code"`
@@ -11,8 +15,14 @@ type State struct {
 }
 
 type User struct {
-	ID    int64  `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Role  string `json:"role"`
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Role         string             `json:"role"`
+	PasswordHash string             `json:"password_hash"`
+	Confirmed    bool               `json:"confirmed"`
+	ConfirmCode  string             `json:"confirm_code"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	Disabled     bool               `json:"disabled"`
 }

@@ -31,9 +31,11 @@ make agent-run
 
 ## Makefile
 
-- `make run` starts the dev server with `reflex` for hot reloads.
+- `make web` installs frontend deps (once) and builds embedded frontend assets.
+- `make start` builds frontend assets, then starts the hot-reload dev server.
+- `make run` starts the hot-reload server and rebuilds frontend assets on each file-change cycle.
 - `make agent-run` starts the dev server and captures all output into `ERRORS`.
-  It watches server code, `frontend-web/src`, and `.env` (but ignores generated client output to avoid restart loops).
+  It watches `*.go`, `*.css`, `*.js`, `*.ts`, and `*.tsx` files, excluding `frontend-web/dist` and `frontend-web/node_modules`.
 - `make test` runs tests.
 - `make deps` installs local tooling dependencies.
 - `make gen` regenerates sqlc output from `db/sql/*`.
@@ -77,7 +79,8 @@ only fill missing environment variables, so shell exports still win.
 In a real app, avoid committing secrets; this template keeps `.env` in-repo for convenience.
 
 - `PORT` (default `8000`)
-- `ADMIN_BEARER_TOKEN` (default `dev-admin-token`)
+- `AUTH_TOKEN_SECRET` (default `dev-auth-secret`)
+- `AUTH_TOKEN_TTL_SECONDS` (default `300`)
 - `CORS_ALLOW_ORIGINS` (default `*`, comma-separated)
 - `DATABASE_URL` (runtime PostgreSQL DSN used by API)
 - `PG_HOST`, `PG_PORT`, `PG_DB`, `PG_USER`, `PG_PASS` (Make/Goose app connection)
@@ -87,10 +90,15 @@ In a real app, avoid committing secrets; this template keeps `.env` in-repo for 
 
 Admin users:
 ```bash
-curl -H "Authorization: Bearer dev-admin-token" \\
+curl -H "Authorization: Bearer <token_from_user_login>" \\
   -H "Content-Type: application/json" \\
   -d '{}' \\
   http://localhost:8000/rpc/admin/users-get-many
+
+curl -H "Authorization: Bearer <token_from_user_login>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"id":"2"}' \\
+  http://localhost:8000/rpc/admin/user-disable
 ```
 
 States:
@@ -99,6 +107,24 @@ curl -H "Content-Type: application/json" \\
   -d '{}' \\
   http://localhost:8000/rpc/states/states-get-many
 ```
+
+Auth register/confirm/login:
+```bash
+curl -H "Content-Type: application/json" \\
+  -d '{"email":"new@virtuous.dev","name":"New User","password":"user123"}' \\
+  http://localhost:8000/rpc/users/user-register
+
+curl -H "Content-Type: application/json" \\
+  -d '{"code":"<confirmation_code_from_register>"}' \\
+  http://localhost:8000/rpc/users/user-confirm
+
+curl -H "Content-Type: application/json" \\
+  -d '{"email":"new@virtuous.dev","password":"user123"}' \\
+  http://localhost:8000/rpc/users/user-login
+```
+
+For admin routes, log in as an admin account and pass the returned JWT as `Authorization: Bearer <token>`.
+Guards also re-check the user role from the database on each request, so role changes are effective immediately.
 
 Static landing page:
 - `http://localhost:8000/`

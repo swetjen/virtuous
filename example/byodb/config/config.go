@@ -3,23 +3,28 @@ package config
 import (
 	"bufio"
 	"os"
+	"strconv"
 	"strings"
 )
 
+const defaultAuthTokenTTLSeconds = 5 * 60
+
 type Config struct {
-	Port             string
-	AdminBearerToken string
-	AllowedOrigins   []string
-	DatabaseURL      string
+	Port            string
+	AuthTokenSecret string
+	AuthTokenTTL    int
+	AllowedOrigins  []string
+	DatabaseURL     string
 }
 
 func Load() Config {
 	loadDotEnv(".env")
 	return Config{
-		Port:             getEnv("PORT", "8000"),
-		AdminBearerToken: getEnv("ADMIN_BEARER_TOKEN", "dev-admin-token"),
-		AllowedOrigins:   splitEnvList("CORS_ALLOW_ORIGINS", []string{"*"}),
-		DatabaseURL:      strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		Port:            getEnv("PORT", "8000"),
+		AuthTokenSecret: getEnv("AUTH_TOKEN_SECRET", "dev-auth-secret"),
+		AuthTokenTTL:    getEnvInt("AUTH_TOKEN_TTL_SECONDS", defaultAuthTokenTTLSeconds),
+		AllowedOrigins:  splitEnvList("CORS_ALLOW_ORIGINS", []string{"*"}),
+		DatabaseURL:     strings.TrimSpace(os.Getenv("DATABASE_URL")),
 	}
 }
 
@@ -49,6 +54,18 @@ func splitEnvList(key string, fallback []string) []string {
 		return fallback
 	}
 	return out
+}
+
+func getEnvInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func loadDotEnv(path string) {

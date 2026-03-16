@@ -23,4 +23,6 @@ Primary index for byodb agents. Start here.
 - Never edit `frontend-web/api/client.gen.js` by hand (generated).
 - Do not modify files under `frontend-web/api/` manually (generated).
 - Use the generated JS client in the frontend whenever possible.
+- Keep frontend route declarations centralized in `frontend-web/src/App.tsx`.
+- Use `frontend-web/src/components/` for shared UI/layout/nav pieces and `frontend-web/src/pages/` for route pages.
 - Before release, run `make gen-all`.

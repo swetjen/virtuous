@@ -26,9 +26,17 @@ func main() {
 
 func RunServer() (*http.Server, func(), error) {
 	cfg := config.Load()
-	queries, pool, err := db.Open(context.Background(), cfg.DatabaseURL)
+	ctx := context.Background()
+	queries, pool, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, nil, err
+	}
+	seeded, err := db.SeedFixtureUsers(ctx, queries)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, fixture := range seeded {
+		log.Printf("fixture user seeded: email=%s role=%s password=%s", fixture.Email, fixture.Role, fixture.Password)
 	}
 	cleanup := func() {
 		pool.Close()

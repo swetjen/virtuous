@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.28
+
+- Expand the `example/byodb` starter into a role-aware app shell with centralized declarative routing, guest/signed-in/admin layouts, and route guards.
+- Add backend auth flows for register/confirm/login/me plus JWT session middleware patterned around a router-instanced auth dependency.
+- Harden byodb auth defaults with short-lived JWT sessions (`AUTH_TOKEN_TTL_SECONDS`, default `300`) and disabled-account enforcement on login and guarded requests.
+- Add admin user-management improvements in byodb: create-user with explicit/generated passwords and a user disable action reflected directly in UI state.
+- Simplify starter console surfaces by removing default signed-in product placeholders (API Keys/Endpoints/Rules/Traffic, Teams/Console) and tightening dashboard/nav defaults.
+- Improve embedded SPA deep-link behavior in byodb so refreshes on routes like `/login` resolve correctly without redirecting to `/`.
+- Seed first-run byodb fixture users from the `db` package when no users exist, generating random 12-character passwords and logging credentials at startup.
+- Update integrated docs shell behavior to remove the top summary tiles from the `Database` module while preserving observability-focused tiles.
+
 ## 0.0.27
 
 - Add explicit docs module toggles (`api`, `database`, `observability`) for both RPC and `httpapi` via `WithModules(...)`.
