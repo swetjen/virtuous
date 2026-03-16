@@ -72,7 +72,8 @@ When the user says `run release playbook`, interpret it as this exact sequence:
 4. Perform housekeeping: clean leftover artifacts, remove dead code, and do general release cleanup.
 5. Commit all release-related changes.
 6. Merge to `main`.
-7. Push remote (`main` and associated release/tag refs as applicable).
+7. Push remote `main`.
+8. From a clean tree on `main`, run `make publish` to create/push tag `v$(cat VERSION)` and create the matching GitHub release from `CHANGELOG.md`.
 
 ## Extension Points
 - Router-level type overrides via `SetTypeOverrides`.

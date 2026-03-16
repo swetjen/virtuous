@@ -10,6 +10,7 @@
 - Improve embedded SPA deep-link behavior in byodb so refreshes on routes like `/login` resolve correctly without redirecting to `/`.
 - Seed first-run byodb fixture users from the `db` package when no users exist, generating random 12-character passwords and logging credentials at startup.
 - Update integrated docs shell behavior to remove the top summary tiles from the `Database` module while preserving observability-focused tiles.
+- Tighten release agent instructions so the release playbook explicitly runs `make publish` after pushing `main`.
 
 ## 0.0.27
 
