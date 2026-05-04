@@ -209,7 +209,7 @@ This mounts docs at `/admin/docs/`, with OpenAPI at `/admin/docs/openapi.json`.
 
 #### 4) OR auth semantics (accept either of two schemes)
 
-When a route should accept either credential type, express that logic in one composite guard and attach it once.
+For RPC routes that accept either credential type, express that logic in one composite guard and attach it once. For legacy `httpapi` routes, use `httpapi.AuthAny(...)`.
 
 ```go
 type bearerOrAPIKeyGuard struct {
@@ -362,13 +362,13 @@ Use this when:
 ### Quick start
 
 Method-prefixed patterns (`GET /path`) are required for docs and client generation.
-Typed `httpapi` routes are JSON-focused for generated docs/clients. `string` and `[]byte` responses are supported directly, and `HandlerMeta.Responses` can declare custom media types and multiple statuses.
+Typed `httpapi` routes default to JSON, while explicit metadata covers compatibility needs such as typed path/query params, form request bodies, custom response media types, multiple statuses, and OR auth.
 
 ```go
 router := httpapi.NewRouter()
 router.HandleTyped(
 	"GET /api/v1/lookup/states/{code}",
-	httpapi.WrapFunc(StateByCode, nil, StateResponse{}, httpapi.HandlerMeta{
+	httpapi.WrapFunc(StateByCode, GetStateRequest{}, StateResponse{}, httpapi.HandlerMeta{
 		Service: "States",
 		Method:  "GetByCode",
 	}),
@@ -507,36 +507,59 @@ This mounts docs at `/admin/docs/`, with OpenAPI at `/admin/docs/openapi.json`.
 
 #### 4) OR auth semantics (accept either of two schemes)
 
-When a route should accept either credential type, express that logic in one composite guard and attach it once.
+Normal guard lists mean every guard runs, so they model AND auth. When a route should accept either credential type, wrap the guards with `httpapi.AuthAny(...)`.
 
 ```go
-type bearerOrAPIKeyGuard struct {
-	bearer bearerGuard
-	apiKey apiKeyGuard
-}
-
-func (g bearerOrAPIKeyGuard) Spec() guard.Spec {
-	return guard.Spec{
-		Name:  "BearerOrApiKey",
-		In:    "header",
-		Param: "Authorization",
-	}
-}
-
-func (g bearerOrAPIKeyGuard) Middleware() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if g.bearer.authenticate(r) || g.apiKey.authenticate(r) {
-				next.ServeHTTP(w, r)
-				return
-			}
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-		})
-	}
-}
+router.HandleTyped(
+	"GET /api/v1/secure/report",
+	httpapi.WrapFunc(GetSecureReport, nil, ReportResponse{}, httpapi.HandlerMeta{
+		Service: "Reports",
+		Method:  "GetSecure",
+	}),
+	httpapi.AuthAny(bearerGuard{}, apiKeyGuard{}),
+)
 ```
 
-#### 5) Optional request body contract
+#### 5) Typed path/query params
+
+Use `path` and `query` tags on request structs to preserve scalar parameter types in OpenAPI and generated clients. Handlers still parse runtime values from `*http.Request`.
+
+```go
+type GetStateRequest struct {
+	ID      int64 `path:"id" doc:"Numeric state ID."`
+	Verbose bool  `query:"verbose,omitempty" doc:"Include extra fields."`
+}
+
+router.HandleTyped(
+	"GET /api/v1/states/{id}",
+	httpapi.WrapFunc(StateByID, GetStateRequest{}, StateResponse{}, httpapi.HandlerMeta{
+		Service: "States",
+		Method:  "GetByID",
+	}),
+)
+```
+
+#### 6) Form request body contract
+
+Use `HandlerMeta.RequestBody` when the request media type is not JSON. `httpapi.FormBody(...)` emits `application/x-www-form-urlencoded` and generated clients encode `form` tag wire names.
+
+```go
+type FacebookComplianceRequest struct {
+	Mode        string `json:"mode" form:"hub.mode"`
+	VerifyToken string `json:"verifyToken" form:"hub.verify_token"`
+}
+
+router.HandleTyped(
+	"POST /facebook/compliance",
+	httpapi.WrapFunc(FacebookCompliance, nil, httpapi.NoResponse200{}, httpapi.HandlerMeta{
+		Service:     "Callbacks",
+		Method:      "FacebookCompliance",
+		RequestBody: httpapi.FormBody(FacebookComplianceRequest{}),
+	}),
+)
+```
+
+#### 7) Optional request body contract
 
 Request bodies are required by default when you pass a typed request.
 Use `httpapi.Optional` when a route should accept either no body or a JSON body.
@@ -552,7 +575,7 @@ router.HandleTyped(
 )
 ```
 
-#### 6) Explicit response specs
+#### 8) Explicit response specs
 
 Use `HandlerMeta.Responses` when a route needs multiple statuses or a custom response media type.
 

@@ -108,11 +108,13 @@ Use `httpapi` when you need to retain classic `net/http` handlers or preserve an
 
 Notes:
 
-- Typed `httpapi` routes are JSON-focused for generated OpenAPI and clients.
+- Typed `httpapi` routes default to JSON, with explicit metadata for typed path/query params, form request bodies, custom response media types, and multi-status responses.
 - Typed `string`/`[]byte` responses map to `text/plain`/`application/octet-stream`.
 - Use `httpapi.HandlerMeta.Responses` for multi-status routes or custom response media types.
+- Use `httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` request bodies.
+- Use `path`/`query` tags to preserve scalar parameter types in generated OpenAPI and clients.
 - Use `httpapi.Optional[Req]()` when a typed route should accept an optional JSON body.
-- Untyped routes can still be served for other non-JSON endpoints during migration.
+- Untyped routes can still be served during migration, but they are skipped in generated OpenAPI and clients.
 - Runtime route registration is source of truth if legacy annotations drift.
 
 Example:
@@ -187,7 +189,10 @@ You are implementing a Virtuous RPC API.
 Use the canonical Swaggo migration prompt in docs/tutorials/migrate-swaggo.md.
 - Target Virtuous version: read `VERSION` in the repo and pin it in the output.
 - Default to httpapi for Swaggo routes.
+- Use exported OpenAPI as the migration reference when available; do not make Swaggo comments the final source of truth.
 - Use rpc only for phase-2 moves.
+- Preserve scalar path/query contracts with httpapi path/query tags.
+- Use httpapi.AuthAny(...) for OR auth and httpapi.FormBody(...) for form request bodies.
 - Validate against the migration Definition of Done in that guide.
 ```
 

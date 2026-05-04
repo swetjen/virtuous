@@ -45,7 +45,7 @@ func buildRouter() *httpapi.Router {
 
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
-		httpapi.WrapFunc(StateByCode, nil, StateResponse{}, httpapi.HandlerMeta{
+		httpapi.WrapFunc(StateByCode, StateLookupRequest{}, StateResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",
@@ -55,13 +55,13 @@ func buildRouter() *httpapi.Router {
 
 	router.HandleTyped(
 		"GET /api/v1/secure/states/{code}",
-		httpapi.WrapFunc(StateByCode, nil, StateResponse{}, httpapi.HandlerMeta{
+		httpapi.WrapFunc(StateByCode, StateLookupRequest{}, StateResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCodeSecure",
-			Summary: "Get state by code (bearer token required)",
+			Summary: "Get state by code (bearer token or API key required)",
 			Tags:    []string{"States"},
 		}),
-		bearerGuard{},
+		httpapi.AuthAny(bearerGuard{}, apiKeyGuard{}),
 	)
 
 	router.HandleTyped(
@@ -71,6 +71,17 @@ func buildRouter() *httpapi.Router {
 			Method:  "Create",
 			Summary: "Create a new state",
 			Tags:    []string{"States"},
+		}),
+	)
+
+	router.HandleTyped(
+		"POST /api/v1/compliance/facebook",
+		httpapi.WrapFunc(ComplianceCallback, nil, httpapi.NoResponse200{}, httpapi.HandlerMeta{
+			Service:     "Callbacks",
+			Method:      "FacebookCompliance",
+			Summary:     "Facebook compliance callback",
+			Tags:        []string{"Callbacks"},
+			RequestBody: httpapi.FormBody(ComplianceCallbackRequest{}),
 		}),
 	)
 

@@ -31,9 +31,11 @@ You are implementing a Virtuous RPC API.
 Migrate Swaggo routes to Virtuous using the canonical guide at docs/tutorials/migrate-swaggo.md.
 - Target Virtuous version: read `VERSION` in the repo and pin it in the output.
 - For Swaggo migrations, use httpapi first.
+- Use the exported OpenAPI contract as the migration reference; do not depend on Swaggo comments as the final source of truth.
 - Use rpc only for explicit phase-2 moves.
-- Move field docs to doc struct tags.
-- Map security annotations to guards.
+- Move field docs to doc struct tags, and preserve scalar path/query types with path/query tags.
+- Map AND security to normal guard lists; map OR security to httpapi.AuthAny(...).
+- Use httpapi.FormBody(...) for application/x-www-form-urlencoded request bodies.
 - Ensure routes appear in ServeAllDocs output.
 ```
 
@@ -48,6 +50,7 @@ That tutorial is the canonical transformation guide, including mapping rules, mi
 ## Documentation hints
 
 - Use `doc:"..."` tags on struct fields to populate OpenAPI and client docs.
+- For httpapi compatibility routes, use `path:"..."`, `query:"..."`, `form:"..."`, `httpapi.FormBody(...)`, and `httpapi.AuthAny(...)` where the source OpenAPI contract requires them.
 - Keep section names consistent across documents for reliable agent parsing.
 - During migrations, treat runtime router registration as source of truth over stale annotations.
 - Use `WithModules(...)` when agent output must limit docs surface (`api`, `database`, `observability`).

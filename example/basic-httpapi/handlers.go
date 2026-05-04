@@ -23,9 +23,19 @@ type StateResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
+type StateLookupRequest struct {
+	Code    string `path:"code" doc:"Two-letter state code."`
+	Verbose bool   `query:"verbose,omitempty" doc:"Include optional lookup details."`
+}
+
 type CreateStateRequest struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
+}
+
+type ComplianceCallbackRequest struct {
+	Mode        string `json:"mode" form:"hub.mode" doc:"Callback mode."`
+	VerifyToken string `json:"verifyToken" form:"hub.verify_token" doc:"Verification token."`
 }
 
 func StatesGetMany(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +98,18 @@ func StateCreate(w http.ResponseWriter, r *http.Request) {
 	stateData = append(stateData, state)
 	response.State = state
 	httpapi.Encode(w, r, http.StatusOK, response)
+}
+
+func ComplianceCallback(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	if r.Form.Get("hub.mode") == "" || r.Form.Get("hub.verify_token") == "" {
+		http.Error(w, "missing form fields", http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 var nextStateID int32 = 3

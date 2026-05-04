@@ -44,6 +44,46 @@ func TestGeneratedOutputs(t *testing.T) {
 	if _, ok := doc["paths"]; !ok {
 		t.Fatalf("openapi missing paths field")
 	}
+	paths, ok := doc["paths"].(map[string]any)
+	if !ok {
+		t.Fatalf("openapi paths not an object")
+	}
+	statePath := paths["/api/v1/lookup/states/{code}"].(map[string]any)
+	stateGet := statePath["get"].(map[string]any)
+	params := stateGet["parameters"].([]any)
+	if !hasParam(params, "path", "code", "string") {
+		t.Fatalf("openapi missing typed code path param")
+	}
+	if !hasParam(params, "query", "verbose", "boolean") {
+		t.Fatalf("openapi missing typed verbose query param")
+	}
+
+	securePath := paths["/api/v1/secure/states/{code}"].(map[string]any)
+	secureGet := securePath["get"].(map[string]any)
+	security := secureGet["security"].([]any)
+	if len(security) != 2 {
+		t.Fatalf("secure route security alternatives = %d, want 2", len(security))
+	}
+
+	callbackPath := paths["/api/v1/compliance/facebook"].(map[string]any)
+	callbackPost := callbackPath["post"].(map[string]any)
+	requestBody := callbackPost["requestBody"].(map[string]any)
+	content := requestBody["content"].(map[string]any)
+	if _, ok := content["application/x-www-form-urlencoded"]; !ok {
+		t.Fatalf("callback route missing form request body")
+	}
+}
+
+func hasParam(params []any, in, name, typ string) bool {
+	for _, item := range params {
+		param, ok := item.(map[string]any)
+		if !ok || param["in"] != in || param["name"] != name {
+			continue
+		}
+		schema, ok := param["schema"].(map[string]any)
+		return ok && schema["type"] == typ
+	}
+	return false
 }
 
 func assertNonEmptyFile(t *testing.T, path string) {

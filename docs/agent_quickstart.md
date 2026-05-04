@@ -87,11 +87,14 @@ func (bearerGuard) Middleware() func(http.Handler) http.Handler {
 - Method-prefixed patterns like `GET /path` are required for docs/clients.
 - Use `Wrap` or `WrapFunc` so request/response types attach to handlers.
 - `HandlerMeta.Service` and `HandlerMeta.Method` control client method names.
-- Typed `httpapi` docs/clients are JSON-focused.
+- Typed `httpapi` docs/clients default to JSON, with explicit metadata for compatibility contracts.
+- Use `path`/`query` tags for typed params.
+- Use `httpapi.FormBody(Req{})` for form request bodies.
+- Use `httpapi.AuthAny(...)` for OR auth.
 - Typed `string`/`[]byte` responses map to `text/plain`/`application/octet-stream`.
 - Use `httpapi.HandlerMeta.Responses` for multi-status routes or custom response media types.
 - Use `httpapi.Optional[Req]()` for optional JSON request bodies on typed routes.
-- Keep other non-JSON routes untyped (`Handle`) during migration.
+- Keep runtime-only routes untyped (`Handle`) during migration when they should be skipped from docs/clients.
 - Router registration is source of truth when legacy annotations drift.
 
 ## Query params (legacy)

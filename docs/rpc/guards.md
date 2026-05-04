@@ -10,6 +10,8 @@ Guards provide middleware and auth metadata. They are used to secure handlers an
 - OpenAPI semantics: guard specs become security requirements for each guarded operation.
 - Generated client semantics: current JS/TS/PY clients expose one auth input derived from the first attached guard.
 
+These notes are RPC-specific. For legacy `httpapi` routes, use normal guard lists for AND auth and `httpapi.AuthAny(...)` when a route accepts one of several credentials.
+
 ## Interface
 
 ```go
