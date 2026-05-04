@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.29
+
+- Add richer `httpapi` operation metadata for typed path/query/header/cookie params, explicit request body media types, and explicit security alternatives.
+- Add `httpapi.AuthAny(...)` plus `SecurityAny`/`SecurityAll` helpers so OR auth can be modeled separately from normal AND guard composition in OpenAPI and generated clients.
+- Add typed `path` parameter inference, typed query schemas, form-urlencoded request body support, and OpenAPI schema tags for `format`, `default`, `example`, `minimum`, and `maximum`.
+- Add focused unit coverage for `httpapi` metadata helpers, path params, OR auth runtime behavior, client-spec mapping, and schema metadata tags.
+- Refresh migration docs to drop stale Swaggo gap claims and point direct Swaggo migrations at exported OpenAPI contracts plus explicit Virtuous route registration.
+
 ## 0.0.28
 
 - Expand the `example/byodb` starter into a role-aware app shell with centralized declarative routing, guest/signed-in/admin layouts, and route guards.

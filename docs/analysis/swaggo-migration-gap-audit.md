@@ -19,8 +19,8 @@ This file is intended as a working draft for follow-up prompts.
 | 2 | Non-JSON routes (`image/png`, `text/html`, files) | Resolved + Knowledge | Typed handlers support `string`, `[]byte`, and custom text/byte media types via `httpapi.HandlerMeta.Responses`; runtime headers remain handler-owned. |
 | 3 | Optional request body (`@Param body ... false`) | Resolved + Knowledge | Supported via `httpapi.Optional[Req]()`; docs/examples need to point migration users to this marker. |
 | 4 | Mixed body+query with tag conflicts | Knowledge + Constraint | Supported when query/body use different fields. Same field cannot have both `query` and `json` tags by design. Needs explicit modeling guidance in docs. |
-| 5 | Two security schemes (OR/AND + generated client semantics) | Capability + Knowledge | Runtime middleware composes all guards; OpenAPI encodes multiple security entries; generated clients currently use only first guard auth parameter. Needs behavior clarification and eventual feature work. |
-| 6 | Path/query type fidelity (`int/bool` vs string) | Capability + Knowledge | OpenAPI and generated clients model path/query values as strings during migration path. Query string behavior is partially documented; path typing behavior is not explicit. |
+| 5 | Two security schemes (OR/AND + generated client semantics) | Resolved + Knowledge | Normal guards compose as AND; `httpapi.AuthAny(...)` models OR runtime semantics and emits matching OpenAPI/client alternatives. |
+| 6 | Path/query type fidelity (`int/bool` vs string) | Resolved + Knowledge | `query` and `path` struct tags preserve scalar Go types in OpenAPI and generated clients. |
 | 7 | Handler factory methods (`func(...) http.HandlerFunc`) | Knowledge | Already supported through `WrapFunc` / `Wrap` because factory output is still a standard handler function. Needs explicit migration example. |
 | 8 | Annotation vs router drift: source of truth | Knowledge | Runtime router registration is source of truth. Migration docs should explicitly define conflict policy. |
 | 9 | Trailing slash normalization/preservation | Knowledge | Current docs do not define slash policy clearly for migration. Needs explicit guidance and examples. |
@@ -50,23 +50,9 @@ This file is intended as a working draft for follow-up prompts.
 
 ## Capability Gaps Ranked by Impact
 
-### High / Big Impact
+No high-impact capability gaps remain from this feedback set after the `httpapi` metadata, typed param, request media, and auth semantics work.
 
-1. Dual/multi-security scheme behavior consistency across runtime, OpenAPI, and generated clients (Q5)
-
-Reasoning: these directly affect large Swaggo migration cohorts and can block correctness at contract level.
-
-### Medium Impact
-
-2. Path/query typed fidelity beyond "string" in OpenAPI/client generation (Q6)
-
-Reasoning: important for contract precision and strict consumers, but many teams can migrate with documented constraints.
-
-### Low Impact
-
-3. (No additional pure capability gaps beyond Q5/Q6 from this feedback set)
-
-Reasoning: remaining items are primarily documentation/policy clarity problems rather than missing runtime/product capability.
+Remaining work is onboarding/product workflow rather than Swaggo comment compatibility: use the exported OpenAPI contract as the migration reference and register Virtuous routes explicitly.
 
 ## Working Notes
 

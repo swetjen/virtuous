@@ -10,7 +10,12 @@ import (
 type Guard = httpapi.Guard
 type GuardSpec = httpapi.GuardSpec
 type HandlerMeta = httpapi.HandlerMeta
+type ParamSpec = httpapi.ParamSpec
+type RequestBodySpec = httpapi.RequestBodySpec
+type RequestContentSpec = httpapi.RequestContentSpec
 type ResponseSpec = httpapi.ResponseSpec
+type SecuritySpec = httpapi.SecuritySpec
+type SecurityRequirement = httpapi.SecurityRequirement
 type TypedHandler = httpapi.TypedHandler
 type TypedHandlerFunc = httpapi.TypedHandlerFunc
 type Route = httpapi.Route
@@ -43,6 +48,14 @@ const (
 	ModuleAPI           = httpapi.ModuleAPI
 	ModuleDatabase      = httpapi.ModuleDatabase
 	ModuleObservability = httpapi.ModuleObservability
+
+	ParamInPath   = httpapi.ParamInPath
+	ParamInQuery  = httpapi.ParamInQuery
+	ParamInHeader = httpapi.ParamInHeader
+	ParamInCookie = httpapi.ParamInCookie
+
+	MediaTypeJSON           = httpapi.MediaTypeJSON
+	MediaTypeFormURLEncoded = httpapi.MediaTypeFormURLEncoded
 )
 
 // Function shims for backwards compatibility.
@@ -60,6 +73,42 @@ func WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp an
 
 func Optional[T any](req ...T) any {
 	return httpapi.Optional(req...)
+}
+
+func PathParam(name string, typ any) ParamSpec {
+	return httpapi.PathParam(name, typ)
+}
+
+func QueryParam(name string, typ any) ParamSpec {
+	return httpapi.QueryParam(name, typ)
+}
+
+func HeaderParam(name string, typ any) ParamSpec {
+	return httpapi.HeaderParam(name, typ)
+}
+
+func CookieParam(name string, typ any) ParamSpec {
+	return httpapi.CookieParam(name, typ)
+}
+
+func JSONBody(body any) *RequestBodySpec {
+	return httpapi.JSONBody(body)
+}
+
+func FormBody(body any) *RequestBodySpec {
+	return httpapi.FormBody(body)
+}
+
+func SecurityAny(guards ...GuardSpec) SecuritySpec {
+	return httpapi.SecurityAny(guards...)
+}
+
+func SecurityAll(guards ...GuardSpec) SecuritySpec {
+	return httpapi.SecurityAll(guards...)
+}
+
+func AuthAny(guards ...Guard) Guard {
+	return httpapi.AuthAny(guards...)
 }
 
 func Encode(w http.ResponseWriter, r *http.Request, status int, v any) {

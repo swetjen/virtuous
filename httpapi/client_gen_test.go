@@ -121,9 +121,24 @@ func (responseSpecPointerClientHandler) Metadata() HandlerMeta {
 	}
 }
 
+type secureClientHandler struct{}
+
+func (secureClientHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (secureClientHandler) RequestType() any                                 { return nil }
+func (secureClientHandler) ResponseType() any                                { return NoResponse200{} }
+func (secureClientHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Secure", Method: "Fetch"}
+}
+
 func TestGeneratedClientsAreValid(t *testing.T) {
 	router := NewRouter()
 	router.HandleTyped("GET /api/v1/lookup/states/{code}", testHandler{})
+	router.HandleTyped("GET /users/{id}", typedParamHandler{})
+	router.HandleTyped("POST /facebook/compliance", formBodyHandler{})
+	router.HandleTyped("GET /secure", secureClientHandler{}, AuthAny(
+		testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"},
+		testGuard{name: "TokenAuth", in: "header", param: "Authorization"},
+	))
 
 	js := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientJS(buf) })
 	ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
@@ -163,12 +178,33 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if !strings.Contains(tsText, "query?: {") || !strings.Contains(tsText, "q?: string") || !strings.Contains(tsText, "id: string[]") {
 		t.Fatalf("ts client missing query type")
 	}
+	if !strings.Contains(tsText, "id: number") {
+		t.Fatalf("ts client missing typed path param")
+	}
+	if !strings.Contains(tsText, `"Content-Type": "application/x-www-form-urlencoded"`) || !strings.Contains(tsText, "URLSearchParams") {
+		t.Fatalf("ts client missing form body encoding")
+	}
+	if !strings.Contains(tsText, `appendForm("hub.mode"`) || !strings.Contains(tsText, `appendForm("hub.verify_token"`) {
+		t.Fatalf("ts client missing form wire names")
+	}
+	if !strings.Contains(tsText, "apiKeyAuth") || !strings.Contains(tsText, "tokenAuth") {
+		t.Fatalf("ts client missing named auth options")
+	}
 	if !strings.Contains(tsText, "appendQuery(\"q\"") || !strings.Contains(tsText, "appendQuery(\"id\"") {
 		t.Fatalf("ts client missing query serialization")
 	}
 	pyText := string(py)
 	if !strings.Contains(pyText, "def getByCode") || !strings.Contains(pyText, "query: Optional[dict[str, Any]]") {
 		t.Fatalf("py client missing query argument")
+	}
+	if !strings.Contains(pyText, "id: int") {
+		t.Fatalf("py client missing typed path param")
+	}
+	if !strings.Contains(pyText, "_encode_form") {
+		t.Fatalf("py client missing form body encoding")
+	}
+	if !strings.Contains(pyText, `("hub.mode", "mode")`) || !strings.Contains(pyText, `("hub.verify_token", "verifyToken")`) {
+		t.Fatalf("py client missing form wire names")
 	}
 }
 

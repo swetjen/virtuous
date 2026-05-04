@@ -13,6 +13,8 @@ type queryParam struct {
 	Optional bool
 	IsArray  bool
 	Doc      string
+	Type     reflect.Type
+	Field    *reflect.StructField
 }
 
 type queryParamsInfo struct {
@@ -52,6 +54,8 @@ func queryParamsFor(t reflect.Type) (queryParamsInfo, error) {
 				Optional: optional,
 				IsArray:  isArray,
 				Doc:      reflectutil.FieldDoc(field),
+				Type:     field.Type,
+				Field:    &field,
 			})
 			info.QueryFieldSet[field.Name] = struct{}{}
 			continue
@@ -98,6 +102,9 @@ func queryParamKind(t reflect.Type) (bool, error) {
 	}
 	switch base.Kind() {
 	case reflect.Struct, reflect.Map:
+		if isScalarParamStruct(base) {
+			return false, nil
+		}
 		return false, fmt.Errorf("query params do not support %s", base.Kind())
 	case reflect.Slice, reflect.Array:
 		elem := reflectutil.DerefType(base.Elem())
@@ -106,6 +113,9 @@ func queryParamKind(t reflect.Type) (bool, error) {
 		}
 		switch elem.Kind() {
 		case reflect.Struct, reflect.Map, reflect.Slice, reflect.Array:
+			if isScalarParamStruct(elem) {
+				return true, nil
+			}
 			return false, fmt.Errorf("query params do not support %s elements", elem.Kind())
 		default:
 			return true, nil
@@ -113,4 +123,8 @@ func queryParamKind(t reflect.Type) (bool, error) {
 	default:
 		return false, nil
 	}
+}
+
+func isScalarParamStruct(t reflect.Type) bool {
+	return t.PkgPath() == "time" && t.Name() == "Time"
 }

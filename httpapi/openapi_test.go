@@ -112,6 +112,18 @@ type queryRequestMixed struct {
 	Name  string `json:"name"`
 }
 
+type typedParamRequest struct {
+	ID     int64  `path:"id" doc:"Stable user ID"`
+	Limit  int    `query:"limit,omitempty" doc:"Page size" default:"20" minimum:"1" maximum:"100"`
+	Active bool   `query:"active,omitempty"`
+	Since  string `query:"since,omitempty" format:"date"`
+}
+
+type formRequest struct {
+	Mode        string `form:"hub.mode" json:"mode" doc:"Callback mode"`
+	VerifyToken string `form:"hub.verify_token" json:"verifyToken"`
+}
+
 type optionalBodyRequest struct {
 	Name string `json:"name"`
 }
@@ -162,6 +174,28 @@ func (queryHandlerMixed) RequestType() any                                 { ret
 func (queryHandlerMixed) ResponseType() any                                { return nullableResponse{} }
 func (queryHandlerMixed) Metadata() HandlerMeta {
 	return HandlerMeta{Service: "Test", Method: "QueryMixed"}
+}
+
+type typedParamHandler struct{}
+
+func (typedParamHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (typedParamHandler) RequestType() any                                 { return typedParamRequest{} }
+func (typedParamHandler) ResponseType() any                                { return nullableResponse{} }
+func (typedParamHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Users", Method: "GetUser"}
+}
+
+type formBodyHandler struct{}
+
+func (formBodyHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (formBodyHandler) RequestType() any                                 { return nil }
+func (formBodyHandler) ResponseType() any                                { return NoResponse200{} }
+func (formBodyHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service:     "Callbacks",
+		Method:      "FacebookCompliance",
+		RequestBody: FormBody(formRequest{}),
+	}
 }
 
 type optionalBodyHandler struct{}
@@ -251,6 +285,20 @@ func (responseSpecPointerHandler) Metadata() HandlerMeta {
 	}
 }
 
+type testGuard struct {
+	name  string
+	in    string
+	param string
+}
+
+func (g testGuard) Spec() GuardSpec {
+	return GuardSpec{Name: g.name, In: g.in, Param: g.param}
+}
+
+func (g testGuard) Middleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler { return next }
+}
+
 func TestOpenAPIQueryParamsOnly(t *testing.T) {
 	router := NewRouter()
 	router.HandleTyped("GET /query", queryHandlerOnly{})
@@ -307,6 +355,120 @@ func TestOpenAPIQueryParamsMixed(t *testing.T) {
 	param := getMapFromList(t, params, 0)
 	if param["required"] != false {
 		t.Fatalf("query param should be optional")
+	}
+}
+
+func TestOpenAPITypedPathAndQueryParams(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /users/{id}", typedParamHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	paths := getMap(t, doc, "paths")
+	usersPath := getMap(t, paths, "/users/{id}")
+	getOp := getMap(t, usersPath, "get")
+	params := getList(t, getOp, "parameters")
+	if len(params) != 4 {
+		t.Fatalf("expected 4 params, got %d", len(params))
+	}
+	id := findParam(t, params, "path", "id")
+	idSchema := getMap(t, id, "schema")
+	if idSchema["type"] != "integer" || idSchema["format"] != "int64" {
+		t.Fatalf("path id schema = %#v, want integer int64", idSchema)
+	}
+	limit := findParam(t, params, "query", "limit")
+	limitSchema := getMap(t, limit, "schema")
+	if limitSchema["type"] != "integer" || limitSchema["default"] != float64(20) {
+		t.Fatalf("limit schema = %#v, want integer default 20", limitSchema)
+	}
+	if limitSchema["minimum"] != float64(1) || limitSchema["maximum"] != float64(100) {
+		t.Fatalf("limit min/max = %#v", limitSchema)
+	}
+	active := findParam(t, params, "query", "active")
+	activeSchema := getMap(t, active, "schema")
+	if activeSchema["type"] != "boolean" {
+		t.Fatalf("active schema = %#v, want boolean", activeSchema)
+	}
+	since := findParam(t, params, "query", "since")
+	sinceSchema := getMap(t, since, "schema")
+	if sinceSchema["format"] != "date" {
+		t.Fatalf("since format = %v, want date", sinceSchema["format"])
+	}
+}
+
+func TestOpenAPIExplicitFormRequestBody(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("POST /facebook/compliance", formBodyHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	paths := getMap(t, doc, "paths")
+	formPath := getMap(t, paths, "/facebook/compliance")
+	postOp := getMap(t, formPath, "post")
+	requestBody := getMap(t, postOp, "requestBody")
+	content := getMap(t, requestBody, "content")
+	form := getMap(t, content, MediaTypeFormURLEncoded)
+	formSchema := getMap(t, form, "schema")
+	props := getMap(t, formSchema, "properties")
+	if _, ok := props["hub.mode"]; !ok {
+		t.Fatalf("form schema missing hub.mode property")
+	}
+	if _, ok := props["hub.verify_token"]; !ok {
+		t.Fatalf("form schema missing hub.verify_token property")
+	}
+}
+
+func TestOpenAPISecurityDistinguishesANDAndOR(t *testing.T) {
+	apiKey := testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"}
+	token := testGuard{name: "TokenAuth", in: "header", param: "Authorization"}
+
+	andRouter := NewRouter()
+	andRouter.HandleTyped("GET /and", nullableHandler{}, apiKey, token)
+	andData, err := andRouter.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI AND: %v", err)
+	}
+	var andDoc map[string]any
+	if err := json.Unmarshal(andData, &andDoc); err != nil {
+		t.Fatalf("OpenAPI AND JSON invalid: %v", err)
+	}
+	andSecurity := getList(t, getMap(t, getMap(t, getMap(t, andDoc, "paths"), "/and"), "get"), "security")
+	if len(andSecurity) != 1 {
+		t.Fatalf("AND guards should emit one security requirement, got %d", len(andSecurity))
+	}
+	andReq := getMapFromList(t, andSecurity, 0)
+	if _, ok := andReq["ApiKeyAuth"]; !ok {
+		t.Fatalf("AND security missing ApiKeyAuth")
+	}
+	if _, ok := andReq["TokenAuth"]; !ok {
+		t.Fatalf("AND security missing TokenAuth")
+	}
+
+	orRouter := NewRouter()
+	orRouter.HandleTyped("GET /or", nullableHandler{}, AuthAny(apiKey, token))
+	orData, err := orRouter.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI OR: %v", err)
+	}
+	var orDoc map[string]any
+	if err := json.Unmarshal(orData, &orDoc); err != nil {
+		t.Fatalf("OpenAPI OR JSON invalid: %v", err)
+	}
+	orSecurity := getList(t, getMap(t, getMap(t, getMap(t, orDoc, "paths"), "/or"), "get"), "security")
+	if len(orSecurity) != 2 {
+		t.Fatalf("OR guards should emit two security alternatives, got %d", len(orSecurity))
 	}
 }
 
@@ -520,6 +682,18 @@ func getMapFromList(t *testing.T, list []any, idx int) map[string]any {
 		t.Fatalf("list item not a map")
 	}
 	return out
+}
+
+func findParam(t *testing.T, params []any, in, name string) map[string]any {
+	t.Helper()
+	for idx := range params {
+		param := getMapFromList(t, params, idx)
+		if param["in"] == in && param["name"] == name {
+			return param
+		}
+	}
+	t.Fatalf("missing %s param %s", in, name)
+	return nil
 }
 
 func TestOpenAPISchemaServicePrefix(t *testing.T) {

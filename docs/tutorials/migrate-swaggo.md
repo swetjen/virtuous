@@ -39,8 +39,9 @@ Use this matrix to separate "supported now" from "known product limitations":
 | Non-JSON responses (`image/png`, `text/html`, files) | Supported for typed `string`/`[]byte` responses, including custom media types via `httpapi.HandlerMeta.Responses`. | Use `ResponseSpec{MediaType: ...}` for typed custom media responses; keep runtime headers in the handler. |
 | Optional request body (`@Param ... body ... false`) | Supported via `httpapi.Optional[...]` request marker. | Wrap request type with `httpapi.Optional[Req]()` when body is optional. |
 | Mixed query + body requests | Supported when query and JSON use different struct fields. | Use separate fields; do not dual-tag a single field with both `query` and `json`. Tag aliases are literal wire names and can overlap across query/body on different fields. |
-| Multiple security schemes on one route | Runtime middleware composes all guards. OpenAPI emits multiple security entries. Generated clients currently use only the first guard auth input. | Keep route security in middleware; treat generated-client multi-auth parity as a known capability gap. |
-| Query/path param type fidelity | Query/path values are documented and generated as strings. | Accept string transport types during phase-1 migration; cast to `int`/`bool`/etc. in handler logic when needed. |
+| Multiple security schemes on one route | Normal guards compose as AND. `httpapi.AuthAny(...)` models runtime OR and emits matching OpenAPI/client alternatives. | Use normal guard lists for AND; use `AuthAny(...)` when legacy clients may send one of several credentials. |
+| Query/path param type fidelity | `query` and `path` struct tags preserve scalar Go types in OpenAPI and generated clients. | Use typed request fields for docs/client contracts; handlers still own runtime parsing from `net/http`. |
+| Form request bodies | Supported with `httpapi.FormBody(...)` and `form` tags. | Use `RequestBody: httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` callbacks. |
 | Swaggo annotation drift vs router wiring | Runtime registration drives OpenAPI and clients. | Treat router registration as source of truth. |
 
 ## Annotation mapping (Swaggo -> Virtuous)
@@ -50,12 +51,12 @@ Use this matrix to separate "supported now" from "known product limitations":
 | `@title`, `@version`, `@description` | `router.SetOpenAPIOptions(...)` | Works for both `rpc` and `httpapi` routers. |
 | `@Summary`, `@Description`, `@Tags` | `httpapi.HandlerMeta{Summary, Description, Tags}` | RPC currently does not expose per-operation summary/description metadata. |
 | `@Param ... body` | Typed request struct with `json` tags | RPC request is always JSON body when request type exists. |
-| `@Param ... query` | Request struct fields with `query:"..."` tags (`httpapi`) | Query tags are migration-only; nested structs/maps are not supported. |
-| `@Param ... path` | Method-prefixed route pattern with `{param}` (`httpapi`) | Path params come from route pattern, not struct tags. |
+| `@Param ... query` | Request struct fields with `query:"..."` tags (`httpapi`) | Scalar and array values are typed in docs/clients; nested structs/maps are not supported. |
+| `@Param ... path` | Method-prefixed route pattern with `{param}` plus optional request fields with `path:"..."` (`httpapi`) | `path` tags add type/docs metadata for matching route placeholders. |
 | `@Success` / `@Failure` | Typed response struct and optional `httpapi.HandlerMeta.Responses` | RPC always documents 200/422/500 with the same response schema. `httpapi` can declare explicit response entries per status. |
 | `@Security` | `guard.Guard` with `Spec()` + middleware | Security schemes are emitted from guard specs. |
 | `@Router /path [method]` | `router.HandleTyped("METHOD /path", ...)` (`httpapi`) or `router.HandleRPC(fn)` (`rpc`) | RPC path is inferred: `/{prefix}/{package}/{kebab(function)}`. |
-| `@Accept`, `@Produce` | Implicit JSON by default for typed routes; override response media with `httpapi.HandlerMeta.Responses` | Use `ResponseSpec{MediaType: ...}` for typed custom response media types. |
+| `@Accept`, `@Produce` | Implicit JSON by default; override request media with `HandlerMeta.RequestBody` and response media with `HandlerMeta.Responses` | Use `FormBody(...)` for form callbacks and `ResponseSpec{MediaType: ...}` for typed custom response media types. |
 
 ## Behavioral differences that matter
 
@@ -63,7 +64,7 @@ Use this matrix to separate "supported now" from "known product limitations":
 2. RPC operations are HTTP POST only.
 3. RPC operation summary/description is not comment-driven.
 4. `httpapi` is the compatibility lane when you must preserve REST routes and per-route metadata.
-5. Typed `httpapi` is JSON-first for OpenAPI/client output.
+5. Typed `httpapi` defaults to JSON, with explicit request/response media metadata for compatibility routes.
 
 ## Phase 1 (required): Preserve existing routes with `httpapi`
 
@@ -162,42 +163,17 @@ Attach globally with `rpc.WithGuards(...)` or per route in `HandleRPC(...)` / `H
 
 ### Security semantics (important)
 
-- Runtime middleware semantics: guards compose in order; all attached guard middleware runs.
-- OpenAPI semantics: each guard spec is emitted as a security requirement entry.
-- Generated client semantics: current JS/TS/PY generators expose auth input for the first guard only.
+- Runtime middleware semantics: normal guards compose in order; all attached guard middleware runs.
+- OpenAPI semantics: normal guards emit one AND security requirement; `httpapi.AuthAny(...)` emits OR alternatives.
+- Generated client semantics: JS/TS/PY generators expose named auth options for each security alternative and keep `auth` as a single-value convenience fallback for one-of auth.
 
-For routes that require strict multi-scheme client ergonomics, track this as a capability gap during migration.
+Use normal guard lists when every credential is required. Use `httpapi.AuthAny(...)` when a legacy route accepts one of several credentials.
 
-### Composite OR guard (no framework changes required)
+### OR auth guard
 
-If a route should accept either of two credentials, combine that logic inside one guard and attach that guard to the route.
+If a route should accept either of two credentials, wrap the guards with `httpapi.AuthAny(...)`:
 
 ```go
-type bearerOrAPIKeyGuard struct {
-	bearer bearerGuard
-	apiKey apiKeyGuard
-}
-
-func (g bearerOrAPIKeyGuard) Spec() guard.Spec {
-	return guard.Spec{
-		Name:  "BearerOrApiKey",
-		In:    "header",
-		Param: "Authorization",
-	}
-}
-
-func (g bearerOrAPIKeyGuard) Middleware() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if g.bearer.authenticate(r) || g.apiKey.authenticate(r) {
-				next.ServeHTTP(w, r)
-				return
-			}
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-		})
-	}
-}
-
 router := httpapi.NewRouter()
 router.HandleTyped(
 	"GET /api/v1/secure/report",
@@ -205,7 +181,7 @@ router.HandleTyped(
 		Service: "Reports",
 		Method:  "GetSecure",
 	}),
-	bearerOrAPIKeyGuard{},
+	httpapi.AuthAny(bearerGuard{}, apiKeyGuard{}),
 )
 ```
 
@@ -253,6 +229,16 @@ router.HandleTyped(
 			{Status: 200, Body: []byte{}, MediaType: "image/png"},
 			{Status: 404, Body: ErrorResponse{}},
 		},
+	}),
+)
+
+// Form callback route (typed; included as application/x-www-form-urlencoded)
+router.HandleTyped(
+	"POST /facebook/compliance",
+	httpapi.WrapFunc(FacebookCompliance, nil, httpapi.NoResponse200{}, httpapi.HandlerMeta{
+		Service:     "Callbacks",
+		Method:      "FacebookCompliance",
+		RequestBody: httpapi.FormBody(FacebookComplianceRequest{}),
 	}),
 )
 
@@ -321,9 +307,9 @@ Deliverables:
 
 ## Known gaps vs Swaggo
 
-- RPC does not currently provide Swaggo-style per-operation comment metadata (`@Summary`, `@Description`) as direct handler annotations.
+- RPC does not provide Swaggo-style per-operation comment metadata (`@Summary`, `@Description`) as direct handler annotations.
 - RPC always documents the same response schema for 200, 422, and 500.
-- Query-tag behavior is intentionally limited and exists for migration, not new design.
-- Generated clients currently expose one auth input even when multiple guards are attached.
+- Query/path tags exist for `httpapi` compatibility routes, not new RPC design.
+- Virtuous does not ingest Swaggo comments directly; export/use the existing OpenAPI contract as the migration reference and register routes explicitly.
 
 If those are hard requirements for a route, keep that route on `httpapi` until constraints can be relaxed.

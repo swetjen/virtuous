@@ -3,6 +3,7 @@ package schema
 import (
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/swetjen/virtuous/internal/reflectutil"
@@ -15,6 +16,10 @@ type OpenAPISchema struct {
 	Format               string                    `json:"format,omitempty"`
 	Nullable             bool                      `json:"nullable,omitempty"`
 	Description          string                    `json:"description,omitempty"`
+	Default              any                       `json:"default,omitempty"`
+	Example              any                       `json:"example,omitempty"`
+	Minimum              *float64                  `json:"minimum,omitempty"`
+	Maximum              *float64                  `json:"maximum,omitempty"`
 	Properties           map[string]*OpenAPISchema `json:"properties,omitempty"`
 	Items                *OpenAPISchema            `json:"items,omitempty"`
 	AdditionalProperties *OpenAPISchema            `json:"additionalProperties,omitempty"`
@@ -175,20 +180,9 @@ func (g *Generator) structSchema(t reflect.Type) *OpenAPISchema {
 			continue
 		}
 		doc := reflectutil.FieldDoc(field)
-		nullable := schema.Nullable
-		if doc != "" {
-			if schema.Ref != "" {
-				schema = &OpenAPISchema{
-					AllOf:       []*OpenAPISchema{{Ref: schema.Ref}},
-					Description: doc,
-					Nullable:    nullable,
-				}
-			} else {
-				schema.Description = doc
-			}
-		}
-		if nullable {
-			schema.Nullable = true
+		schema = ApplyFieldMetadata(field, schema)
+		if doc != "" && schema.Description == "" {
+			schema.Description = doc
 		}
 		props[name] = schema
 		if !omit && field.Type.Kind() != reflect.Ptr {
@@ -246,6 +240,109 @@ func (g *Generator) inlineSchema(t reflect.Type) *OpenAPISchema {
 	default:
 		return &OpenAPISchema{Type: "string"}
 	}
+}
+
+// ApplyFieldMetadata copies OpenAPI-oriented struct tags onto a schema.
+func ApplyFieldMetadata(field reflect.StructField, fieldSchema *OpenAPISchema) *OpenAPISchema {
+	if fieldSchema == nil {
+		return nil
+	}
+	schema := fieldSchema
+	nullable := schema.Nullable
+	if needsSchemaWrapper(schema, field) {
+		wrapped := &OpenAPISchema{
+			Description: schema.Description,
+			Nullable:    nullable,
+			Default:     schema.Default,
+			Example:     schema.Example,
+			Minimum:     schema.Minimum,
+			Maximum:     schema.Maximum,
+		}
+		if schema.Ref != "" {
+			wrapped.AllOf = []*OpenAPISchema{{Ref: schema.Ref}}
+		} else {
+			copy := *schema
+			wrapped.AllOf = []*OpenAPISchema{&copy}
+		}
+		schema = wrapped
+	}
+	if doc := reflectutil.FieldDoc(field); doc != "" {
+		schema.Description = doc
+	}
+	if format := strings.TrimSpace(field.Tag.Get("format")); format != "" {
+		schema.Format = format
+	}
+	if value, ok := parseSchemaTagValue(field.Tag.Get("default"), field.Type); ok {
+		schema.Default = value
+	}
+	if value, ok := parseSchemaTagValue(field.Tag.Get("example"), field.Type); ok {
+		schema.Example = value
+	}
+	if minimum, ok := parseFloatTag(field.Tag.Get("minimum")); ok {
+		schema.Minimum = &minimum
+	}
+	if maximum, ok := parseFloatTag(field.Tag.Get("maximum")); ok {
+		schema.Maximum = &maximum
+	}
+	if nullable {
+		schema.Nullable = true
+	}
+	return schema
+}
+
+func needsSchemaWrapper(schema *OpenAPISchema, field reflect.StructField) bool {
+	if schema.Ref == "" {
+		return false
+	}
+	return reflectutil.FieldDoc(field) != "" ||
+		strings.TrimSpace(field.Tag.Get("format")) != "" ||
+		strings.TrimSpace(field.Tag.Get("default")) != "" ||
+		strings.TrimSpace(field.Tag.Get("example")) != "" ||
+		strings.TrimSpace(field.Tag.Get("minimum")) != "" ||
+		strings.TrimSpace(field.Tag.Get("maximum")) != ""
+}
+
+func parseSchemaTagValue(raw string, t reflect.Type) (any, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, false
+	}
+	base := reflectutil.DerefType(t)
+	if base == nil {
+		return raw, true
+	}
+	switch base.Kind() {
+	case reflect.Bool:
+		value, err := strconv.ParseBool(raw)
+		if err == nil {
+			return value, true
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err == nil {
+			return value, true
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		value, err := strconv.ParseUint(raw, 10, 64)
+		if err == nil {
+			return value, true
+		}
+	case reflect.Float32, reflect.Float64:
+		value, err := strconv.ParseFloat(raw, 64)
+		if err == nil {
+			return value, true
+		}
+	}
+	return raw, true
+}
+
+func parseFloatTag(raw string) (float64, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, false
+	}
+	value, err := strconv.ParseFloat(raw, 64)
+	return value, err == nil
 }
 
 func schemaName(t reflect.Type) string {

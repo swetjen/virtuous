@@ -51,7 +51,14 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.Wrap(handler http.Handler, req any, resp any, meta httpapi.HandlerMeta)`
 - `httpapi.WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta httpapi.HandlerMeta)`
 - `httpapi.Optional[T any](req ...T)`
+- `httpapi.ParamSpec`
+- `httpapi.RequestBodySpec`
+- `httpapi.JSONBody(body any)`
+- `httpapi.FormBody(body any)`
 - `httpapi.ResponseSpec`
+- `httpapi.SecurityAny(guards ...httpapi.GuardSpec)`
+- `httpapi.SecurityAll(guards ...httpapi.GuardSpec)`
+- `httpapi.AuthAny(guards ...httpapi.Guard)`
 - `type httpapi.Module`
 - `httpapi.ModuleAPI`
 - `httpapi.ModuleDatabase`

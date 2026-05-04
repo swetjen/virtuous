@@ -44,17 +44,17 @@ class _{{ $service.Name }}Service:
         self._basepath = basepath
 
 {{- range $method := $service.Methods }}
-    def {{ $method.Name }}(self{{- if $method.PathParams }}{{- range $param := $method.PathParams }}, {{ $param }}: str{{- end }}{{- end }}{{- if $method.HasBody }}, body: Optional[{{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}] = None{{- end }}{{- if $method.HasQuery }}, query: Optional[dict[str, Any]] = None{{- end }}{{- if $method.HasAuth }}, {{ $method.AuthParam }}: Optional[str] = None{{- end }}) -> {{- if eq $method.ResponseMode "none" }}None{{- else if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}Any{{- end }}:
+    def {{ $method.Name }}(self{{- if $method.PathParams }}{{- range $param := $method.PathParams }}, {{ $param.Name }}: {{ $param.Type }}{{- end }}{{- end }}{{- if $method.HasBody }}, body: Optional[{{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}] = None{{- end }}{{- if $method.HasQuery }}, query: Optional[dict[str, Any]] = None{{- end }}{{- if $method.HasAuth }}{{- range $auth := $method.AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}) -> {{- if eq $method.ResponseMode "none" }}None{{- else if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}Any{{- end }}:
         headers = {
             "Accept": "{{ $method.AcceptType }}",
 {{- if $method.HasBody }}
-            "Content-Type": "application/json",
+            "Content-Type": "{{ $method.RequestMedia }}",
 {{- end }}
         }
         url = self._basepath + "{{ $method.Path }}"
 {{- if $method.PathParams }}
 {{- range $param := $method.PathParams }}
-        url = url.replace("{{ printf "{%s}" $param }}", parse.quote(str({{ $param }})))
+        url = url.replace("{{ printf "{%s}" $param.Name }}", parse.quote(str({{ $param.Name }})))
 {{- end }}
 {{- end }}
 {{- if $method.HasQuery }}
@@ -84,25 +84,46 @@ class _{{ $service.Name }}Service:
 {{- end }}
 {{- end }}
 {{- if $method.HasAuth }}
-        if {{ $method.AuthParam }} is not None:
-            auth_value = {{ $method.AuthParam }}
-{{- if ne $method.Auth.Prefix "" }}
-            auth_value = "{{ $method.Auth.Prefix }} " + {{ $method.AuthParam }}
+        def apply_auth(location: str, param: str, prefix: str, value: str) -> None:
+            nonlocal url
+            auth_value = prefix + " " + value if prefix else value
+            if location == "header":
+                headers[param] = auth_value
+            elif location == "query":
+                url = _append_query(url, param, auth_value)
+            elif location == "cookie":
+                headers["Cookie"] = param + "=" + parse.quote(auth_value)
+        auth_applied = False
+{{- range $req := $method.AuthReqs }}
+        if not auth_applied:
+{{- if eq (len $req.Guards) 1 }}
+{{- range $guard := $req.Guards }}
+            auth_value = {{ $guard.ParamName }}
+            if auth_value is not None:
+                apply_auth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", auth_value)
+                auth_applied = True
 {{- end }}
-{{- if eq $method.Auth.In "header" }}
-            headers["{{ $method.Auth.Param }}"] = auth_value
+{{- else }}
+            if {{ range $i, $guard := $req.Guards }}{{ if gt $i 0 }} and {{ end }}{{ $guard.ParamName }} is not None{{ end }}:
+{{- range $guard := $req.Guards }}
+                apply_auth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", {{ $guard.ParamName }})
 {{- end }}
-{{- if eq $method.Auth.In "query" }}
-            url = _append_query(url, "{{ $method.Auth.Param }}", auth_value)
+                auth_applied = True
 {{- end }}
-{{- if eq $method.Auth.In "cookie" }}
-            headers["Cookie"] = "{{ $method.Auth.Param }}=" + parse.quote(auth_value)
 {{- end }}
 {{- end }}
         data = None
 {{- if $method.HasBody }}
         if body is not None:
+{{- if eq $method.BodyMode "form" }}
+            data = _encode_form(body, [
+{{- range $field := $method.BodyFields }}
+                ("{{ $field.WireName }}", "{{ $field.Name }}"),
+{{- end }}
+            ]).encode("utf-8")
+{{- else }}
             data = json.dumps(_encode_value(body)).encode("utf-8")
+{{- end }}
 {{- end }}
         req = request.Request(url, data=data, method="{{ $method.HTTPMethod }}", headers=headers)
         status = 0
@@ -218,6 +239,25 @@ def _encode_value(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _encode_value(item) for key, item in value.items()}
     return value
+
+
+def _encode_form(value: Any, fields: list[tuple[str, str]]) -> str:
+    encoded = _encode_value(value)
+    if encoded is None:
+        return ""
+    if not isinstance(encoded, dict):
+        return parse.urlencode({"value": str(encoded)})
+    pairs: list[tuple[str, str]] = []
+    items = [(wire_name, encoded.get(field_name)) for wire_name, field_name in fields] if fields else list(encoded.items())
+    for key, item in items:
+        if item is None:
+            continue
+        if isinstance(item, list):
+            for child in item:
+                pairs.append((key, "" if child is None else str(child)))
+            continue
+        pairs.append((key, str(item)))
+    return parse.urlencode(pairs)
 
 
 def _append_query(url: str, key: str, value: str) -> str:

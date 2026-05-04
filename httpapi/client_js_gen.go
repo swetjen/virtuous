@@ -49,17 +49,17 @@ export function createClient(basepath = "/") {
 {{- if $method.HasQuery }}
 			 * @param {Object} [query]
 {{- range $param := $method.QueryParams }}
-			 * @param { {{- if $param.IsArray }}string[]{{ else }}string{{ end }} }{{ if $param.Optional }} [{{ printf "query.%s" $param.Name }}]{{ else }} {{ printf "query.%s" $param.Name }}{{ end }}{{ if $param.Doc }} - {{ $param.Doc }}{{ end }}
+			 * @param { {{- $param.Type }} }{{ if $param.Optional }} [{{ printf "query.%s" $param.Name }}]{{ else }} {{ printf "query.%s" $param.Name }}{{ end }}{{ if $param.Doc }} - {{ $param.Doc }}{{ end }}
 {{- end }}
 {{- end }}
 			 * @param {AuthOptions} [options]
 			 * @returns {Promise<{{- if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}any{{ end }}>}
 				 */
 				async {{ $method.Name }}({{ if $method.PathParams }}pathParams, {{ end }}{{ if $method.HasBody }}request, {{ end }}{{ if $method.HasQuery }}query, {{ end }}options) {
-					const headers = {
-						"Accept": "{{ $method.AcceptType }}",
+				const headers = {
+					"Accept": "{{ $method.AcceptType }}",
 {{- if $method.HasBody }}
-						"Content-Type": "application/json",
+						"Content-Type": "{{ $method.RequestMedia }}",
 {{- end }}
 				}
 				let url = basepath + "{{ $method.Path }}"
@@ -68,7 +68,7 @@ export function createClient(basepath = "/") {
 					throw new Error("pathParams is required")
 				}
 {{- range $param := $method.PathParams }}
-				url = url.replace("{{ printf "{%s}" $param }}", encodeURIComponent(String(pathParams.{{ $param }})))
+				url = url.replace("{{ printf "{%s}" $param.Name }}", encodeURIComponent(String(pathParams.{{ $param.Name }})))
 {{- end }}
 {{- end }}
 {{- if $method.HasQuery }}
@@ -111,33 +111,81 @@ export function createClient(basepath = "/") {
 				}
 {{- end }}
 {{- if $method.HasAuth }}
-				const authValue = options && options.auth
-				if (authValue) {
-{{- if eq $method.Auth.In "header" }}
-					headers["{{ $method.Auth.Param }}"] = {{ if ne $method.Auth.Prefix "" }}"{{ $method.Auth.Prefix }} " + {{ end }}authValue
+				const applyAuth = (location, param, prefix, value) => {
+					const authValue = prefix ? prefix + " " + value : value
+					if (location === "header") {
+						headers[param] = authValue
+					} else if (location === "query") {
+						const sep = url.includes("?") ? "&" : "?"
+						url = url + sep + encodeURIComponent(param) + "=" + encodeURIComponent(authValue)
+					} else if (location === "cookie") {
+						document.cookie = param + "=" + encodeURIComponent(authValue) + "; path=/"
+					}
+				}
+				let authApplied = false
+{{- range $req := $method.AuthReqs }}
+				if (!authApplied) {
+{{- if eq (len $req.Guards) 1 }}
+{{- range $guard := $req.Guards }}
+					const {{ $guard.ParamName }}Value = options && (options.{{ $guard.ParamName }} || options.auth)
+					if ({{ $guard.ParamName }}Value) {
+						applyAuth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", {{ $guard.ParamName }}Value)
+						authApplied = true
+					}
 {{- end }}
-{{- if eq $method.Auth.In "query" }}
-					const sep = url.includes("?") ? "&" : "?"
-					url = url + sep + encodeURIComponent("{{ $method.Auth.Param }}") + "=" + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}"{{ $method.Auth.Prefix }} " + {{ end }}authValue)
+{{- else }}
+					const hasAuthValues = true{{ range $guard := $req.Guards }} && !!(options && options.{{ $guard.ParamName }}){{ end }}
+					if (hasAuthValues) {
+{{- range $guard := $req.Guards }}
+						applyAuth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", options.{{ $guard.ParamName }})
 {{- end }}
-{{- if eq $method.Auth.In "cookie" }}
-					document.cookie = "{{ $method.Auth.Param }}=" + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}"{{ $method.Auth.Prefix }} " + {{ end }}authValue) + "; path=/"
+						authApplied = true
+					}
 {{- end }}
+				}
+{{- end }}
+{{- end }}
+{{- if and $method.HasBody (eq $method.BodyMode "form") }}
+				const encodeForm = (value) => {
+					const form = new URLSearchParams()
+					const appendForm = (key, item) => {
+						if (item === undefined || item === null) {
+							return
+						}
+						if (Array.isArray(item)) {
+							for (const child of item) {
+								if (child !== undefined && child !== null) {
+									form.append(key, String(child))
+								}
+							}
+							return
+						}
+						form.append(key, String(item))
+					}
+					const data = value || {}
+{{- if $method.BodyFields }}
+{{- range $field := $method.BodyFields }}
+					appendForm("{{ $field.WireName }}", data.{{ $field.Name }})
+{{- end }}
+{{- else }}
+					for (const [key, item] of Object.entries(data)) {
+						appendForm(key, item)
+					}
+{{- end }}
+					return form.toString()
 				}
 {{- end }}
 				const response = await fetch(url, {
 					method: "{{ $method.HTTPMethod }}",
 					headers,
-{{- if $method.HasAuth }}
-{{- if eq $method.Auth.In "cookie" }}
+{{- if $method.HasCookieAuth }}
 					credentials: "same-origin",
-{{- end }}
 {{- end }}
 {{- if $method.HasBody }}
 {{- if $method.BodyOptional }}
-					body: request === undefined || request === null ? undefined : JSON.stringify(request),
+					body: request === undefined || request === null ? undefined : {{ if eq $method.BodyMode "form" }}encodeForm(request){{ else }}JSON.stringify(request){{ end }},
 {{- else }}
-					body: JSON.stringify(request || {}),
+					body: {{ if eq $method.BodyMode "form" }}encodeForm(request || {}){{ else }}JSON.stringify(request || {}){{ end }},
 {{- end }}
 {{- end }}
 				})

@@ -30,21 +30,12 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			Responses:   map[string]openAPIResponse{},
 		}
 
-		if len(route.Guards) > 0 {
-			var secReq []map[string][]string
-			for _, guard := range route.Guards {
-				securitySchemes[guard.Name] = openAPISecurityScheme{
-					Type:   "apiKey",
-					In:     guard.In,
-					Name:   guard.Param,
-					Prefix: guard.Prefix,
-				}
-				secReq = append(secReq, map[string][]string{guard.Name: {}})
-			}
-			op.Security = secReq
-		}
+		addSecuritySchemes(securitySchemes, route.Meta.Security)
+		op.Security = openAPISecurity(route.Meta.Security)
 
 		reqInfo := resolveRequestType(route.Handler.RequestType())
+		explicitParams := paramSpecKeys(route.Meta.Params)
+		seenParams := map[string]struct{}{}
 		if reqInfo.Present {
 			reqReflect := reqInfo.Type
 			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
@@ -58,25 +49,41 @@ func (r *Router) OpenAPI() ([]byte, error) {
 				return nil, err
 			}
 			for _, param := range queryInfo.Params {
-				op.Parameters = append(op.Parameters, openAPIParameter{
-					Name:        param.Name,
-					In:          "query",
-					Description: param.Doc,
-					Required:    !param.Optional,
-					Schema:      schema.OpenAPISchema{Type: "string"},
-				})
+				if _, ok := explicitParams[paramKey(param.Name, ParamInQuery)]; ok {
+					continue
+				}
+				op.Parameters = append(op.Parameters, openAPIParameterForField(gen, param.Name, ParamInQuery, !param.Optional, param.Doc, param.Type, param.Field))
+				seenParams[paramKey(param.Name, ParamInQuery)] = struct{}{}
 			}
-			if queryInfo.BodyFields > 0 {
+			pathInfo, err := pathParamsFor(reqReflect)
+			if err != nil {
+				return nil, err
+			}
+			for _, param := range pathInfo {
+				if _, ok := explicitParams[paramKey(param.Name, ParamInPath)]; ok {
+					continue
+				}
+				op.Parameters = append(op.Parameters, openAPIParameterForField(gen, param.Name, ParamInPath, true, param.Doc, param.Type, param.Field))
+				seenParams[paramKey(param.Name, ParamInPath)] = struct{}{}
+			}
+			if route.Meta.RequestBody == nil && queryInfo.BodyFields > 0 {
 				reqSchema := requestBodySchema(gen, reqReflect, queryInfo.QueryFieldSet)
 				if reqSchema != nil {
 					op.RequestBody = &openAPIRequestBody{
 						Required: !reqInfo.Optional,
 						Content: map[string]openAPIMedia{
-							"application/json": {Schema: reqSchema},
+							MediaTypeJSON: {Schema: reqSchema},
 						},
 					}
 				}
 			}
+		}
+		if route.Meta.RequestBody != nil {
+			body, err := openAPIRequestBodyFor(gen, route.Meta, *route.Meta.RequestBody)
+			if err != nil {
+				return nil, err
+			}
+			op.RequestBody = body
 		}
 
 		responses, err := routeResponseSpecs(route)
@@ -103,12 +110,23 @@ func (r *Router) OpenAPI() ([]byte, error) {
 		}
 
 		for _, param := range route.PathParams {
+			key := paramKey(param, ParamInPath)
+			if _, ok := explicitParams[key]; ok {
+				continue
+			}
+			if _, ok := seenParams[key]; ok {
+				continue
+			}
 			op.Parameters = append(op.Parameters, openAPIParameter{
 				Name:     param,
-				In:       "path",
+				In:       ParamInPath,
 				Required: true,
 				Schema:   schema.OpenAPISchema{Type: "string"},
 			})
+			seenParams[key] = struct{}{}
+		}
+		for _, param := range route.Meta.Params {
+			op.Parameters = append(op.Parameters, openAPIParameterForSpec(gen, param))
 		}
 
 		if _, ok := paths[route.Path]; !ok {
@@ -227,22 +245,7 @@ func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]st
 		if fieldSchema == nil {
 			continue
 		}
-		doc := reflectutil.FieldDoc(field)
-		nullable := fieldSchema.Nullable
-		if doc != "" {
-			if fieldSchema.Ref != "" {
-				fieldSchema = &schema.OpenAPISchema{
-					AllOf:       []*schema.OpenAPISchema{{Ref: fieldSchema.Ref}},
-					Description: doc,
-					Nullable:    nullable,
-				}
-			} else {
-				fieldSchema.Description = doc
-			}
-		}
-		if nullable {
-			fieldSchema.Nullable = true
-		}
+		fieldSchema = schema.ApplyFieldMetadata(field, fieldSchema)
 		props[name] = fieldSchema
 		if !omit && field.Type.Kind() != reflect.Ptr {
 			required = append(required, name)
@@ -254,6 +257,211 @@ func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]st
 		Properties: props,
 		Required:   required,
 	}
+}
+
+func openAPIRequestBodyFor(gen *schema.Generator, meta HandlerMeta, spec RequestBodySpec) (*openAPIRequestBody, error) {
+	if len(spec.Content) == 0 {
+		return nil, nil
+	}
+	body := &openAPIRequestBody{
+		Required: spec.Required,
+		Content:  map[string]openAPIMedia{},
+	}
+	for _, content := range spec.Content {
+		mediaType := content.MediaType
+		if mediaType == "" {
+			mediaType = MediaTypeJSON
+		}
+		var bodyType reflect.Type
+		if content.Body != nil {
+			bodyType = reflect.TypeOf(content.Body)
+			if preferred := preferredSchemaName(meta, bodyType); preferred != "" {
+				gen.PreferNameOf(bodyType, preferred)
+			}
+		}
+		body.Content[mediaType] = openAPIMedia{Schema: requestContentSchema(gen, mediaType, bodyType)}
+	}
+	return body, nil
+}
+
+func requestContentSchema(gen *schema.Generator, mediaType string, t reflect.Type) *schema.OpenAPISchema {
+	if t == nil {
+		return nil
+	}
+	if mediaType == MediaTypeFormURLEncoded {
+		return formRequestBodySchema(gen, t)
+	}
+	return gen.SchemaForType(t)
+}
+
+func formRequestBodySchema(gen *schema.Generator, t reflect.Type) *schema.OpenAPISchema {
+	base := reflectutil.DerefType(t)
+	if base == nil || base.Kind() != reflect.Struct {
+		return gen.SchemaForType(t)
+	}
+	props := map[string]*schema.OpenAPISchema{}
+	var required []string
+	for i := 0; i < base.NumField(); i++ {
+		field := base.Field(i)
+		if field.PkgPath != "" {
+			continue
+		}
+		name, omit := formFieldName(field)
+		if name == "" {
+			continue
+		}
+		fieldSchema := gen.SchemaForType(field.Type)
+		if fieldSchema == nil {
+			continue
+		}
+		props[name] = schema.ApplyFieldMetadata(field, fieldSchema)
+		if !omit && field.Type.Kind() != reflect.Ptr {
+			required = append(required, name)
+		}
+	}
+	sort.Strings(required)
+	return &schema.OpenAPISchema{
+		Type:       "object",
+		Properties: props,
+		Required:   required,
+	}
+}
+
+func formFieldName(field reflect.StructField) (string, bool) {
+	if tag := field.Tag.Get("form"); tag != "" {
+		parts := strings.Split(tag, ",")
+		if parts[0] == "-" {
+			return "", false
+		}
+		name := parts[0]
+		if name == "" {
+			name = lowerFirst(field.Name)
+		}
+		omit := false
+		for _, part := range parts[1:] {
+			if part == "omitempty" || part == "optional" {
+				omit = true
+			}
+		}
+		return name, omit
+	}
+	return reflectutil.JSONFieldName(field)
+}
+
+func addSecuritySchemes(out map[string]openAPISecurityScheme, spec SecuritySpec) {
+	for _, alt := range spec.Alternatives {
+		for _, guard := range alt.Guards {
+			if guard.Name == "" {
+				continue
+			}
+			out[guard.Name] = openAPISecurityScheme{
+				Type:   "apiKey",
+				In:     guard.In,
+				Name:   guard.Param,
+				Prefix: guard.Prefix,
+			}
+		}
+	}
+}
+
+func openAPISecurity(spec SecuritySpec) []map[string][]string {
+	if len(spec.Alternatives) == 0 {
+		return nil
+	}
+	out := make([]map[string][]string, 0, len(spec.Alternatives))
+	for _, alt := range spec.Alternatives {
+		req := map[string][]string{}
+		for _, guard := range alt.Guards {
+			if guard.Name != "" {
+				req[guard.Name] = []string{}
+			}
+		}
+		if len(req) > 0 {
+			out = append(out, req)
+		}
+	}
+	return out
+}
+
+func paramSpecKeys(params []ParamSpec) map[string]struct{} {
+	out := make(map[string]struct{}, len(params))
+	for _, param := range params {
+		if param.Name == "" || param.In == "" {
+			continue
+		}
+		out[paramKey(param.Name, param.In)] = struct{}{}
+	}
+	return out
+}
+
+func paramKey(name, in string) string {
+	return in + "\x00" + name
+}
+
+func openAPIParameterForField(gen *schema.Generator, name, in string, required bool, doc string, t reflect.Type, field *reflect.StructField) openAPIParameter {
+	paramSchema := paramSchemaForType(gen, t)
+	if field != nil {
+		paramSchema = schema.ApplyFieldMetadata(*field, paramSchema)
+	}
+	if doc != "" && paramSchema.Description == "" {
+		paramSchema.Description = doc
+	}
+	return openAPIParameter{
+		Name:        name,
+		In:          in,
+		Required:    required,
+		Description: doc,
+		Schema:      *paramSchema,
+	}
+}
+
+func openAPIParameterForSpec(gen *schema.Generator, spec ParamSpec) openAPIParameter {
+	in := spec.In
+	if in == "" {
+		in = ParamInQuery
+	}
+	paramSchema := paramSchemaForSpec(gen, spec)
+	return openAPIParameter{
+		Name:        spec.Name,
+		In:          in,
+		Required:    spec.Required || in == ParamInPath,
+		Description: spec.Description,
+		Schema:      *paramSchema,
+	}
+}
+
+func paramSchemaForSpec(gen *schema.Generator, spec ParamSpec) *schema.OpenAPISchema {
+	paramSchema := paramSchemaForType(gen, reflect.TypeOf(spec.Type))
+	if spec.Description != "" {
+		paramSchema.Description = spec.Description
+	}
+	if spec.Format != "" {
+		paramSchema.Format = spec.Format
+	}
+	if spec.Default != nil {
+		paramSchema.Default = spec.Default
+	}
+	if spec.Example != nil {
+		paramSchema.Example = spec.Example
+	}
+	if spec.Minimum != nil {
+		paramSchema.Minimum = spec.Minimum
+	}
+	if spec.Maximum != nil {
+		paramSchema.Maximum = spec.Maximum
+	}
+	return paramSchema
+}
+
+func paramSchemaForType(gen *schema.Generator, t reflect.Type) *schema.OpenAPISchema {
+	if t == nil {
+		return &schema.OpenAPISchema{Type: "string"}
+	}
+	paramSchema := gen.SchemaForType(t)
+	if paramSchema == nil || paramSchema.Ref != "" {
+		return &schema.OpenAPISchema{Type: "string"}
+	}
+	return paramSchema
 }
 
 type openAPIDoc struct {

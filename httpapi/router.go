@@ -15,7 +15,36 @@ type HandlerMeta struct {
 	Summary     string
 	Description string
 	Tags        []string
+	Params      []ParamSpec
+	RequestBody *RequestBodySpec
 	Responses   []ResponseSpec
+	Security    SecuritySpec
+}
+
+// ParamSpec describes an explicit operation parameter.
+type ParamSpec struct {
+	Name        string
+	In          string
+	Type        any
+	Required    bool
+	Description string
+	Format      string
+	Default     any
+	Example     any
+	Minimum     *float64
+	Maximum     *float64
+}
+
+// RequestBodySpec describes an explicit request body contract.
+type RequestBodySpec struct {
+	Required bool
+	Content  []RequestContentSpec
+}
+
+// RequestContentSpec describes a single request body media type.
+type RequestContentSpec struct {
+	MediaType string
+	Body      any
 }
 
 // ResponseSpec describes an explicit response contract for a typed route.
@@ -24,6 +53,17 @@ type ResponseSpec struct {
 	Body        any
 	MediaType   string
 	Description string
+}
+
+// SecuritySpec describes operation auth requirements. Requirements within an
+// alternative are ANDed; alternatives are ORed.
+type SecuritySpec struct {
+	Alternatives []SecurityRequirement
+}
+
+// SecurityRequirement describes one auth requirement alternative.
+type SecurityRequirement struct {
+	Guards []GuardSpec
 }
 
 // TypedHandler is an http.Handler with type metadata.
@@ -155,13 +195,16 @@ func (r *Router) handle(pattern string, h http.Handler, typed TypedHandler, guar
 
 	meta := typed.Metadata()
 	meta = inferMeta(meta, method, path)
+	if securitySpecEmpty(meta.Security) {
+		meta.Security = securitySpecFromGuards(guards)
+	}
 	route := Route{
 		Pattern:    pattern,
 		Method:     method,
 		Path:       path,
 		PathParams: parsePathParams(path),
 		Meta:       meta,
-		Guards:     guardSpecs(guards),
+		Guards:     flattenSecuritySpec(meta.Security),
 		Handler:    typed,
 	}
 	r.routes = append(r.routes, route)

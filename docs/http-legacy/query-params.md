@@ -19,7 +19,7 @@ Rules:
 
 - `query:"name"` always includes the key.
 - `query:"name,omitempty"` omits empty values.
-- Query params are serialized as strings and URL-escaped.
+- Query params preserve scalar Go types in OpenAPI and generated clients, then serialize as URL-escaped query strings.
 - Nested structs and maps are not supported.
 - A field cannot use both `query` and `json` tags.
 - Tag aliases are literal wire names. If you set `query:"limit"`, the query key is exactly `limit`.
@@ -41,17 +41,35 @@ Notes:
 
 - Query-tagged fields become query params.
 - JSON-tagged fields become request body fields.
-- Query/path values are represented as strings in generated transport docs/clients.
+- Query/path values preserve scalar Go types in generated OpenAPI and clients.
 - Alias overlap across query/body is valid when using different fields (for example `QueryLimit string \`query:"limit"\`` and `BodyLimit int \`json:"limit"\``).
 
-## Casting in handlers
+## Path params
 
-Use `query` tags for request fields, then cast path/query values to domain types in handler code as needed:
+Use `path` tags to add type and docs metadata for route placeholders:
+
+```go
+type GetUserRequest struct {
+	ID int64 `path:"id" doc:"User ID"`
+}
+
+router.HandleTyped(
+	"GET /users/{id}",
+	httpapi.WrapFunc(GetUser, GetUserRequest{}, GetUserResponse{}, httpapi.HandlerMeta{
+		Service: "Users",
+		Method:  "GetUser",
+	}),
+)
+```
+
+## Handler parsing
+
+Generated docs/clients preserve scalar types, but legacy `httpapi` handlers still receive `*http.Request`. Parse runtime path/query values from `r.PathValue(...)` and `r.URL.Query()` as needed:
 
 ```go
 type SearchRequest struct {
-	Limit string `query:"limit,omitempty"` // docs/client transport metadata
-	Name  string `json:"name,omitempty"`   // JSON body field
+	Limit int    `query:"limit,omitempty"`
+	Name  string `json:"name,omitempty"`
 }
 
 func SearchUsers(w http.ResponseWriter, r *http.Request) {
