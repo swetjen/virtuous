@@ -31,6 +31,7 @@ type ParamSpec struct {
 	Format      string
 	Default     any
 	Example     any
+	Enum        []any
 	Minimum     *float64
 	Maximum     *float64
 }
@@ -169,6 +170,12 @@ func (r *Router) HandleTyped(pattern string, h TypedHandler, guards ...Guard) {
 	r.handle(pattern, h, h, guards...)
 }
 
+// Describe registers documentation/client metadata for an existing route
+// without mounting a runtime handler.
+func (r *Router) Describe(pattern string, req any, resp any, meta HandlerMeta, guards ...Guard) {
+	r.describe(pattern, Wrap(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), req, resp, meta), guards...)
+}
+
 // ServeHTTP implements http.Handler.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mux.ServeHTTP(w, req)
@@ -208,6 +215,30 @@ func (r *Router) handle(pattern string, h http.Handler, typed TypedHandler, guar
 		Handler:    typed,
 	}
 	r.routes = append(r.routes, route)
+}
+
+func (r *Router) describe(pattern string, typed TypedHandler, guards ...Guard) {
+	method, path, ok := parseMethodPattern(pattern)
+	if !ok {
+		if r.logger != nil {
+			r.logger.Warn("virtuous: pattern missing HTTP method prefix; skipping docs/client registration", "pattern", pattern)
+		}
+		return
+	}
+	meta := typed.Metadata()
+	meta = inferMeta(meta, method, path)
+	if securitySpecEmpty(meta.Security) {
+		meta.Security = securitySpecFromGuards(guards)
+	}
+	r.routes = append(r.routes, Route{
+		Pattern:    pattern,
+		Method:     method,
+		Path:       path,
+		PathParams: parsePathParams(path),
+		Meta:       meta,
+		Guards:     flattenSecuritySpec(meta.Security),
+		Handler:    typed,
+	})
 }
 
 func wrapWithGuards(h http.Handler, guards []Guard) http.Handler {

@@ -23,6 +23,7 @@ Rules:
 - Nested structs and maps are not supported.
 - A field cannot use both `query` and `json` tags.
 - Tag aliases are literal wire names. If you set `query:"limit"`, the query key is exactly `limit`.
+- Use `enum:"a,b,c"` on scalar fields when the OpenAPI contract needs allowed values.
 
 ## Mixed query + JSON body
 
@@ -41,6 +42,7 @@ Notes:
 
 - Query-tagged fields become query params.
 - JSON-tagged fields become request body fields.
+- Path-tagged fields become path params and are excluded from inferred JSON request bodies.
 - Query/path values preserve scalar Go types in generated OpenAPI and clients.
 - Alias overlap across query/body is valid when using different fields (for example `QueryLimit string \`query:"limit"\`` and `BodyLimit int \`json:"limit"\``).
 

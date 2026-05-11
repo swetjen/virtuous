@@ -18,6 +18,7 @@ type OpenAPISchema struct {
 	Description          string                    `json:"description,omitempty"`
 	Default              any                       `json:"default,omitempty"`
 	Example              any                       `json:"example,omitempty"`
+	Enum                 []any                     `json:"enum,omitempty"`
 	Minimum              *float64                  `json:"minimum,omitempty"`
 	Maximum              *float64                  `json:"maximum,omitempty"`
 	Properties           map[string]*OpenAPISchema `json:"properties,omitempty"`
@@ -255,6 +256,7 @@ func ApplyFieldMetadata(field reflect.StructField, fieldSchema *OpenAPISchema) *
 			Nullable:    nullable,
 			Default:     schema.Default,
 			Example:     schema.Example,
+			Enum:        schema.Enum,
 			Minimum:     schema.Minimum,
 			Maximum:     schema.Maximum,
 		}
@@ -278,6 +280,9 @@ func ApplyFieldMetadata(field reflect.StructField, fieldSchema *OpenAPISchema) *
 	if value, ok := parseSchemaTagValue(field.Tag.Get("example"), field.Type); ok {
 		schema.Example = value
 	}
+	if values := parseEnumTag(field.Tag.Get("enum"), field.Type); len(values) > 0 {
+		schema.Enum = values
+	}
 	if minimum, ok := parseFloatTag(field.Tag.Get("minimum")); ok {
 		schema.Minimum = &minimum
 	}
@@ -298,6 +303,7 @@ func needsSchemaWrapper(schema *OpenAPISchema, field reflect.StructField) bool {
 		strings.TrimSpace(field.Tag.Get("format")) != "" ||
 		strings.TrimSpace(field.Tag.Get("default")) != "" ||
 		strings.TrimSpace(field.Tag.Get("example")) != "" ||
+		strings.TrimSpace(field.Tag.Get("enum")) != "" ||
 		strings.TrimSpace(field.Tag.Get("minimum")) != "" ||
 		strings.TrimSpace(field.Tag.Get("maximum")) != ""
 }
@@ -345,6 +351,23 @@ func parseFloatTag(raw string) (float64, bool) {
 	return value, err == nil
 }
 
+func parseEnumTag(raw string, t reflect.Type) []any {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	values := make([]any, 0, len(parts))
+	for _, part := range parts {
+		value, ok := parseSchemaTagValue(strings.TrimSpace(part), t)
+		if !ok {
+			continue
+		}
+		values = append(values, value)
+	}
+	return values
+}
+
 func schemaName(t reflect.Type) string {
 	if t.PkgPath() == "" {
 		return t.Name()
@@ -354,13 +377,22 @@ func schemaName(t reflect.Type) string {
 	return name
 }
 
-func schemaNameOrPanic(seen map[string]reflect.Type, t reflect.Type) string {
+// QualifiedNameOf derives a stable package-qualified schema name for a Go type.
+func QualifiedNameOf(t reflect.Type) string {
+	t = reflectutil.DerefType(t)
+	if t == nil {
+		return ""
+	}
+	return schemaName(t)
+}
+
+func schemaNameOrFallback(seen map[string]reflect.Type, t reflect.Type) string {
 	name := t.Name()
 	if name == "" {
 		name = schemaName(t)
 	}
 	if other, ok := seen[name]; ok && other != t {
-		panic("virtuous: schema name collision for " + name)
+		name = uniqueSchemaName(seen, schemaName(t), t)
 	}
 	seen[name] = t
 	return name
@@ -369,12 +401,30 @@ func schemaNameOrPanic(seen map[string]reflect.Type, t reflect.Type) string {
 func (g *Generator) schemaNameFor(t reflect.Type) string {
 	if preferred, ok := g.preferred[t]; ok {
 		if other, ok := g.seenNames[preferred]; ok && other != t {
-			panic("virtuous: schema name collision for " + preferred)
+			preferred = uniqueSchemaName(g.seenNames, schemaName(t), t)
 		}
 		g.seenNames[preferred] = t
 		return preferred
 	}
-	return schemaNameOrPanic(g.seenNames, t)
+	return schemaNameOrFallback(g.seenNames, t)
+}
+
+func uniqueSchemaName(seen map[string]reflect.Type, base string, t reflect.Type) string {
+	if base == "" {
+		base = t.Name()
+	}
+	if base == "" {
+		base = "Schema"
+	}
+	if other, ok := seen[base]; !ok || other == t {
+		return base
+	}
+	for i := 2; ; i++ {
+		candidate := base + strconv.Itoa(i)
+		if other, ok := seen[candidate]; !ok || other == t {
+			return candidate
+		}
+	}
 }
 
 func sortStrings(values []string) {

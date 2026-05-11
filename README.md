@@ -539,6 +539,24 @@ router.HandleTyped(
 )
 ```
 
+Use `enum:"..."` when a scalar path/query/body field has constrained values:
+
+```go
+type ReportListRequest struct {
+	SortBy    string `query:"sort_by,omitempty" enum:"created_at,name"`
+	SortOrder string `query:"sort_order,omitempty" enum:"asc,desc"`
+}
+```
+
+If the route is already mounted on another mux, use `Describe` to add only the generated docs/client contract:
+
+```go
+router.Describe("GET /api/v1/states/{id}", GetStateRequest{}, StateResponse{}, httpapi.HandlerMeta{
+	Service: "States",
+	Method:  "GetByID",
+})
+```
+
 #### 6) Form request body contract
 
 Use `HandlerMeta.RequestBody` when the request media type is not JSON. `httpapi.FormBody(...)` emits `application/x-www-form-urlencoded` and generated clients encode `form` tag wire names.

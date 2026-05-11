@@ -95,6 +95,10 @@ func buildClientSpecWith(
 ) (clientSpec, error) {
 	serviceMap := make(map[string]*clientService)
 	registry := schema.NewRegistry(overrides)
+	collisionNames := routeCollisionSchemaNames(routes)
+	for typ, name := range collisionNames {
+		registry.PreferNameOf(typ, name)
+	}
 	typeFn := typeFnFactory(registry)
 	for _, route := range routes {
 		if route.Handler == nil {
@@ -120,7 +124,7 @@ func buildClientSpecWith(
 		var bodyFields []clientBodyField
 		if reqInfo.Present {
 			reqReflect := reqInfo.Type
-			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
+			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" && collisionNames[reflectutil.DerefType(reqReflect)] == "" {
 				registry.PreferNameOf(reqReflect, preferred)
 			}
 			inferredPathParams, err := clientPathParamsFor(route, reqReflect, typeFn)
@@ -166,7 +170,7 @@ func buildClientSpecWith(
 			reqInfo.Optional = !route.Meta.RequestBody.Required
 			bodyType := reflect.TypeOf(content.Body)
 			if bodyType != nil {
-				if preferred := preferredSchemaName(route.Meta, bodyType); preferred != "" {
+				if preferred := preferredSchemaName(route.Meta, bodyType); preferred != "" && collisionNames[reflectutil.DerefType(bodyType)] == "" {
 					registry.PreferNameOf(bodyType, preferred)
 				}
 				registry.AddTypeOf(bodyType)
@@ -207,7 +211,7 @@ func buildClientSpecWith(
 				if isByteSliceResponse(respReflect) {
 					responseType = byteType
 				} else {
-					if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" {
+					if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" && collisionNames[reflectutil.DerefType(respReflect)] == "" {
 						registry.PreferNameOf(respReflect, preferred)
 					}
 					registry.AddTypeOf(respReflect)

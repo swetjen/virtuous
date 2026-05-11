@@ -9,6 +9,7 @@ httpapi is a compatibility layer for legacy `net/http` handlers and existing RES
 - Routes must be method-prefixed (for example, `GET /users/{id}`) to appear in OpenAPI and client output.
 - Handlers must be wrapped or typed so request and response types can be reflected.
 - Typed route docs/clients default to JSON, with explicit metadata for typed path/query params, form request bodies, custom response media types, and multi-status responses.
+- Use `Describe` to register docs/client metadata for an existing mux route without remounting its runtime handler.
 - Use `HandlerMeta.Responses` when a route needs multiple statuses or a custom response media type such as `image/png` or `text/html`.
 - Use `HandlerMeta.RequestBody` with `httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` request bodies.
 - Request bodies are required by default when present; use `httpapi.Optional[Req]()` to mark optional bodies in generated docs/clients.
@@ -28,6 +29,15 @@ router.HandleTyped(
 	}),
 )
 router.ServeAllDocs()
+```
+
+For routes already mounted elsewhere, register the contract only:
+
+```go
+router.Describe("GET /api/v1/states/{id}", GetStateRequest{}, StateResponse{}, httpapi.HandlerMeta{
+	Service: "States",
+	Method:  "GetByID",
+})
 ```
 
 ## JSON + non-JSON side by side

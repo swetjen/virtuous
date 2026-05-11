@@ -11,7 +11,7 @@ This document captures the classification of user feedback into:
 
 This file is intended as a working draft for follow-up prompts.
 
-## Gap Classification (Q1-Q11)
+## Gap Classification
 
 | Q | Topic | Classification | Notes |
 | --- | --- | --- | --- |
@@ -26,6 +26,7 @@ This file is intended as a working draft for follow-up prompts.
 | 9 | Trailing slash normalization/preservation | Knowledge | Current docs do not define slash policy clearly for migration. Needs explicit guidance and examples. |
 | 10 | Stale pinned version (`0.0.21` vs `VERSION`) | Knowledge | Prompt templates include stale literals and should rely on `VERSION` only. |
 | 11 | RPC status model inconsistency (401 vs 200/422/500) | Knowledge | Must distinguish handler-return statuses (200/422/500) from guard-driven OpenAPI 401 response documentation. |
+| 12 | Enum metadata parity | Resolved + Knowledge | Supported through `enum:"..."` struct tags and explicit `httpapi.ParamSpec.Enum` values. |
 
 ## Knowledge Gap Backlog (Documentation and Guidance Only)
 
@@ -53,6 +54,8 @@ This file is intended as a working draft for follow-up prompts.
 No high-impact capability gaps remain from this feedback set after the `httpapi` metadata, typed param, request media, and auth semantics work.
 
 Remaining work is onboarding/product workflow rather than Swaggo comment compatibility: use the exported OpenAPI contract as the migration reference and register Virtuous routes explicitly.
+
+`httpapi.Router.Describe(...)` can be used when a route is already mounted outside the Virtuous router but still needs generated OpenAPI/client metadata during migration.
 
 ## Working Notes
 

@@ -3,11 +3,13 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	testa "github.com/swetjen/virtuous/internal/testtypes/a"
 	testb "github.com/swetjen/virtuous/internal/testtypes/b"
+	"github.com/swetjen/virtuous/schema"
 )
 
 type nullableResponse struct {
@@ -35,6 +37,11 @@ type PrefixedResponse struct {
 
 type PrefixedChild struct {
 	Name string `json:"name"`
+}
+
+type NestedCollisionRequest struct {
+	A testa.User `json:"a"`
+	B testb.User `json:"b"`
 }
 
 type prefixedHandler struct{}
@@ -112,6 +119,11 @@ type queryRequestMixed struct {
 	Name  string `json:"name"`
 }
 
+type pathBodyRequest struct {
+	ID   int64  `path:"id"`
+	Name string `json:"name"`
+}
+
 type typedParamRequest struct {
 	ID     int64  `path:"id" doc:"Stable user ID"`
 	Limit  int    `query:"limit,omitempty" doc:"Page size" default:"20" minimum:"1" maximum:"100"`
@@ -174,6 +186,15 @@ func (queryHandlerMixed) RequestType() any                                 { ret
 func (queryHandlerMixed) ResponseType() any                                { return nullableResponse{} }
 func (queryHandlerMixed) Metadata() HandlerMeta {
 	return HandlerMeta{Service: "Test", Method: "QueryMixed"}
+}
+
+type pathBodyHandler struct{}
+
+func (pathBodyHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (pathBodyHandler) RequestType() any                                 { return pathBodyRequest{} }
+func (pathBodyHandler) ResponseType() any                                { return nullableResponse{} }
+func (pathBodyHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Test", Method: "PathBody"}
 }
 
 type typedParamHandler struct{}
@@ -358,6 +379,38 @@ func TestOpenAPIQueryParamsMixed(t *testing.T) {
 	}
 }
 
+func TestOpenAPIPathParamsExcludedFromInferredRequestBody(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("POST /users/{id}", pathBodyHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	paths := getMap(t, doc, "paths")
+	usersPath := getMap(t, paths, "/users/{id}")
+	postOp := getMap(t, usersPath, "post")
+	params := getList(t, postOp, "parameters")
+	if len(params) != 1 {
+		t.Fatalf("expected 1 path param, got %d", len(params))
+	}
+	requestBody := getMap(t, postOp, "requestBody")
+	content := getMap(t, requestBody, "content")
+	jsonMedia := getMap(t, content, MediaTypeJSON)
+	bodySchema := getMap(t, jsonMedia, "schema")
+	props := getMap(t, bodySchema, "properties")
+	if _, ok := props["id"]; ok {
+		t.Fatalf("path field should not appear in inferred JSON request body")
+	}
+	if _, ok := props["name"]; !ok {
+		t.Fatalf("body field should appear in inferred JSON request body")
+	}
+}
+
 func TestOpenAPITypedPathAndQueryParams(t *testing.T) {
 	router := NewRouter()
 	router.HandleTyped("GET /users/{id}", typedParamHandler{})
@@ -373,6 +426,9 @@ func TestOpenAPITypedPathAndQueryParams(t *testing.T) {
 	paths := getMap(t, doc, "paths")
 	usersPath := getMap(t, paths, "/users/{id}")
 	getOp := getMap(t, usersPath, "get")
+	if _, ok := getOp["requestBody"]; ok {
+		t.Fatalf("expected no request body for path/query-only request")
+	}
 	params := getList(t, getOp, "parameters")
 	if len(params) != 4 {
 		t.Fatalf("expected 4 params, got %d", len(params))
@@ -399,6 +455,146 @@ func TestOpenAPITypedPathAndQueryParams(t *testing.T) {
 	sinceSchema := getMap(t, since, "schema")
 	if sinceSchema["format"] != "date" {
 		t.Fatalf("since format = %v, want date", sinceSchema["format"])
+	}
+}
+
+func TestOpenAPIExplicitParamEnum(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /reports", nil, nullableResponse{}, HandlerMeta{
+		Service: "Reports",
+		Method:  "List",
+		Params: []ParamSpec{
+			{Name: "sort_order", In: ParamInQuery, Type: "", Enum: []any{"asc", "desc"}},
+		},
+	})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	getOp := getMap(t, getMap(t, getMap(t, doc, "paths"), "/reports"), "get")
+	params := getList(t, getOp, "parameters")
+	sortOrder := findParam(t, params, "query", "sort_order")
+	sortSchema := getMap(t, sortOrder, "schema")
+	enum := getList(t, sortSchema, "enum")
+	if len(enum) != 2 || enum[0] != "asc" || enum[1] != "desc" {
+		t.Fatalf("enum = %#v, want asc/desc", enum)
+	}
+}
+
+func TestOpenAPIExplicitParamEnumPreservesTypedValues(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /reports", nil, nullableResponse{}, HandlerMeta{
+		Service: "Reports",
+		Method:  "List",
+		Params: []ParamSpec{
+			{Name: "status", In: ParamInQuery, Type: int(0), Enum: []any{1, 2, 3}},
+		},
+	})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	getOp := getMap(t, getMap(t, getMap(t, doc, "paths"), "/reports"), "get")
+	params := getList(t, getOp, "parameters")
+	status := findParam(t, params, "query", "status")
+	statusSchema := getMap(t, status, "schema")
+	if statusSchema["type"] != "integer" {
+		t.Fatalf("status schema = %#v, want integer", statusSchema)
+	}
+	enum := getList(t, statusSchema, "enum")
+	if len(enum) != 3 || enum[0] != float64(1) || enum[1] != float64(2) || enum[2] != float64(3) {
+		t.Fatalf("enum = %#v, want 1/2/3", enum)
+	}
+}
+
+func TestOpenAPIDescribeAddsDocsWithoutMountingHandler(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /external/{id}", typedParamRequest{}, nullableResponse{}, HandlerMeta{
+		Service: "External",
+		Method:  "Get",
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/external/1", nil)
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("Describe should not mount runtime handler, got status %d", rec.Code)
+	}
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	getOp := getMap(t, getMap(t, getMap(t, doc, "paths"), "/external/{id}"), "get")
+	params := getList(t, getOp, "parameters")
+	if len(params) != 4 {
+		t.Fatalf("expected described route params, got %d", len(params))
+	}
+}
+
+func TestOpenAPIDescribeSecurityUsesGuardSpecs(t *testing.T) {
+	apiKey := testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"}
+	token := testGuard{name: "TokenAuth", in: "header", param: "Authorization"}
+	router := NewRouter()
+	router.Describe("GET /external", nil, nullableResponse{}, HandlerMeta{
+		Service: "External",
+		Method:  "List",
+	}, AuthAny(apiKey, token))
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	getOp := getMap(t, getMap(t, getMap(t, doc, "paths"), "/external"), "get")
+	security := getList(t, getOp, "security")
+	if len(security) != 2 {
+		t.Fatalf("security alternatives = %d, want 2", len(security))
+	}
+	first := getMapFromList(t, security, 0)
+	second := getMapFromList(t, security, 1)
+	if _, ok := first["ApiKeyAuth"]; !ok {
+		t.Fatalf("first auth alternative missing ApiKeyAuth")
+	}
+	if _, ok := second["TokenAuth"]; !ok {
+		t.Fatalf("second auth alternative missing TokenAuth")
+	}
+	components := getMap(t, doc, "components")
+	schemes := getMap(t, components, "securitySchemes")
+	if _, ok := schemes["ApiKeyAuth"]; !ok {
+		t.Fatalf("missing ApiKeyAuth security scheme")
+	}
+	if _, ok := schemes["TokenAuth"]; !ok {
+		t.Fatalf("missing TokenAuth security scheme")
+	}
+}
+
+func TestOpenAPIDescribeSkipsPatternWithoutMethod(t *testing.T) {
+	router := NewRouter()
+	router.Describe("/external", nil, nullableResponse{}, HandlerMeta{
+		Service: "External",
+		Method:  "List",
+	})
+
+	if len(router.Routes()) != 0 {
+		t.Fatalf("routes = %d, want 0", len(router.Routes()))
 	}
 }
 
@@ -696,6 +892,25 @@ func findParam(t *testing.T, params []any, in, name string) map[string]any {
 	return nil
 }
 
+func openAPISchemaKeySet(t *testing.T, router *Router) map[string]struct{} {
+	t.Helper()
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	components := getMap(t, doc, "components")
+	schemas := getMap(t, components, "schemas")
+	out := make(map[string]struct{}, len(schemas))
+	for name := range schemas {
+		out[name] = struct{}{}
+	}
+	return out
+}
+
 func TestOpenAPISchemaServicePrefix(t *testing.T) {
 	router := NewRouter()
 	router.HandleTyped("GET /prefixed", prefixedHandler{})
@@ -766,18 +981,87 @@ func (collisionHandlerB) Metadata() HandlerMeta {
 	return HandlerMeta{Service: "Admin", Method: "Update"}
 }
 
-func TestOpenAPISchemaNameCollisionPanics(t *testing.T) {
+type nestedCollisionHandler struct{}
+
+func (nestedCollisionHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (nestedCollisionHandler) RequestType() any                                 { return NestedCollisionRequest{} }
+func (nestedCollisionHandler) ResponseType() any                                { return nullableResponse{} }
+func (nestedCollisionHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Admin", Method: "NestedCollision"}
+}
+
+func TestOpenAPISchemaNameCollisionUsesQualifiedNames(t *testing.T) {
 	router := NewRouter()
 	router.HandleTyped("POST /admin/users", collisionHandlerA{})
 	router.HandleTyped("PUT /admin/users", collisionHandlerB{})
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("expected panic on schema name collision")
-		}
-	}()
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
 
-	_, _ = router.OpenAPI()
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+
+	components := getMap(t, doc, "components")
+	schemas := getMap(t, components, "schemas")
+	if _, ok := schemas[schema.QualifiedNameOf(reflect.TypeOf(testa.User{}))]; !ok {
+		t.Fatalf("missing qualified schema for testtypes/a.User")
+	}
+	if _, ok := schemas[schema.QualifiedNameOf(reflect.TypeOf(testb.User{}))]; !ok {
+		t.Fatalf("missing qualified schema for testtypes/b.User")
+	}
+}
+
+func TestOpenAPISchemaNameCollisionIsDeterministicAcrossRouteOrder(t *testing.T) {
+	forward := NewRouter()
+	forward.HandleTyped("POST /admin/users", collisionHandlerA{})
+	forward.HandleTyped("PUT /admin/users", collisionHandlerB{})
+
+	reverse := NewRouter()
+	reverse.HandleTyped("PUT /admin/users", collisionHandlerB{})
+	reverse.HandleTyped("POST /admin/users", collisionHandlerA{})
+
+	forwardSchemas := openAPISchemaKeySet(t, forward)
+	reverseSchemas := openAPISchemaKeySet(t, reverse)
+	if !reflect.DeepEqual(forwardSchemas, reverseSchemas) {
+		t.Fatalf("schema keys differ by route order: forward=%v reverse=%v", forwardSchemas, reverseSchemas)
+	}
+}
+
+func TestOpenAPINestedSchemaNameCollisionUsesQualifiedNames(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("POST /admin/nested", nestedCollisionHandler{})
+
+	schemas := openAPISchemaKeySet(t, router)
+	if _, ok := schemas[schema.QualifiedNameOf(reflect.TypeOf(testa.User{}))]; !ok {
+		t.Fatalf("missing qualified nested schema for testtypes/a.User")
+	}
+	if _, ok := schemas[schema.QualifiedNameOf(reflect.TypeOf(testb.User{}))]; !ok {
+		t.Fatalf("missing qualified nested schema for testtypes/b.User")
+	}
+}
+
+func TestOpenAPIExplicitBodyAndResponseSchemaNameCollisionUsesQualifiedNames(t *testing.T) {
+	router := NewRouter()
+	router.Describe("POST /admin/explicit", nil, nil, HandlerMeta{
+		Service:     "Admin",
+		Method:      "ExplicitCollision",
+		RequestBody: JSONBody(testa.User{}),
+		Responses: []ResponseSpec{
+			{Status: 200, Body: testb.User{}},
+		},
+	})
+
+	schemas := openAPISchemaKeySet(t, router)
+	if _, ok := schemas[schema.QualifiedNameOf(reflect.TypeOf(testa.User{}))]; !ok {
+		t.Fatalf("missing qualified explicit request schema for testtypes/a.User")
+	}
+	if _, ok := schemas[schema.QualifiedNameOf(reflect.TypeOf(testb.User{}))]; !ok {
+		t.Fatalf("missing qualified explicit response schema for testtypes/b.User")
+	}
 }
 
 func TestOpenAPIOptionsApplied(t *testing.T) {

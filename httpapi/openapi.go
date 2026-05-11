@@ -16,6 +16,10 @@ import (
 func (r *Router) OpenAPI() ([]byte, error) {
 	routes := r.Routes()
 	gen := schema.NewGenerator(r.typeOverrides)
+	collisionNames := routeCollisionSchemaNames(routes)
+	for typ, name := range collisionNames {
+		gen.PreferNameOf(typ, name)
+	}
 	paths := make(map[string]map[string]*openAPIOperation)
 	securitySchemes := make(map[string]openAPISecurityScheme)
 
@@ -38,7 +42,7 @@ func (r *Router) OpenAPI() ([]byte, error) {
 		seenParams := map[string]struct{}{}
 		if reqInfo.Present {
 			reqReflect := reqInfo.Type
-			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" {
+			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" && collisionNames[reflectutil.DerefType(reqReflect)] == "" {
 				gen.PreferNameOf(reqReflect, preferred)
 			}
 			// Register the request schema so prefixed names and collisions are tracked
@@ -79,7 +83,7 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			}
 		}
 		if route.Meta.RequestBody != nil {
-			body, err := openAPIRequestBodyFor(gen, route.Meta, *route.Meta.RequestBody)
+			body, err := openAPIRequestBodyFor(gen, route.Meta, *route.Meta.RequestBody, collisionNames)
 			if err != nil {
 				return nil, err
 			}
@@ -91,7 +95,9 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			return nil, err
 		}
 		for _, resp := range responses {
-			preferResponseSchemaName(gen, route.Meta, resp.BodyType)
+			if collisionNames[reflectutil.DerefType(resp.BodyType)] == "" {
+				preferResponseSchemaName(gen, route.Meta, resp.BodyType)
+			}
 			respSchema := responseBodySchema(gen, resp.BodyType)
 			response := op.Responses[resp.Status]
 			if response.Description == "" {
@@ -237,6 +243,9 @@ func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]st
 		if _, ok := skip[field.Name]; ok {
 			continue
 		}
+		if field.Tag.Get("path") != "" {
+			continue
+		}
 		name, omit := reflectutil.JSONFieldName(field)
 		if name == "" {
 			continue
@@ -259,7 +268,7 @@ func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]st
 	}
 }
 
-func openAPIRequestBodyFor(gen *schema.Generator, meta HandlerMeta, spec RequestBodySpec) (*openAPIRequestBody, error) {
+func openAPIRequestBodyFor(gen *schema.Generator, meta HandlerMeta, spec RequestBodySpec, collisionNames map[reflect.Type]string) (*openAPIRequestBody, error) {
 	if len(spec.Content) == 0 {
 		return nil, nil
 	}
@@ -275,7 +284,7 @@ func openAPIRequestBodyFor(gen *schema.Generator, meta HandlerMeta, spec Request
 		var bodyType reflect.Type
 		if content.Body != nil {
 			bodyType = reflect.TypeOf(content.Body)
-			if preferred := preferredSchemaName(meta, bodyType); preferred != "" {
+			if preferred := preferredSchemaName(meta, bodyType); preferred != "" && collisionNames[reflectutil.DerefType(bodyType)] == "" {
 				gen.PreferNameOf(bodyType, preferred)
 			}
 		}
@@ -444,6 +453,9 @@ func paramSchemaForSpec(gen *schema.Generator, spec ParamSpec) *schema.OpenAPISc
 	if spec.Example != nil {
 		paramSchema.Example = spec.Example
 	}
+	if len(spec.Enum) > 0 {
+		paramSchema.Enum = spec.Enum
+	}
 	if spec.Minimum != nil {
 		paramSchema.Minimum = spec.Minimum
 	}
@@ -462,6 +474,75 @@ func paramSchemaForType(gen *schema.Generator, t reflect.Type) *schema.OpenAPISc
 		return &schema.OpenAPISchema{Type: "string"}
 	}
 	return paramSchema
+}
+
+func routeCollisionSchemaNames(routes []Route) map[reflect.Type]string {
+	types := map[reflect.Type]struct{}{}
+	for _, route := range routes {
+		if route.Handler == nil {
+			continue
+		}
+		reqInfo := resolveRequestType(route.Handler.RequestType())
+		if reqInfo.Present {
+			collectSchemaTypes(types, reqInfo.Type)
+		}
+		collectSchemaTypes(types, responseBodyType(route.Handler.ResponseType()))
+		if route.Meta.RequestBody != nil {
+			for _, content := range route.Meta.RequestBody.Content {
+				collectSchemaTypes(types, reflect.TypeOf(content.Body))
+			}
+		}
+		for _, response := range route.Meta.Responses {
+			collectSchemaTypes(types, reflect.TypeOf(response.Body))
+		}
+		for _, param := range route.Meta.Params {
+			collectSchemaTypes(types, reflect.TypeOf(param.Type))
+		}
+	}
+	byName := map[string][]reflect.Type{}
+	for typ := range types {
+		if typ.Name() == "" || typ.PkgPath() == "" {
+			continue
+		}
+		byName[typ.Name()] = append(byName[typ.Name()], typ)
+	}
+	out := map[reflect.Type]string{}
+	for _, named := range byName {
+		if len(named) < 2 {
+			continue
+		}
+		for _, typ := range named {
+			out[typ] = schema.QualifiedNameOf(typ)
+		}
+	}
+	return out
+}
+
+func collectSchemaTypes(out map[reflect.Type]struct{}, typ reflect.Type) {
+	typ = reflectutil.DerefType(typ)
+	if typ == nil {
+		return
+	}
+	switch typ.Kind() {
+	case reflect.Struct:
+		if typ.Name() != "" {
+			out[typ] = struct{}{}
+		}
+		if typ.PkgPath() == "time" && typ.Name() == "Time" {
+			return
+		}
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			if field.PkgPath != "" {
+				continue
+			}
+			collectSchemaTypes(out, field.Type)
+		}
+	case reflect.Slice, reflect.Array:
+		collectSchemaTypes(out, typ.Elem())
+	case reflect.Map:
+		collectSchemaTypes(out, typ.Elem())
+	}
 }
 
 type openAPIDoc struct {

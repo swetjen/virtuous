@@ -4,6 +4,10 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+
+	testa "github.com/swetjen/virtuous/internal/testtypes/a"
+	testb "github.com/swetjen/virtuous/internal/testtypes/b"
+	"github.com/swetjen/virtuous/schema"
 )
 
 type SpecRequest struct {
@@ -43,6 +47,65 @@ func TestClientSpecUsesServicePrefix(t *testing.T) {
 	}
 	if !containsObject(spec.Objects, "SpecChild") {
 		t.Fatalf("missing nested type without prefix")
+	}
+}
+
+func TestClientSpecSchemaNameCollisionUsesQualifiedNames(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("POST /admin/users", collisionHandlerA{})
+	router.HandleTyped("PUT /admin/users", collisionHandlerB{})
+
+	spec, err := buildClientSpec(router.Routes(), nil)
+	if err != nil {
+		t.Fatalf("build spec: %v", err)
+	}
+	if !containsObject(spec.Objects, schema.QualifiedNameOf(reflect.TypeOf(testa.User{}))) {
+		t.Fatalf("missing qualified client object for testtypes/a.User")
+	}
+	if !containsObject(spec.Objects, schema.QualifiedNameOf(reflect.TypeOf(testb.User{}))) {
+		t.Fatalf("missing qualified client object for testtypes/b.User")
+	}
+}
+
+func TestClientSpecExplicitBodyAndResponseCollisionUsesQualifiedNames(t *testing.T) {
+	router := NewRouter()
+	router.Describe("POST /admin/explicit", nil, nil, HandlerMeta{
+		Service:     "Admin",
+		Method:      "ExplicitCollision",
+		RequestBody: JSONBody(testa.User{}),
+		Responses: []ResponseSpec{
+			{Status: 200, Body: testb.User{}},
+		},
+	})
+
+	spec, err := buildClientSpec(router.Routes(), nil)
+	if err != nil {
+		t.Fatalf("build spec: %v", err)
+	}
+	if !containsObject(spec.Objects, schema.QualifiedNameOf(reflect.TypeOf(testa.User{}))) {
+		t.Fatalf("missing qualified request object for testtypes/a.User")
+	}
+	if !containsObject(spec.Objects, schema.QualifiedNameOf(reflect.TypeOf(testb.User{}))) {
+		t.Fatalf("missing qualified response object for testtypes/b.User")
+	}
+}
+
+func TestClientSpecIncludesDescribedRoutes(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /external/{id}", typedParamRequest{}, nullableResponse{}, HandlerMeta{
+		Service: "External",
+		Method:  "Get",
+	})
+
+	spec, err := buildClientSpec(router.Routes(), nil)
+	if err != nil {
+		t.Fatalf("build spec: %v", err)
+	}
+	if len(spec.Services) != 1 || spec.Services[0].Name != "External" {
+		t.Fatalf("services = %#v, want External", spec.Services)
+	}
+	if len(spec.Services[0].Methods) != 1 || spec.Services[0].Methods[0].Name != "get" {
+		t.Fatalf("methods = %#v, want get", spec.Services[0].Methods)
 	}
 }
 

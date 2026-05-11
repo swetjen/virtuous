@@ -71,6 +71,10 @@ func WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp an
 	return httpapi.WrapFunc(handler, req, resp, meta)
 }
 
+func Describe(router *Router, pattern string, req any, resp any, meta HandlerMeta, guards ...Guard) {
+	router.Describe(pattern, req, resp, meta, guards...)
+}
+
 func Optional[T any](req ...T) any {
 	return httpapi.Optional(req...)
 }

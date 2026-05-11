@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.30
+
+- Add docs-only `httpapi.Router.Describe(...)` registration for existing mux routes that should emit OpenAPI and generated clients without remounting runtime handlers.
+- Disambiguate same-name Go schemas from different packages with package-qualified names instead of panicking during `httpapi` OpenAPI/client generation.
+- Add OpenAPI enum metadata through `enum:"..."` struct tags and explicit `httpapi.ParamSpec.Enum` values.
+- Exclude `path` fields from inferred JSON request bodies while preserving typed path parameter schemas.
+- Add focused unit coverage for schema collisions, docs-only routes, enum metadata, and path/body inference.
+
 ## 0.0.29
 
 - Add richer `httpapi` operation metadata for typed path/query/header/cookie params, explicit request body media types, and explicit security alternatives.

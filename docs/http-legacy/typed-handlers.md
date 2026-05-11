@@ -51,9 +51,29 @@ handler := httpapi.WrapFunc(
 - `Summary`
 - `Description`
 - `Tags`
+- `Params`
+- `RequestBody`
 - `Responses`
 
 If metadata is omitted, the router infers `Service` and `Method` when possible.
+
+## Docs-only registration
+
+Use `Describe` when the route is already mounted on another mux but should still appear in generated OpenAPI and clients:
+
+```go
+router.Describe(
+	"GET /reports/{id}",
+	GetReportRequest{},
+	GetReportResponse{},
+	httpapi.HandlerMeta{
+		Service: "Reports",
+		Method:  "Get",
+	},
+)
+```
+
+`Describe` records metadata only; it does not install a runtime handler.
 
 ## Explicit response specs
 
@@ -84,6 +104,7 @@ Notes:
 ## Request body note
 
 When body fields exist on a typed request, generated OpenAPI marks the request body as required by default.
+Fields tagged with `path` or `query` are modeled as parameters and excluded from inferred JSON request bodies.
 
 To mark the body optional, wrap the request type with `Optional`:
 
@@ -117,3 +138,14 @@ Typed handlers support:
 - `HandlerMeta.Responses` can override media type for typed `string` / `[]byte` responses (for example `text/html` or `image/png`)
 
 For runtime-only routes that should not appear in generated OpenAPI/clients, continue to use untyped handlers with `Handle`.
+
+## Schema metadata
+
+Struct fields support OpenAPI metadata tags including `doc`, `format`, `default`, `example`, `minimum`, `maximum`, and `enum`:
+
+```go
+type ReportListRequest struct {
+	SortBy    string `query:"sort_by,omitempty" enum:"created_at,name"`
+	SortOrder string `query:"sort_order,omitempty" enum:"asc,desc"`
+}
+```

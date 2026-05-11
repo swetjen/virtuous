@@ -60,6 +60,9 @@ func queryParamsFor(t reflect.Type) (queryParamsInfo, error) {
 			info.QueryFieldSet[field.Name] = struct{}{}
 			continue
 		}
+		if field.Tag.Get("path") != "" {
+			continue
+		}
 
 		if jsonName, _ := reflectutil.JSONFieldName(field); jsonName != "" {
 			info.BodyFields++

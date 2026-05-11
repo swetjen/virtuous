@@ -3,6 +3,7 @@ package schema
 import (
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/swetjen/virtuous/internal/reflectutil"
@@ -213,7 +214,7 @@ func (r *Registry) objectName(t reflect.Type) string {
 	}
 	if preferred, ok := r.preferred[t]; ok {
 		if other, ok := r.typeByName[preferred]; ok && other != t {
-			panic("virtuous: schema name collision for " + preferred)
+			preferred = uniqueRegistryName(r.typeByName, schemaName(t), t)
 		}
 		r.nameByType[t] = preferred
 		r.typeByName[preferred] = t
@@ -224,11 +225,29 @@ func (r *Registry) objectName(t reflect.Type) string {
 		name = schemaName(t)
 	}
 	if other, ok := r.typeByName[name]; ok && other != t {
-		panic("virtuous: schema name collision for " + name)
+		name = uniqueRegistryName(r.typeByName, schemaName(t), t)
 	}
 	r.nameByType[t] = name
 	r.typeByName[name] = t
 	return name
+}
+
+func uniqueRegistryName(seen map[string]reflect.Type, base string, t reflect.Type) string {
+	if base == "" {
+		base = t.Name()
+	}
+	if base == "" {
+		base = "Object"
+	}
+	if other, ok := seen[base]; !ok || other == t {
+		return base
+	}
+	for i := 2; ; i++ {
+		candidate := base + strconv.Itoa(i)
+		if other, ok := seen[candidate]; !ok || other == t {
+			return candidate
+		}
+	}
 }
 
 func (r *Registry) preferName(t reflect.Type, name string) {

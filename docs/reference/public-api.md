@@ -48,6 +48,7 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.NewRouter()`
 - `(*httpapi.Router).Handle(pattern string, h http.Handler, guards ...httpapi.Guard)`
 - `(*httpapi.Router).HandleTyped(pattern string, h httpapi.TypedHandler, guards ...httpapi.Guard)`
+- `(*httpapi.Router).Describe(pattern string, req any, resp any, meta httpapi.HandlerMeta, guards ...httpapi.Guard)`
 - `httpapi.Wrap(handler http.Handler, req any, resp any, meta httpapi.HandlerMeta)`
 - `httpapi.WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta httpapi.HandlerMeta)`
 - `httpapi.Optional[T any](req ...T)`
@@ -92,3 +93,4 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `(*schema.Registry).Objects()`
 - `(*schema.Registry).JSType(v any)`
 - `(*schema.Registry).PyType(v any)`
+- `schema.QualifiedNameOf(t reflect.Type)`

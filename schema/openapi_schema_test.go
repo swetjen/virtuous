@@ -1,12 +1,21 @@
 package schema
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+
+	testa "github.com/swetjen/virtuous/internal/testtypes/a"
+	testb "github.com/swetjen/virtuous/internal/testtypes/b"
+)
 
 type taggedSchema struct {
 	Enabled bool    `json:"enabled" doc:"Feature flag" default:"true" example:"false"`
 	Limit   int     `json:"limit" default:"20" minimum:"1" maximum:"100"`
 	Ratio   float64 `json:"ratio" example:"0.5"`
 	Since   string  `json:"since" format:"date"`
+	Sort    string  `json:"sort" enum:"name,created_at"`
+	Level   int     `json:"level" enum:"1,2,3"`
+	DryRun  bool    `json:"dryRun" enum:"true,false"`
 }
 
 type childSchema struct {
@@ -51,6 +60,21 @@ func TestOpenAPISchemaFieldMetadataTags(t *testing.T) {
 	if since.Format != "date" {
 		t.Fatalf("since format = %q, want date", since.Format)
 	}
+
+	sort := props["sort"]
+	if len(sort.Enum) != 2 || sort.Enum[0] != "name" || sort.Enum[1] != "created_at" {
+		t.Fatalf("sort enum = %#v, want name/created_at", sort.Enum)
+	}
+
+	level := props["level"]
+	if len(level.Enum) != 3 || level.Enum[0] != int64(1) || level.Enum[1] != int64(2) || level.Enum[2] != int64(3) {
+		t.Fatalf("level enum = %#v, want int64 1/2/3", level.Enum)
+	}
+
+	dryRun := props["dryRun"]
+	if len(dryRun.Enum) != 2 || dryRun.Enum[0] != true || dryRun.Enum[1] != false {
+		t.Fatalf("dryRun enum = %#v, want true/false", dryRun.Enum)
+	}
 }
 
 func TestOpenAPISchemaFieldMetadataWrapsRefs(t *testing.T) {
@@ -64,5 +88,41 @@ func TestOpenAPISchemaFieldMetadataWrapsRefs(t *testing.T) {
 	}
 	if len(child.AllOf) != 1 || child.AllOf[0].Ref == "" {
 		t.Fatalf("child should wrap ref in allOf: %#v", child)
+	}
+}
+
+func TestOpenAPIGeneratorSchemaNameCollisionFallsBack(t *testing.T) {
+	gen := NewGenerator(nil)
+	_ = gen.SchemaFor(testa.User{})
+	_ = gen.SchemaFor(testb.User{})
+
+	components := gen.Components()
+	if len(components) != 2 {
+		t.Fatalf("components = %d, want 2", len(components))
+	}
+	if _, ok := components["User"]; !ok {
+		t.Fatalf("missing first bare User schema")
+	}
+	if _, ok := components[QualifiedNameOf(reflect.TypeOf(testb.User{}))]; !ok {
+		t.Fatalf("missing fallback qualified schema for testtypes/b.User")
+	}
+}
+
+func TestOpenAPIGeneratorPreferredNameCollisionFallsBack(t *testing.T) {
+	gen := NewGenerator(nil)
+	gen.PreferName(testa.User{}, "User")
+	gen.PreferName(testb.User{}, "User")
+	_ = gen.SchemaFor(testa.User{})
+	_ = gen.SchemaFor(testb.User{})
+
+	components := gen.Components()
+	if len(components) != 2 {
+		t.Fatalf("components = %d, want 2", len(components))
+	}
+	if _, ok := components["User"]; !ok {
+		t.Fatalf("missing preferred User schema")
+	}
+	if _, ok := components[QualifiedNameOf(reflect.TypeOf(testb.User{}))]; !ok {
+		t.Fatalf("missing fallback qualified schema for preferred collision")
 	}
 }

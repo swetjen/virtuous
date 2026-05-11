@@ -56,6 +56,7 @@ Use this matrix to separate "supported now" from "known product limitations":
 | `@Success` / `@Failure` | Typed response struct and optional `httpapi.HandlerMeta.Responses` | RPC always documents 200/422/500 with the same response schema. `httpapi` can declare explicit response entries per status. |
 | `@Security` | `guard.Guard` with `Spec()` + middleware | Security schemes are emitted from guard specs. |
 | `@Router /path [method]` | `router.HandleTyped("METHOD /path", ...)` (`httpapi`) or `router.HandleRPC(fn)` (`rpc`) | RPC path is inferred: `/{prefix}/{package}/{kebab(function)}`. |
+| Existing mounted route | `router.Describe(...)` (`httpapi`) | Emits OpenAPI/client metadata without installing a second runtime handler. |
 | `@Accept`, `@Produce` | Implicit JSON by default; override request media with `HandlerMeta.RequestBody` and response media with `HandlerMeta.Responses` | Use `FormBody(...)` for form callbacks and `ResponseSpec{MediaType: ...}` for typed custom response media types. |
 
 ## Behavioral differences that matter
