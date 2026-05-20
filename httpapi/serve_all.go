@@ -2,11 +2,12 @@ package httpapi
 
 // ServeAllDocsOptions configures ServeAllDocs behavior.
 type ServeAllDocsOptions struct {
-	DocsEnabled  bool
-	DocsOptions  []DocOpt
-	ClientJSPath string
-	ClientTSPath string
-	ClientPYPath string
+	DocsEnabled      bool
+	DocsOptions      []DocOpt
+	ClientJSPath     string
+	ClientTSPath     string
+	ClientPYPath     string
+	ReactQueryTSPath string
 }
 
 // ServeAllDocsOpt mutates ServeAllDocsOptions.
@@ -48,6 +49,15 @@ func WithClientPYPath(path string) ServeAllDocsOpt {
 	}
 }
 
+// WithReactQueryTSPath enables and overrides the React Query TS client route path.
+func WithReactQueryTSPath(path string) ServeAllDocsOpt {
+	return func(o *ServeAllDocsOptions) {
+		if path != "" {
+			o.ReactQueryTSPath = ensureLeadingSlash(path)
+		}
+	}
+}
+
 // WithoutDocs disables docs/OpenAPI route registration.
 func WithoutDocs() ServeAllDocsOpt {
 	return func(o *ServeAllDocsOptions) {
@@ -80,5 +90,9 @@ func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
 	if config.ClientPYPath != "" {
 		r.HandleFunc("GET "+config.ClientPYPath, r.ServeClientPY)
 		r.logger.Info("client py available", "path", config.ClientPYPath)
+	}
+	if config.ReactQueryTSPath != "" {
+		r.HandleFunc("GET "+config.ReactQueryTSPath, r.ServeReactQueryTS)
+		r.logger.Info("react query ts client available", "path", config.ReactQueryTSPath)
 	}
 }

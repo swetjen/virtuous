@@ -31,6 +31,21 @@ router.HandleTyped(
 router.ServeAllDocs()
 ```
 
+Generate the framework-agnostic TypeScript client and optional standalone React Query client as separate artifacts:
+
+```go
+router.WriteClientTSFile("client.gen.ts")
+router.WriteReactQueryTSFile("react-query.gen.ts")
+```
+
+To serve the React Query client from `ServeAllDocs`, opt in with an explicit path:
+
+```go
+router.ServeAllDocs(httpapi.WithReactQueryTSPath("/react-query.gen.ts"))
+```
+
+See [React Query client](./react-query.md) for the generated API shape and path-param `enabled` behavior.
+
 For routes already mounted elsewhere, register the contract only:
 
 ```go

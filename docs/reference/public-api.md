@@ -85,6 +85,12 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `(*httpapi.Router).WriteClientJS(w io.Writer)`
 - `(*httpapi.Router).WriteClientTS(w io.Writer)`
 - `(*httpapi.Router).WriteClientPY(w io.Writer)`
+- `(*httpapi.Router).WriteReactQueryTS(w io.Writer)`
+- `(*httpapi.Router).WriteReactQueryTSFile(path string)`
+- `(*httpapi.Router).WriteReactQueryTSHash(w io.Writer)`
+- `(*httpapi.Router).ServeReactQueryTS(w http.ResponseWriter, r *http.Request)`
+- `(*httpapi.Router).ServeReactQueryTSHash(w http.ResponseWriter, r *http.Request)`
+- `httpapi.WithReactQueryTSPath(path string)`
 
 ## guard package
 

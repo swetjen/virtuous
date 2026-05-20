@@ -1,0 +1,109 @@
+# React Query client
+
+`httpapi` can generate an optional standalone TanStack React Query TypeScript client. It is a distinct asset from the framework-agnostic TypeScript client and may be generated instead of `client.gen.ts`.
+
+Generate either or both artifacts:
+
+```go
+router.WriteClientTSFile("client.gen.ts")
+router.WriteReactQueryTSFile("react-query.gen.ts")
+```
+
+The React Query artifact does not import `client.gen.ts` or any local generated file. It embeds the raw client, `AuthOptions`, and request/response interfaces directly, then exports its own client instance:
+
+```ts
+export const reactQueryClient = createClient('')
+```
+
+Generated imports are limited to external packages such as `@tanstack/react-query`. The base client remains free of React dependencies, and the React Query client can be moved or emitted independently without local import path configuration.
+
+## Queries
+
+`GET` and `HEAD` routes generate:
+
+- a stable query key helper
+- a query options helper
+- a `useQuery` hook
+
+Example:
+
+```ts
+export function getApiV1MeQueryKey() {
+	return ['GET /api/v1/me'] as const
+}
+
+export function getApiV1MeQueryOptions(requestOptions?: AuthOptions) {
+	return {
+		queryKey: getApiV1MeQueryKey(),
+		queryFn: () => reactQueryClient.API.getApiV1Me(requestOptions),
+	}
+}
+
+export function useGetApiV1Me(
+	requestOptions?: AuthOptions,
+	queryOptions?: Omit<UseQueryOptions<MeResponse, Error>, 'queryKey' | 'queryFn'>,
+) {
+	return useQuery({
+		...getApiV1MeQueryOptions(requestOptions),
+		...queryOptions,
+	})
+}
+```
+
+For routes with path or query params, the key includes method/path plus parameter objects:
+
+```ts
+return ['GET /users/{id}', pathParams, query] as const
+```
+
+Required path params set a default `enabled` guard:
+
+```ts
+enabled: !!pathParams && pathParams.id !== undefined && pathParams.id !== null
+```
+
+Caller-provided `queryOptions` are spread last. If a caller overrides `enabled: true` while required path params are still missing, the generated query function will call the raw client with missing params and the raw client may throw.
+
+## Mutations
+
+Non-`GET`/`HEAD` routes generate `useMutation` hooks with typed variable objects.
+
+```ts
+export function useCreateReport(
+	requestOptions?: AuthOptions,
+	mutationOptions?: UseMutationOptions<ReportResponse, Error, { request: ReportCreateRequest }>,
+) {
+	return useMutation({
+		mutationFn: (variables: { request: ReportCreateRequest }) =>
+			reactQueryClient.Reports.createReport(variables.request, requestOptions),
+		...mutationOptions,
+	})
+}
+```
+
+Variable objects include only the inputs required by the raw client: `pathParams`, `request`, and/or `query`.
+
+Optional-body-only mutations accept either a variable object or no variables:
+
+```ts
+mutationFn: (variables?: { request?: UpdateRequest }) =>
+	reactQueryClient.API.update(variables?.request, requestOptions)
+```
+
+## Serving
+
+`ServeAllDocs()` does not expose the React Query client by default. Opt in with an explicit path:
+
+```go
+router.ServeAllDocs(httpapi.WithReactQueryTSPath("/react-query.gen.ts"))
+```
+
+You can also mount the handler yourself:
+
+```go
+mux.HandleFunc("GET /react-query.gen.ts", router.ServeReactQueryTS)
+```
+
+## Naming
+
+React Query exports are flat. When method names collide across services, Virtuous prefixes the generated hook/key names with the service name. For example, `Users.Get` and `Reports.Get` generate names such as `useUsersGet` and `useReportsGet`.

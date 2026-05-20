@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.32
+
+- Add an optional standalone `httpapi` React Query TypeScript generator (`WriteReactQueryTS*`, `ServeReactQueryTS*`, and `WithReactQueryTSPath`) that embeds the raw client/types plus typed query options/hooks and mutation hooks, with docs for the generated API shape and path-param `enabled` behavior.
+
 ## 0.0.31
 
 - Release the docs/admin API split under a new version after `v0.0.30` shipped with public API additions.
