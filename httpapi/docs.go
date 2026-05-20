@@ -212,7 +212,8 @@ func emptyObservabilitySnapshot() any {
 	}
 }
 
-// DocsHandler returns a mountable docs/admin handler with subtree-local endpoints.
+// DocsHandler returns a mountable docs handler with subtree-local docs and OpenAPI endpoints.
+// Admin endpoints are exposed separately by AdminHandler.
 func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 	config := applyDocOpts(opts...)
 	modules := config.enabledModules()
@@ -253,13 +254,27 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 		}))
 	}
 
+	return handler
+}
+
+// AdminHandler returns a mountable docs/admin handler with subtree-local admin endpoints.
+func (r *Router) AdminHandler(opts ...DocOpt) http.Handler {
+	config := applyDocOpts(opts...)
+	modules := config.enabledModules()
+
+	if r.events == nil {
+		r.events = adminui.NewEventFeed(600)
+	}
+
+	handler := http.NewServeMux()
+
 	if modules[ModuleDatabase] {
-		handler.Handle("GET /_admin/sql", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		handler.Handle("GET /sql", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			catalog := adminui.LoadSQLCatalog(config.SQLRoot)
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_ = json.NewEncoder(w).Encode(catalog)
 		}))
-		handler.Handle("GET /_admin/db", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		handler.Handle("GET /db", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			payload := struct {
 				Enabled bool   `json:"enabled"`
 				Snippet string `json:"snippet"`
@@ -280,18 +295,18 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(payload)
 		})
-		handler.Handle("POST /_admin/db/preview", rejectDBMutation)
-		handler.Handle("POST /_admin/db/query", rejectDBMutation)
+		handler.Handle("POST /db/preview", rejectDBMutation)
+		handler.Handle("POST /db/query", rejectDBMutation)
 	}
 
 	if modules[ModuleObservability] {
-		handler.Handle("GET /_admin/metrics", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		handler.Handle("GET /metrics", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_ = json.NewEncoder(w).Encode(emptyObservabilitySnapshot())
 		}))
-		handler.Handle("GET /_admin/events", http.HandlerFunc(r.events.ServeJSON))
-		handler.Handle("GET /_admin/events.stream", http.HandlerFunc(r.events.ServeStream))
-		handler.Handle("GET /_admin/logging", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		handler.Handle("GET /events", http.HandlerFunc(r.events.ServeJSON))
+		handler.Handle("GET /events.stream", http.HandlerFunc(r.events.ServeStream))
+		handler.Handle("GET /logging", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			payload := struct {
 				Enabled bool   `json:"enabled"`
 				Active  bool   `json:"active"`
@@ -309,7 +324,7 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 	return handler
 }
 
-// HandleDocs registers default docs and OpenAPI routes on the router.
+// ServeDocs registers default docs and OpenAPI routes on the router.
 func (r *Router) ServeDocs(opts ...DocOpt) {
 	config := applyDocOpts(opts...)
 	modules := config.enabledModules()
@@ -327,7 +342,7 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 	r.mux.Handle("GET "+docsBase, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, docsIndex, http.StatusMovedPermanently)
 	}))
-	r.mux.Handle(docsIndex, http.StripPrefix(docsBase, r.DocsHandler(opts...)))
+	r.mux.Handle("GET "+docsIndex, http.StripPrefix(docsBase, r.DocsHandler(opts...)))
 
 	openAPIPath := ensureLeadingSlash(config.OpenAPIPath)
 	if modules[ModuleAPI] && openAPIPath != "" {
@@ -348,6 +363,27 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		"openapi", openAPIPath,
 		"modules", strings.Join(enabledModuleNames(modules), ","),
 	)
+}
+
+// ServeAdmin registers docs/admin endpoints under the docs _admin subtree.
+func (r *Router) ServeAdmin(opts ...DocOpt) {
+	config := applyDocOpts(opts...)
+
+	if r.events == nil {
+		r.events = adminui.NewEventFeed(600)
+	}
+
+	docsBase := strings.TrimSuffix(config.DocsPath, "/")
+	if docsBase == "" {
+		docsBase = "/docs"
+	}
+	adminBase := docsBase + "/_admin"
+	adminIndex := adminBase + "/"
+	handler := http.StripPrefix(adminBase, r.AdminHandler(opts...))
+
+	r.mux.Handle("GET "+adminIndex, handler)
+	r.mux.Handle("POST "+adminIndex, handler)
+	r.events.RecordSystem("admin docs online: " + adminIndex)
 }
 
 func ensureLeadingSlash(path string) string {

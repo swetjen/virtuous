@@ -33,9 +33,10 @@ _ = server.ListenAndServe()
 - `ServeAllDocs()` adds generated clients (`/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`).
 - `WithModules(...)` controls visible docs modules: `api`, `database`, `observability`.
 - `DocsHandler(...)` returns a mountable docs subtree handler for custom route placement and docs-only middleware.
+- `AdminHandler(...)` returns mountable admin endpoints for enabled database or observability modules; mount it explicitly under a guarded `_admin` subtree when those modules are exposed.
 - `/rpc/_virtuous/observability` redirects into the docs observability panel.
 - `/rpc/_virtuous/metrics` serves live JSON aggregates.
-- `/rpc/docs/_admin/db` and related endpoints power the docs database explorer when `rpc.WithDBExplorer(...)` is configured.
+- `/rpc/docs/_admin/db` and related endpoints power the docs database explorer only when `AdminHandler(...)` or `ServeAdmin(...)` is explicitly mounted and `rpc.WithDBExplorer(...)` is configured.
 
 Mountable docs example:
 
@@ -43,10 +44,14 @@ Mountable docs example:
 docs := router.DocsHandler(
 	rpc.WithModules(rpc.ModuleAPI, rpc.ModuleObservability),
 )
+admin := router.AdminHandler(
+	rpc.WithModules(rpc.ModuleObservability),
+)
 
 mux := http.NewServeMux()
 mux.Handle("/rpc/", router)
 mux.Handle("/admin/docs/", http.StripPrefix("/admin/docs", docs))
+mux.Handle("GET /admin/docs/_admin/", http.StripPrefix("/admin/docs/_admin", admin))
 ```
 
 ## Observability
@@ -85,7 +90,9 @@ func (bearerGuard) Middleware() func(http.Handler) http.Handler {
 ## Legacy httpapi (migration only)
 
 - Method-prefixed patterns like `GET /path` are required for docs/clients.
-- Use `Wrap` or `WrapFunc` so request/response types attach to handlers.
+- Use `Wrap` or `WrapFunc` for quick adapters around existing handlers.
+- Use `TypedHandlerFunc` for compact inline typed handlers.
+- Prefer struct-based `TypedHandler` implementations when a route needs richer docs metadata, multiple statuses, or custom media types.
 - `HandlerMeta.Service` and `HandlerMeta.Method` control client method names.
 - Typed `httpapi` docs/clients default to JSON, with explicit metadata for compatibility contracts.
 - Use `path`/`query` tags for typed params.

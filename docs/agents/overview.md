@@ -10,7 +10,7 @@ Virtuous is designed to be deterministic for agents. Keep project layout and han
 2) Implement RPC handlers.
 3) Register handlers on the RPC router.
 4) Serve docs and clients via `ServeAllDocs()`.
-5) If needed, mount docs with `DocsHandler(...)` for custom route/guard control.
+5) If needed, mount docs with `DocsHandler(...)` for custom route/guard control and `AdminHandler(...)` for explicit admin endpoints.
 
 ## Agent prompt template (RPC)
 
@@ -21,7 +21,7 @@ You are implementing a Virtuous RPC API.
 - Put handlers in package folders (states, users, admin).
 - Use func(ctx, req) (Resp, int).
 - Register handlers in router.go and call router.ServeAllDocs().
-- If docs need a custom path/guard, use router.DocsHandler(...) and mount it on mux.
+- If docs need a custom path/guard, use router.DocsHandler(...) and mount it on mux. Mount router.AdminHandler(...) separately when database or observability admin endpoints are exposed.
 - Use httpapi only for legacy handlers.
 ```
 

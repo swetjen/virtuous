@@ -7,6 +7,12 @@ These instructions describe how to understand and work with this repository.
 - RPC is the canonical API style; `httpapi` exists for legacy handlers and migration.
 - Route registration is dynamic; there is no CLI.
 
+## Scope Boundary
+- Work in this repository as the Virtuous library author.
+- Direct edits are limited to Virtuous itself: library code, docs, examples, tests, release files, and other files under `~/dev/virtuous`.
+- You may inspect or audit downstream projects and migration branches, including code outside this repository, to understand integration requirements or reproduce issues.
+- Do not directly edit downstream consumer repositories. When consumer-side changes appear necessary, report the needed changes or propose a patch plan for that project instead.
+
 ## Key Files
 - `rpc/router.go`: RPC route registration, guards, metadata inference.
 - `rpc/handler.go`: RPC handler adapter and signature validation.

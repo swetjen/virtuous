@@ -32,7 +32,9 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.NewPGXDBExplorer(pool *pgxpool.Pool, opts ...rpc.DBExplorerOption)`
 - `(*rpc.Router).HandleRPC(fn any, guards ...rpc.Guard)`
 - `(*rpc.Router).DocsHandler(opts ...rpc.DocOpt)`
+- `(*rpc.Router).AdminHandler(opts ...rpc.DocOpt)`
 - `(*rpc.Router).ServeDocs(opts ...rpc.DocOpt)`
+- `(*rpc.Router).ServeAdmin(opts ...rpc.DocOpt)`
 - `(*rpc.Router).ServeAllDocs(opts ...rpc.ServeAllDocsOpt)`
 - `(*rpc.Router).AttachLogger(next http.Handler)`
 - `(*rpc.Router).OpenAPI()`
@@ -51,6 +53,8 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `(*httpapi.Router).Describe(pattern string, req any, resp any, meta httpapi.HandlerMeta, guards ...httpapi.Guard)`
 - `httpapi.Wrap(handler http.Handler, req any, resp any, meta httpapi.HandlerMeta)`
 - `httpapi.WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta httpapi.HandlerMeta)`
+- `httpapi.TypedHandler`
+- `httpapi.TypedHandlerFunc`
 - `httpapi.Optional[T any](req ...T)`
 - `httpapi.ParamSpec`
 - `httpapi.RequestBodySpec`
@@ -69,7 +73,9 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.WithOpenAPIPath(path string)`
 - `httpapi.WithSQLRoot(path string)`
 - `(*httpapi.Router).DocsHandler(opts ...httpapi.DocOpt)`
+- `(*httpapi.Router).AdminHandler(opts ...httpapi.DocOpt)`
 - `(*httpapi.Router).ServeDocs(opts ...httpapi.DocOpt)`
+- `(*httpapi.Router).ServeAdmin(opts ...httpapi.DocOpt)`
 - `(*httpapi.Router).ServeAllDocs(opts ...httpapi.ServeAllDocsOpt)`
 - `(*httpapi.Router).AttachLogger(next http.Handler)`
 - `(*httpapi.Router).OpenAPI()`

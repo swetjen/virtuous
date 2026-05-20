@@ -8,6 +8,8 @@ RPC routers can serve docs and clients at runtime. Specs and clients are generat
 
 `DocsHandler(...)` is the low-level mountable handler when you want custom route placement, guards, or middleware at the docs boundary.
 
+`AdminHandler(...)` is the explicit mountable handler for database and observability admin endpoints used by those docs modules.
+
 ## Modules
 
 The docs shell has three modules:
@@ -36,11 +38,12 @@ router.ServeDocs(
 - Observability redirect: `/rpc/_virtuous/observability` (when `observability` module enabled)
 - Metrics JSON: `/rpc/_virtuous/metrics` (when `observability` module enabled)
 
-The docs subtree also serves module endpoints under `/rpc/docs/_admin/...`.
+Admin endpoints are not mounted by `ServeDocs()`. Call `ServeAdmin(...)` or mount `AdminHandler(...)` explicitly when the database or observability modules need live endpoints under `/rpc/docs/_admin/...`.
 
-## DocsHandler (mountable)
+## DocsHandler and AdminHandler (mountable)
 
 Use `DocsHandler(...)` when docs must live under a custom path or be wrapped with auth.
+Use `AdminHandler(...)` when database or observability admin endpoints should be exposed.
 
 ```go
 router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
@@ -49,6 +52,9 @@ router.HandleRPC(states.GetMany)
 docs := router.DocsHandler(
 	rpc.WithModules(rpc.ModuleAPI, rpc.ModuleObservability),
 )
+admin := router.AdminHandler(
+	rpc.WithModules(rpc.ModuleObservability),
+)
 
 mux := http.NewServeMux()
 mux.Handle("/rpc/", router)
@@ -56,14 +62,21 @@ mux.Handle(
 	"/admin/docs/",
 	http.StripPrefix("/admin/docs", docsBasicAuth("docs", "secret", docs)),
 )
+mux.Handle(
+	"GET /admin/docs/_admin/",
+	http.StripPrefix("/admin/docs/_admin", docsBasicAuth("docs", "secret", admin)),
+)
 ```
 
 Docs-handler-local endpoints:
 
 - `GET /` docs shell
 - `GET /openapi.json` when `api` module enabled
-- `GET /_admin/sql`, `GET /_admin/db`, `POST /_admin/db/preview`, `POST /_admin/db/query` when `database` module enabled
-- `GET /_admin/events`, `GET /_admin/events.stream`, `GET /_admin/logging`, `GET /_admin/metrics` when `observability` module enabled
+
+Admin-handler-local endpoints:
+
+- `GET /sql`, `GET /db`, `POST /db/preview`, `POST /db/query` when `database` module enabled
+- `GET /events`, `GET /events.stream`, `GET /logging`, `GET /metrics` when `observability` module enabled
 
 ## ServeAllDocs
 

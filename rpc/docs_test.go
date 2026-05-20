@@ -65,6 +65,13 @@ func TestRPCServeDocsWithModulesTogglesUI(t *testing.T) {
 	if !strings.Contains(body, "const MODULE_OBSERVABILITY = false") {
 		t.Fatalf("expected observability module disabled")
 	}
+
+	reqAdmin := httptest.NewRequest(http.MethodGet, "/rpc/docs/_admin/events", nil)
+	recAdmin := httptest.NewRecorder()
+	router.ServeHTTP(recAdmin, reqAdmin)
+	if recAdmin.Code != http.StatusNotFound {
+		t.Fatalf("expected ServeDocs not to mount admin endpoints, got %d", recAdmin.Code)
+	}
 }
 
 func TestRPCDocsHandlerMountableWithGuard(t *testing.T) {
@@ -112,5 +119,26 @@ func TestRPCDocsHandlerMountableWithGuard(t *testing.T) {
 	mux.ServeHTTP(recSQL, reqSQL)
 	if recSQL.Code != http.StatusNotFound {
 		t.Fatalf("expected sql endpoint 404 when database module disabled, got %d", recSQL.Code)
+	}
+}
+
+func TestRPCServeAdminExplicitlyMountsAdminEndpoints(t *testing.T) {
+	router := NewRouter()
+	router.HandleRPC(testHandler)
+	router.ServeDocs(WithModules(ModuleAPI, ModuleObservability))
+	router.ServeAdmin(WithModules(ModuleObservability))
+
+	reqEvents := httptest.NewRequest(http.MethodGet, "/rpc/docs/_admin/events", nil)
+	recEvents := httptest.NewRecorder()
+	router.ServeHTTP(recEvents, reqEvents)
+	if recEvents.Code != http.StatusOK {
+		t.Fatalf("expected explicit admin events endpoint 200, got %d", recEvents.Code)
+	}
+
+	reqSQL := httptest.NewRequest(http.MethodGet, "/rpc/docs/_admin/sql", nil)
+	recSQL := httptest.NewRecorder()
+	router.ServeHTTP(recSQL, reqSQL)
+	if recSQL.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled database admin endpoint 404, got %d", recSQL.Code)
 	}
 }

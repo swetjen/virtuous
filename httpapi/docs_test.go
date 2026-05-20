@@ -65,6 +65,35 @@ func TestHTTPServeDocsWithModulesTogglesUI(t *testing.T) {
 	if !strings.Contains(body, "const MODULE_OBSERVABILITY = false") {
 		t.Fatalf("expected observability module disabled")
 	}
+
+	reqAdmin := httptest.NewRequest(http.MethodGet, "/docs/_admin/events", nil)
+	recAdmin := httptest.NewRecorder()
+	router.ServeHTTP(recAdmin, reqAdmin)
+	if recAdmin.Code != http.StatusNotFound {
+		t.Fatalf("expected ServeDocs not to mount admin endpoints, got %d", recAdmin.Code)
+	}
+}
+
+func TestHTTPServeDocsAllowsMethodSpecificCatchAll(t *testing.T) {
+	router := NewRouter()
+	router.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("root"))
+	})
+	router.ServeDocs(WithModules(ModuleAPI))
+
+	reqDocs := httptest.NewRequest(http.MethodGet, "/docs/", nil)
+	recDocs := httptest.NewRecorder()
+	router.ServeHTTP(recDocs, reqDocs)
+	if recDocs.Code != http.StatusOK {
+		t.Fatalf("expected docs 200 with GET catch-all, got %d", recDocs.Code)
+	}
+
+	reqRoot := httptest.NewRequest(http.MethodGet, "/", nil)
+	recRoot := httptest.NewRecorder()
+	router.ServeHTTP(recRoot, reqRoot)
+	if recRoot.Code != http.StatusOK || recRoot.Body.String() != "root" {
+		t.Fatalf("expected root catch-all to remain available, got status=%d body=%q", recRoot.Code, recRoot.Body.String())
+	}
 }
 
 func TestHTTPDocsHandlerMountableWithGuard(t *testing.T) {
@@ -112,5 +141,26 @@ func TestHTTPDocsHandlerMountableWithGuard(t *testing.T) {
 	mux.ServeHTTP(recSQL, reqSQL)
 	if recSQL.Code != http.StatusNotFound {
 		t.Fatalf("expected sql endpoint 404 when database module disabled, got %d", recSQL.Code)
+	}
+}
+
+func TestHTTPServeAdminExplicitlyMountsAdminEndpoints(t *testing.T) {
+	router := NewRouter()
+	router.Handle("GET /health", WrapFunc(func(http.ResponseWriter, *http.Request) {}, struct{}{}, struct{}{}, HandlerMeta{Service: "Health", Method: "Get"}))
+	router.ServeDocs(WithModules(ModuleAPI, ModuleObservability))
+	router.ServeAdmin(WithModules(ModuleObservability))
+
+	reqEvents := httptest.NewRequest(http.MethodGet, "/docs/_admin/events", nil)
+	recEvents := httptest.NewRecorder()
+	router.ServeHTTP(recEvents, reqEvents)
+	if recEvents.Code != http.StatusOK {
+		t.Fatalf("expected explicit admin events endpoint 200, got %d", recEvents.Code)
+	}
+
+	reqSQL := httptest.NewRequest(http.MethodGet, "/docs/_admin/sql", nil)
+	recSQL := httptest.NewRecorder()
+	router.ServeHTTP(recSQL, reqSQL)
+	if recSQL.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled database admin endpoint 404, got %d", recSQL.Code)
 	}
 }

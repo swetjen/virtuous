@@ -291,7 +291,8 @@ Goal:
 Rules:
 - Keep existing request/response structs when possible.
 - Move field docs into struct tags using doc:"...".
-- Swaggo migration default is httpapi with method-prefixed patterns and Wrap/WrapFunc.
+- Swaggo migration default is httpapi with method-prefixed patterns and typed handlers.
+- Use `WrapFunc` for simple adapters; prefer struct-based `TypedHandler` implementations when route metadata grows beyond basic request/response types.
 - For RPC phase-2 handlers, use: func(context.Context, Req) (Resp, int).
 - RPC status codes returned by handlers must be 200, 422, or 500.
 - RPC paths are inferred; do not handcraft RPC route strings.

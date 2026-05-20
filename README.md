@@ -196,12 +196,19 @@ router.ServeAllDocs(rpc.WithoutDocs())
 docs := router.DocsHandler(
 	rpc.WithModules(rpc.ModuleAPI, rpc.ModuleObservability),
 )
+admin := router.AdminHandler(
+	rpc.WithModules(rpc.ModuleObservability),
+)
 
 mux := http.NewServeMux()
 mux.Handle("/rpc/", router) // API routes
 mux.Handle(
 	"/admin/docs/",
 	http.StripPrefix("/admin/docs", docsBasicAuth("docs", "secret", docs)),
+)
+mux.Handle(
+	"GET /admin/docs/_admin/",
+	http.StripPrefix("/admin/docs/_admin", docsBasicAuth("docs", "secret", admin)),
 )
 ```
 
@@ -285,7 +292,7 @@ Default `ServeAllDocs()` paths:
 - Metrics JSON: `/rpc/_virtuous/metrics`
 - Responses should include a canonical `error` field (string or struct) when errors occur.
 
-If you need custom placement or docs-only middleware, use `router.DocsHandler(...)` and mount it on your mux.
+If you need custom placement or docs-only middleware, use `router.DocsHandler(...)` and mount it on your mux. Mount `router.AdminHandler(...)` separately when exposing database or observability admin endpoints.
 
 ### Observability
 
@@ -364,6 +371,12 @@ Use this when:
 Method-prefixed patterns (`GET /path`) are required for docs and client generation.
 Typed `httpapi` routes default to JSON, while explicit metadata covers compatibility needs such as typed path/query params, form request bodies, custom response media types, multiple statuses, and OR auth.
 
+For `httpapi`, keep the verb in the route string and use one of the blessed typed-handler patterns:
+
+- `httpapi.WrapFunc(...)` for quick adapters around existing handler functions.
+- `httpapi.TypedHandlerFunc` for compact typed handlers.
+- Structs implementing `httpapi.TypedHandler` when route documentation needs richer metadata.
+
 ```go
 router := httpapi.NewRouter()
 router.HandleTyped(
@@ -374,6 +387,41 @@ router.HandleTyped(
 	}),
 )
 router.ServeAllDocs()
+```
+
+For larger routes, move the contract onto the handler implementation so router files remain easy to scan:
+
+```go
+type StateByCodeHandler struct {
+	Store StateStore
+}
+
+var _ httpapi.TypedHandler = StateByCodeHandler{}
+
+func (h StateByCodeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// runtime handler
+}
+
+func (h StateByCodeHandler) RequestType() any {
+	return GetStateRequest{}
+}
+
+func (h StateByCodeHandler) ResponseType() any {
+	return StateResponse{}
+}
+
+func (h StateByCodeHandler) Metadata() httpapi.HandlerMeta {
+	return httpapi.HandlerMeta{
+		Service: "States",
+		Method:  "GetByCode",
+		Responses: []httpapi.ResponseSpec{
+			{Status: 200, Body: StateResponse{}},
+			{Status: 404, Body: ErrorResponse{}},
+		},
+	}
+}
+
+router.HandleTyped("GET /api/v1/lookup/states/{code}", StateByCodeHandler{Store: store})
 ```
 
 Docs modules can be toggled the same way:
@@ -494,12 +542,19 @@ router.ServeAllDocs(httpapi.WithoutDocs()) // keep generated clients
 docs := router.DocsHandler(
 	httpapi.WithModules(httpapi.ModuleAPI, httpapi.ModuleObservability),
 )
+admin := router.AdminHandler(
+	httpapi.WithModules(httpapi.ModuleObservability),
+)
 
 mux := http.NewServeMux()
 mux.Handle("/", router) // API routes
 mux.Handle(
 	"/admin/docs/",
 	http.StripPrefix("/admin/docs", docsBasicAuth("docs", "secret", docs)),
+)
+mux.Handle(
+	"GET /admin/docs/_admin/",
+	http.StripPrefix("/admin/docs/_admin", docsBasicAuth("docs", "secret", admin)),
 )
 ```
 

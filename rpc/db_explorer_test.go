@@ -60,6 +60,7 @@ func TestRPCServeDocsDBExplorerDisabledPayload(t *testing.T) {
 	router := NewRouter()
 	router.HandleRPC(testHandler)
 	router.ServeDocs()
+	router.ServeAdmin()
 
 	req := httptest.NewRequest(http.MethodGet, "/rpc/docs/_admin/db", nil)
 	rec := httptest.NewRecorder()
@@ -121,6 +122,7 @@ func TestRPCServeDocsDBExplorerEndpoints(t *testing.T) {
 	router := NewRouter(WithDBExplorer(fake))
 	router.HandleRPC(testHandler)
 	router.ServeDocs()
+	router.ServeAdmin()
 
 	stateReq := httptest.NewRequest(http.MethodGet, "/rpc/docs/_admin/db", nil)
 	stateRec := httptest.NewRecorder()
@@ -172,6 +174,7 @@ func TestRPCServeDocsDBExplorerStateErrorPayload(t *testing.T) {
 	router := NewRouter(WithDBExplorer(fake))
 	router.HandleRPC(testHandler)
 	router.ServeDocs()
+	router.ServeAdmin()
 
 	req := httptest.NewRequest(http.MethodGet, "/rpc/docs/_admin/db", nil)
 	rec := httptest.NewRecorder()

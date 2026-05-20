@@ -57,16 +57,21 @@ router.HandleRPC(states.Create)
 router.ServeAllDocs()
 ```
 
-To mount docs under a custom path (and optionally wrap docs-only auth/middleware), use `DocsHandler(...)`:
+To mount docs under a custom path (and optionally wrap docs-only auth/middleware), use `DocsHandler(...)`.
+Mount admin endpoints separately with `AdminHandler(...)` when database or observability modules are enabled:
 
 ```go
 docs := router.DocsHandler(
 	rpc.WithModules(rpc.ModuleAPI, rpc.ModuleObservability),
 )
+admin := router.AdminHandler(
+	rpc.WithModules(rpc.ModuleObservability),
+)
 
 mux := http.NewServeMux()
 mux.Handle("/rpc/", router)
 mux.Handle("/admin/docs/", http.StripPrefix("/admin/docs", docs))
+mux.Handle("GET /admin/docs/_admin/", http.StripPrefix("/admin/docs/_admin", admin))
 ```
 
 ### Paths
@@ -86,11 +91,11 @@ Default `ServeAllDocs()` endpoints:
 - Observability dashboard: `/rpc/_virtuous/observability`
 - Metrics JSON: `/rpc/_virtuous/metrics`
 
-Docs module endpoints (under the mounted docs subtree):
+Docs module endpoints:
 
 - `Api`: `/openapi.json`
-- `Database`: `/_admin/sql`, `/_admin/db`, `/_admin/db/preview`, `/_admin/db/query`
-- `Observability`: `/_admin/events`, `/_admin/events.stream`, `/_admin/logging`, `/_admin/metrics`
+- `Database`: `/sql`, `/db`, `/db/preview`, `/db/query` under an explicitly mounted `AdminHandler(...)`
+- `Observability`: `/events`, `/events.stream`, `/logging`, `/metrics` under an explicitly mounted `AdminHandler(...)`
 
 Use `WithModules(...)` to toggle docs modules (`api`, `database`, `observability`). By default all are enabled.
 
@@ -109,6 +114,8 @@ Use `httpapi` when you need to retain classic `net/http` handlers or preserve an
 Notes:
 
 - Typed `httpapi` routes default to JSON, with explicit metadata for typed path/query params, form request bodies, custom response media types, and multi-status responses.
+- Keep HTTP verbs in method-prefixed route strings such as `GET /path`.
+- Use `WrapFunc` for quick adapters, `TypedHandlerFunc` for compact typed handlers, and struct-based `TypedHandler` implementations when route documentation needs richer metadata.
 - Typed `string`/`[]byte` responses map to `text/plain`/`application/octet-stream`.
 - Use `httpapi.HandlerMeta.Responses` for multi-status routes or custom response media types.
 - Use `httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` request bodies.

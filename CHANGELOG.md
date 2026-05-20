@@ -4,9 +4,11 @@
 
 - Add docs-only `httpapi.Router.Describe(...)` registration for existing mux routes that should emit OpenAPI and generated clients without remounting runtime handlers.
 - Disambiguate same-name Go schemas from different packages with package-qualified names instead of panicking during `httpapi` OpenAPI/client generation.
+- Split docs and admin mounting with explicit `AdminHandler(...)` / `ServeAdmin(...)`, so `ServeDocs(...)` no longer implicitly exposes `_admin` endpoints and uses method-prefixed docs routes.
 - Add OpenAPI enum metadata through `enum:"..."` struct tags and explicit `httpapi.ParamSpec.Enum` values.
 - Exclude `path` fields from inferred JSON request bodies while preserving typed path parameter schemas.
 - Add focused unit coverage for schema collisions, docs-only routes, enum metadata, and path/body inference.
+- Clarify the blessed `httpapi` patterns: method-prefixed route strings with `WrapFunc`, `TypedHandlerFunc`, or struct-based `TypedHandler` implementations.
 
 ## 0.0.29
 

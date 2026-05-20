@@ -4,7 +4,23 @@
 
 httpapi relies on typed handlers to emit OpenAPI and client SDKs. Typed handlers attach request and response types to existing `net/http` handlers.
 
-## Wrappers
+Keep the HTTP verb in the method-prefixed route string:
+
+```go
+router.HandleTyped("GET /reports/{id}", handler)
+```
+
+## Blessed Patterns
+
+Use one of these patterns:
+
+- `WrapFunc`: quick migration adapter for an existing `func(http.ResponseWriter, *http.Request)`.
+- `TypedHandlerFunc`: compact inline typed handler when the contract is still small.
+- Struct-based `TypedHandler`: preferred when documentation metadata grows beyond basic request/response types.
+
+Avoid route-specific helper DSLs such as `GET[TReq, TResp](...)`. They tend to hide the method-prefixed route string and spread route contracts across variadic options.
+
+## WrapFunc
 
 ```go
 handler := httpapi.WrapFunc(
@@ -19,6 +35,65 @@ handler := httpapi.WrapFunc(
 ```
 
 `Wrap` accepts an `http.Handler` while `WrapFunc` accepts `func(http.ResponseWriter, *http.Request)`.
+
+## TypedHandlerFunc
+
+Use `TypedHandlerFunc` when the handler is small but you still want the contract next to the route:
+
+```go
+router.HandleTyped(
+	"GET /reports/{id}",
+	httpapi.TypedHandlerFunc{
+		Handler: GetReport,
+		Req:     GetReportRequest{},
+		Resp:    GetReportResponse{},
+		Meta: httpapi.HandlerMeta{
+			Service: "Reports",
+			Method:  "Get",
+		},
+	},
+)
+```
+
+## Struct-based TypedHandler
+
+For routes with richer docs, multiple statuses, custom media types, or dependencies, put the contract on the handler type:
+
+```go
+type GetReportHandler struct {
+	Store ReportStore
+}
+
+var _ httpapi.TypedHandler = GetReportHandler{}
+
+func (h GetReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// runtime handler
+}
+
+func (h GetReportHandler) RequestType() any {
+	return GetReportRequest{}
+}
+
+func (h GetReportHandler) ResponseType() any {
+	return GetReportResponse{}
+}
+
+func (h GetReportHandler) Metadata() httpapi.HandlerMeta {
+	return httpapi.HandlerMeta{
+		Service: "Reports",
+		Method:  "Get",
+		Responses: []httpapi.ResponseSpec{
+			{Status: 200, Body: GetReportResponse{}},
+			{Status: 400, Body: ErrorResponse{}},
+			{Status: 404, Body: ErrorResponse{}},
+		},
+	}
+}
+
+router.HandleTyped("GET /reports/{id}", GetReportHandler{Store: store}, signedIn)
+```
+
+This keeps router files browsable while moving route-specific documentation details to the handler implementation.
 
 ## Factory handlers
 
