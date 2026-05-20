@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.31
+
+- Release the docs/admin API split under a new version after `v0.0.30` shipped with public API additions.
+- Keep `AdminHandler(...)` / `ServeAdmin(...)` as the explicit mount points for database and observability admin endpoints.
+- Keep `ServeDocs(...)` focused on docs/OpenAPI routes with method-prefixed docs registration.
+
 ## 0.0.30
 
 - Add docs-only `httpapi.Router.Describe(...)` registration for existing mux routes that should emit OpenAPI and generated clients without remounting runtime handlers.
