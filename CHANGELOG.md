@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.33
+
+- Flatten anonymous embedded Go struct fields in generated OpenAPI schemas and clients so emitted shapes match Go `encoding/json` and Swaggo migration expectations.
+
 ## 0.0.32
 
 - Add an optional standalone `httpapi` React Query TypeScript generator (`WriteReactQueryTS*`, `ServeReactQueryTS*`, and `WithReactQueryTSPath`) that embeds the raw client/types plus typed query options/hooks and mutation hooks, with docs for the generated API shape and path-param `enabled` behavior.

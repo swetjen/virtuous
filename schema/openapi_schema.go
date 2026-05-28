@@ -167,15 +167,8 @@ func isTimeType(t reflect.Type) bool {
 func (g *Generator) structSchema(t reflect.Type) *OpenAPISchema {
 	props := map[string]*OpenAPISchema{}
 	var required []string
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if field.PkgPath != "" {
-			continue
-		}
-		name, omit := reflectutil.JSONFieldName(field)
-		if name == "" {
-			continue
-		}
+	for _, jsonField := range reflectutil.JSONFields(t) {
+		field := jsonField.Field
 		schema := g.schemaFor(field.Type)
 		if schema == nil {
 			continue
@@ -185,9 +178,9 @@ func (g *Generator) structSchema(t reflect.Type) *OpenAPISchema {
 		if doc != "" && schema.Description == "" {
 			schema.Description = doc
 		}
-		props[name] = schema
-		if !omit && field.Type.Kind() != reflect.Ptr {
-			required = append(required, name)
+		props[jsonField.Name] = schema
+		if !jsonField.OmitEmpty && !jsonField.ParentOptional && field.Type.Kind() != reflect.Ptr {
+			required = append(required, jsonField.Name)
 		}
 	}
 	sortStrings(required)

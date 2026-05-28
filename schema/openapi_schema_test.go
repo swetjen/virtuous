@@ -26,6 +26,32 @@ type refTaggedSchema struct {
 	Child childSchema `json:"child" doc:"Nested child"`
 }
 
+type EmbeddedOrganization struct {
+	ID   string `json:"id"`
+	UID  string `json:"uid"`
+	Name string `json:"name"`
+}
+
+type EmbeddedBrand struct {
+	LogoURL string `json:"logo_url"`
+}
+
+type embeddedDetailResponse struct {
+	EmbeddedOrganization
+	Branding *EmbeddedBrand `json:"branding"`
+	Error    string         `json:"error"`
+}
+
+type embeddedTaggedResponse struct {
+	EmbeddedOrganization `json:"organization"`
+	Error                string `json:"error"`
+}
+
+type embeddedPointerResponse struct {
+	*EmbeddedOrganization
+	Error string `json:"error"`
+}
+
 func TestOpenAPISchemaFieldMetadataTags(t *testing.T) {
 	gen := NewGenerator(nil)
 	schema := gen.SchemaFor(taggedSchema{})
@@ -125,4 +151,65 @@ func TestOpenAPIGeneratorPreferredNameCollisionFallsBack(t *testing.T) {
 	if _, ok := components[QualifiedNameOf(reflect.TypeOf(testb.User{}))]; !ok {
 		t.Fatalf("missing fallback qualified schema for preferred collision")
 	}
+}
+
+func TestOpenAPISchemaFlattensAnonymousEmbeddedStruct(t *testing.T) {
+	gen := NewGenerator(nil)
+	_ = gen.SchemaFor(embeddedDetailResponse{})
+
+	component := gen.Components()["embeddedDetailResponse"]
+	props := component.Properties
+	for _, name := range []string{"id", "uid", "name", "branding", "error"} {
+		if _, ok := props[name]; !ok {
+			t.Fatalf("missing flattened property %q in %#v", name, props)
+		}
+	}
+	if _, ok := props["embeddedOrganization"]; ok {
+		t.Fatalf("anonymous embedded struct should not be emitted as nested property")
+	}
+	for _, name := range []string{"id", "uid", "name", "error"} {
+		if !containsString(component.Required, name) {
+			t.Fatalf("required = %#v, want %q", component.Required, name)
+		}
+	}
+}
+
+func TestOpenAPISchemaKeepsExplicitlyTaggedEmbeddedStructNested(t *testing.T) {
+	gen := NewGenerator(nil)
+	_ = gen.SchemaFor(embeddedTaggedResponse{})
+
+	component := gen.Components()["embeddedTaggedResponse"]
+	props := component.Properties
+	if _, ok := props["organization"]; !ok {
+		t.Fatalf("missing explicitly tagged embedded property in %#v", props)
+	}
+	if _, ok := props["id"]; ok {
+		t.Fatalf("explicitly tagged embedded struct should not be flattened")
+	}
+}
+
+func TestOpenAPISchemaMakesPromotedPointerFieldsOptional(t *testing.T) {
+	gen := NewGenerator(nil)
+	_ = gen.SchemaFor(embeddedPointerResponse{})
+
+	component := gen.Components()["embeddedPointerResponse"]
+	props := component.Properties
+	if _, ok := props["id"]; !ok {
+		t.Fatalf("missing promoted pointer property id in %#v", props)
+	}
+	if containsString(component.Required, "id") || containsString(component.Required, "uid") || containsString(component.Required, "name") {
+		t.Fatalf("promoted pointer fields should not be required: %#v", component.Required)
+	}
+	if !containsString(component.Required, "error") {
+		t.Fatalf("required = %#v, want error", component.Required)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

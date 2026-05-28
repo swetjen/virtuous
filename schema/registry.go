@@ -183,19 +183,12 @@ func (r *Registry) addType(t reflect.Type) {
 		name := r.objectName(base)
 		obj := &objectDef{Name: name}
 		r.objects[base] = obj
-		for i := 0; i < base.NumField(); i++ {
-			field := base.Field(i)
-			if field.PkgPath != "" {
-				continue
-			}
-			name, omit := reflectutil.JSONFieldName(field)
-			if name == "" {
-				continue
-			}
+		for _, jsonField := range reflectutil.JSONFields(base) {
+			field := jsonField.Field
 			obj.Fields = append(obj.Fields, fieldDef{
-				Name:     name,
+				Name:     jsonField.Name,
 				Type:     field.Type,
-				Optional: omit,
+				Optional: jsonField.OmitEmpty || jsonField.ParentOptional,
 				Nullable: isOptionalType(field.Type),
 				Doc:      reflectutil.FieldDoc(field),
 			})
