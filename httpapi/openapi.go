@@ -297,7 +297,7 @@ func requestContentSchema(gen *schema.Generator, mediaType string, t reflect.Typ
 	if t == nil {
 		return nil
 	}
-	if mediaType == MediaTypeFormURLEncoded {
+	if mediaType == MediaTypeFormURLEncoded || mediaType == MediaTypeMultipartForm {
 		return formRequestBodySchema(gen, t)
 	}
 	return gen.SchemaForType(t)

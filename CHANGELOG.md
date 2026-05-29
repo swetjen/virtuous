@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.34
+
+- Add first-class `httpapi.MultipartBody(...)` and `httpapi.File` support for `multipart/form-data` file uploads in OpenAPI, JS/TS/Python clients, and React Query TypeScript output.
+
 ## 0.0.33
 
 - Flatten anonymous embedded Go struct fields in generated OpenAPI schemas and clients so emitted shapes match Go `encoding/json` and Swaggo migration expectations.

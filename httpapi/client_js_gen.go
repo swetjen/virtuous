@@ -59,7 +59,9 @@ export function createClient(basepath = "/") {
 				const headers = {
 					"Accept": "{{ $method.AcceptType }}",
 {{- if $method.HasBody }}
+{{- if ne $method.BodyMode "multipart" }}
 						"Content-Type": "{{ $method.RequestMedia }}",
+{{- end }}
 {{- end }}
 				}
 				let url = basepath + "{{ $method.Path }}"
@@ -175,6 +177,38 @@ export function createClient(basepath = "/") {
 					return form.toString()
 				}
 {{- end }}
+{{- if and $method.HasBody (eq $method.BodyMode "multipart") }}
+				const encodeMultipart = (value) => {
+					const form = new FormData()
+					const appendMultipart = (key, item) => {
+						if (item === undefined || item === null) {
+							return
+						}
+						if (Array.isArray(item)) {
+							for (const child of item) {
+								appendMultipart(key, child)
+							}
+							return
+						}
+						if (typeof Blob !== "undefined" && item instanceof Blob) {
+							form.append(key, item)
+							return
+						}
+						form.append(key, String(item))
+					}
+					const data = value || {}
+{{- if $method.BodyFields }}
+{{- range $field := $method.BodyFields }}
+					appendMultipart("{{ $field.WireName }}", data.{{ $field.Name }})
+{{- end }}
+{{- else }}
+					for (const [key, item] of Object.entries(data)) {
+						appendMultipart(key, item)
+					}
+{{- end }}
+					return form
+				}
+{{- end }}
 				const response = await fetch(url, {
 					method: "{{ $method.HTTPMethod }}",
 					headers,
@@ -183,9 +217,9 @@ export function createClient(basepath = "/") {
 {{- end }}
 {{- if $method.HasBody }}
 {{- if $method.BodyOptional }}
-					body: request === undefined || request === null ? undefined : {{ if eq $method.BodyMode "form" }}encodeForm(request){{ else }}JSON.stringify(request){{ end }},
+					body: request === undefined || request === null ? undefined : {{ if eq $method.BodyMode "form" }}encodeForm(request){{ else if eq $method.BodyMode "multipart" }}encodeMultipart(request){{ else }}JSON.stringify(request){{ end }},
 {{- else }}
-					body: {{ if eq $method.BodyMode "form" }}encodeForm(request || {}){{ else }}JSON.stringify(request || {}){{ end }},
+					body: {{ if eq $method.BodyMode "form" }}encodeForm(request || {}){{ else if eq $method.BodyMode "multipart" }}encodeMultipart(request || {}){{ else }}JSON.stringify(request || {}){{ end }},
 {{- end }}
 {{- end }}
 				})

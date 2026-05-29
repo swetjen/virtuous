@@ -11,9 +11,14 @@ const (
 	ParamInHeader = "header"
 	ParamInCookie = "cookie"
 
-	MediaTypeJSON           = "application/json"
-	MediaTypeFormURLEncoded = "application/x-www-form-urlencoded"
+	MediaTypeJSON              = "application/json"
+	MediaTypeFormURLEncoded    = "application/x-www-form-urlencoded"
+	MediaTypeMultipartForm     = "multipart/form-data"
+	MediaTypeMultipartFormData = MediaTypeMultipartForm
 )
+
+// File marks a multipart/form-data file part in request body metadata.
+type File struct{}
 
 // PathParam returns an explicit typed path parameter spec.
 func PathParam(name string, typ any) ParamSpec {
@@ -48,6 +53,14 @@ func FormBody(body any) *RequestBodySpec {
 	return &RequestBodySpec{
 		Required: true,
 		Content:  []RequestContentSpec{{MediaType: MediaTypeFormURLEncoded, Body: body}},
+	}
+}
+
+// MultipartBody returns an explicit multipart/form-data request body spec.
+func MultipartBody(body any) *RequestBodySpec {
+	return &RequestBodySpec{
+		Required: true,
+		Content:  []RequestContentSpec{{MediaType: MediaTypeMultipartForm, Body: body}},
 	}
 }
 

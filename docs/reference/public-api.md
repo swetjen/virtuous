@@ -60,6 +60,8 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.RequestBodySpec`
 - `httpapi.JSONBody(body any)`
 - `httpapi.FormBody(body any)`
+- `httpapi.MultipartBody(body any)`
+- `httpapi.File`
 - `httpapi.ResponseSpec`
 - `httpapi.SecurityAny(guards ...httpapi.GuardSpec)`
 - `httpapi.SecurityAll(guards ...httpapi.GuardSpec)`

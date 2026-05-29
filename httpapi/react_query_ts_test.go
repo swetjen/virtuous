@@ -47,6 +47,7 @@ type rqImportResponse struct {
 func TestGeneratedReactQueryTSClientIsValid(t *testing.T) {
 	router := NewRouter()
 	router.HandleTyped("GET /users/{id}", typedParamHandler{}, testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"})
+	router.HandleTyped("POST /assets/upload", multipartBodyHandler{})
 	router.Describe("POST /api/v1/reports", optionalClientRequest{}, testResponse{}, HandlerMeta{
 		Service: "API",
 		Method:  "PostApiV1Reports",
@@ -64,6 +65,9 @@ func TestGeneratedReactQueryTSClientIsValid(t *testing.T) {
 	assertContains(t, tsText, "enabled: !!pathParams && pathParams.id !== undefined && pathParams.id !== null")
 	assertContains(t, tsText, "requestOptions?: AuthOptions")
 	assertContains(t, tsText, "queryFn: () => reactQueryClient.Users.getUser(pathParams!, query, requestOptions)")
+	assertContains(t, tsText, "FormData")
+	assertContains(t, tsText, `appendMultipart("file"`)
+	assertNotContains(t, tsText, `"Content-Type": "multipart/form-data"`)
 	assertContains(t, tsText, "export function usePostApiV1Reports(requestOptions?: AuthOptions, mutationOptions?: UseMutationOptions<testResponse, Error, { request: optionalClientRequest }>)")
 	assertContains(t, tsText, "mutationFn: (variables: { request: optionalClientRequest }) => reactQueryClient.API.postApiV1Reports(variables.request, requestOptions)")
 }

@@ -11,7 +11,7 @@ httpapi is a compatibility layer for legacy `net/http` handlers and existing RES
 - Typed route docs/clients default to JSON, with explicit metadata for typed path/query params, form request bodies, custom response media types, and multi-status responses.
 - Use `Describe` to register docs/client metadata for an existing mux route without remounting its runtime handler.
 - Use `HandlerMeta.Responses` when a route needs multiple statuses or a custom response media type such as `image/png` or `text/html`.
-- Use `HandlerMeta.RequestBody` with `httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` request bodies.
+- Use `HandlerMeta.RequestBody` with `httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` bodies or `httpapi.MultipartBody(Req{})` with `httpapi.File` for uploads.
 - Request bodies are required by default when present; use `httpapi.Optional[Req]()` to mark optional bodies in generated docs/clients.
 - Untyped routes still run normally but are skipped in generated OpenAPI and clients.
 - Route registration is source of truth for path/method (including trailing slashes).

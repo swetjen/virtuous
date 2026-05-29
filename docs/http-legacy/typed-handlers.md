@@ -207,7 +207,7 @@ Use sentinel types to express responses with no body:
 
 Typed handlers support:
 
-- `HandlerMeta.RequestBody` can override request media type. Use `httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` request bodies.
+- `HandlerMeta.RequestBody` can override request media type. Use `httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` bodies or `httpapi.MultipartBody(Req{})` with `httpapi.File` for uploads.
 - `string` response type -> `text/plain`
 - `[]byte` response type -> `application/octet-stream`
 - `HandlerMeta.Responses` can override media type for typed `string` / `[]byte` responses (for example `text/html` or `image/png`)

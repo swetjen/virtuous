@@ -614,7 +614,7 @@ router.Describe("GET /api/v1/states/{id}", GetStateRequest{}, StateResponse{}, h
 
 #### 6) Form request body contract
 
-Use `HandlerMeta.RequestBody` when the request media type is not JSON. `httpapi.FormBody(...)` emits `application/x-www-form-urlencoded` and generated clients encode `form` tag wire names.
+Use `HandlerMeta.RequestBody` when the request media type is not JSON. `httpapi.FormBody(...)` emits `application/x-www-form-urlencoded`; `httpapi.MultipartBody(...)` emits `multipart/form-data` and maps `httpapi.File` fields to binary file parts. Generated clients encode `form` tag wire names.
 
 ```go
 type FacebookComplianceRequest struct {

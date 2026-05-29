@@ -96,7 +96,7 @@ func (bearerGuard) Middleware() func(http.Handler) http.Handler {
 - `HandlerMeta.Service` and `HandlerMeta.Method` control client method names.
 - Typed `httpapi` docs/clients default to JSON, with explicit metadata for compatibility contracts.
 - Use `path`/`query` tags for typed params.
-- Use `httpapi.FormBody(Req{})` for form request bodies.
+- Use `httpapi.FormBody(Req{})` for form-urlencoded bodies and `httpapi.MultipartBody(Req{})` with `httpapi.File` for multipart uploads.
 - Use `httpapi.AuthAny(...)` for OR auth.
 - Typed `string`/`[]byte` responses map to `text/plain`/`application/octet-stream`.
 - Use `httpapi.HandlerMeta.Responses` for multi-status routes or custom response media types.

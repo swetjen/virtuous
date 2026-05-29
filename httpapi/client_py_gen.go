@@ -17,6 +17,7 @@ from datetime import datetime
 import http
 import json
 import types
+import uuid
 from typing import Any, Optional, Union, get_args, get_origin, get_type_hints
 from urllib import error, parse, request
 
@@ -48,7 +49,9 @@ class _{{ $service.Name }}Service:
         headers = {
             "Accept": "{{ $method.AcceptType }}",
 {{- if $method.HasBody }}
+{{- if ne $method.BodyMode "multipart" }}
             "Content-Type": "{{ $method.RequestMedia }}",
+{{- end }}
 {{- end }}
         }
         url = self._basepath + "{{ $method.Path }}"
@@ -121,6 +124,13 @@ class _{{ $service.Name }}Service:
                 ("{{ $field.WireName }}", "{{ $field.Name }}"),
 {{- end }}
             ]).encode("utf-8")
+{{- else if eq $method.BodyMode "multipart" }}
+            data, content_type = _encode_multipart(body, [
+{{- range $field := $method.BodyFields }}
+                ("{{ $field.WireName }}", "{{ $field.Name }}", {{ if $field.IsFile }}True{{ else }}False{{ end }}),
+{{- end }}
+            ])
+            headers["Content-Type"] = content_type
 {{- else }}
             data = json.dumps(_encode_value(body)).encode("utf-8")
 {{- end }}
@@ -258,6 +268,75 @@ def _encode_form(value: Any, fields: list[tuple[str, str]]) -> str:
             continue
         pairs.append((key, str(item)))
     return parse.urlencode(pairs)
+
+
+def _encode_multipart(value: Any, fields: list[tuple[str, str, bool]]) -> tuple[bytes, str]:
+    boundary = "----virtuous-" + uuid.uuid4().hex
+    encoded = _encode_value(value)
+    if encoded is None:
+        encoded = {}
+    if not isinstance(encoded, dict):
+        encoded = {"value": encoded}
+    items = [(wire_name, encoded.get(field_name), is_file) for wire_name, field_name, is_file in fields] if fields else [(key, item, False) for key, item in encoded.items()]
+    chunks: list[bytes] = []
+    for key, item, is_file in items:
+        if item is None:
+            continue
+        if isinstance(item, list):
+            for child in item:
+                if child is not None:
+                    _append_multipart_part(chunks, boundary, key, child, is_file)
+            continue
+        _append_multipart_part(chunks, boundary, key, item, is_file)
+    chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(chunks), "multipart/form-data; boundary=" + boundary
+
+
+def _append_multipart_part(chunks: list[bytes], boundary: str, key: str, item: Any, is_file: bool) -> None:
+    chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+    if is_file:
+        filename, content, content_type = _multipart_file_value(key, item)
+        chunks.append(
+            f'Content-Disposition: form-data; name="{_multipart_quote(key)}"; filename="{_multipart_quote(filename)}"\r\n'.encode("utf-8")
+        )
+        chunks.append(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+        chunks.append(content)
+        chunks.append(b"\r\n")
+        return
+    chunks.append(f'Content-Disposition: form-data; name="{_multipart_quote(key)}"\r\n\r\n'.encode("utf-8"))
+    chunks.append(str(item).encode("utf-8"))
+    chunks.append(b"\r\n")
+
+
+def _multipart_file_value(key: str, item: Any) -> tuple[str, bytes, str]:
+    filename = key
+    content_type = "application/octet-stream"
+    content = item
+    if isinstance(item, tuple):
+        if len(item) >= 1:
+            filename = str(item[0])
+        if len(item) >= 2:
+            content = item[1]
+        if len(item) >= 3 and item[2]:
+            content_type = str(item[2])
+    elif hasattr(item, "read"):
+        name = getattr(item, "name", "")
+        if name:
+            filename = str(name).replace("\\", "/").rsplit("/", 1)[-1]
+        content = item.read()
+    if isinstance(content, str):
+        content_bytes = content.encode("utf-8")
+    elif isinstance(content, bytearray):
+        content_bytes = bytes(content)
+    elif isinstance(content, bytes):
+        content_bytes = content
+    else:
+        content_bytes = str(content).encode("utf-8")
+    return filename, content_bytes, content_type
+
+
+def _multipart_quote(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "").replace("\n", "")
 
 
 def _append_query(url: str, key: str, value: str) -> str:

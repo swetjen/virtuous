@@ -119,6 +119,7 @@ Notes:
 - Typed `string`/`[]byte` responses map to `text/plain`/`application/octet-stream`.
 - Use `httpapi.HandlerMeta.Responses` for multi-status routes or custom response media types.
 - Use `httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` request bodies.
+- Use `httpapi.MultipartBody(Req{})` with `form` tags and `httpapi.File` fields for `multipart/form-data` file uploads.
 - Use `path`/`query` tags to preserve scalar parameter types in generated OpenAPI and clients.
 - Use `httpapi.Optional[Req]()` when a typed route should accept an optional JSON body.
 - Untyped routes can still be served during migration, but they are skipped in generated OpenAPI and clients.
@@ -199,7 +200,7 @@ Use the canonical Swaggo migration prompt in docs/tutorials/migrate-swaggo.md.
 - Use exported OpenAPI as the migration reference when available; do not make Swaggo comments the final source of truth.
 - Use rpc only for phase-2 moves.
 - Preserve scalar path/query contracts with httpapi path/query tags.
-- Use httpapi.AuthAny(...) for OR auth and httpapi.FormBody(...) for form request bodies.
+- Use httpapi.AuthAny(...) for OR auth, httpapi.FormBody(...) for form-urlencoded bodies, and httpapi.MultipartBody(...) with httpapi.File for file uploads.
 - Validate against the migration Definition of Done in that guide.
 ```
 

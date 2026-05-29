@@ -135,6 +135,7 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	router.HandleTyped("GET /api/v1/lookup/states/{code}", testHandler{})
 	router.HandleTyped("GET /users/{id}", typedParamHandler{})
 	router.HandleTyped("POST /facebook/compliance", formBodyHandler{})
+	router.HandleTyped("POST /assets/upload", multipartBodyHandler{})
 	router.HandleTyped("GET /secure", secureClientHandler{}, AuthAny(
 		testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"},
 		testGuard{name: "TokenAuth", in: "header", param: "Authorization"},
@@ -174,6 +175,12 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if !strings.Contains(jsText, "async getByCode(pathParams, request, query") {
 		t.Fatalf("js client missing query argument")
 	}
+	if !strings.Contains(jsText, "FormData") || !strings.Contains(jsText, `appendMultipart("file"`) {
+		t.Fatalf("js client missing multipart body encoding")
+	}
+	if strings.Contains(jsText, `"Content-Type": "multipart/form-data"`) {
+		t.Fatalf("js client should not set multipart Content-Type header")
+	}
 	tsText := string(ts)
 	if !strings.Contains(tsText, "query?: {") || !strings.Contains(tsText, "q?: string") || !strings.Contains(tsText, "id: string[]") {
 		t.Fatalf("ts client missing query type")
@@ -186,6 +193,12 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	}
 	if !strings.Contains(tsText, `appendForm("hub.mode"`) || !strings.Contains(tsText, `appendForm("hub.verify_token"`) {
 		t.Fatalf("ts client missing form wire names")
+	}
+	if !strings.Contains(tsText, "FormData") || !strings.Contains(tsText, `appendMultipart("file"`) || !strings.Contains(tsText, `appendMultipart("client_id"`) {
+		t.Fatalf("ts client missing multipart body encoding")
+	}
+	if strings.Contains(tsText, `"Content-Type": "multipart/form-data"`) {
+		t.Fatalf("ts client should not set multipart Content-Type header")
 	}
 	if !strings.Contains(tsText, "apiKeyAuth") || !strings.Contains(tsText, "tokenAuth") {
 		t.Fatalf("ts client missing named auth options")
@@ -205,6 +218,9 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	}
 	if !strings.Contains(pyText, `("hub.mode", "mode")`) || !strings.Contains(pyText, `("hub.verify_token", "verifyToken")`) {
 		t.Fatalf("py client missing form wire names")
+	}
+	if !strings.Contains(pyText, "_encode_multipart") || !strings.Contains(pyText, `("file", "file", True)`) || !strings.Contains(pyText, `("client_id", "clientID", False)`) {
+		t.Fatalf("py client missing multipart encoding")
 	}
 }
 

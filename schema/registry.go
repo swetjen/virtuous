@@ -161,6 +161,12 @@ func defaultTypeOverrides() map[string]TypeOverride {
 			PyType:      "Any",
 			OpenAPIType: "object",
 		},
+		"github.com/swetjen/virtuous/httpapi.File": {
+			JSType:        "File|Blob",
+			PyType:        "bytes",
+			OpenAPIType:   "string",
+			OpenAPIFormat: "binary",
+		},
 	}
 }
 

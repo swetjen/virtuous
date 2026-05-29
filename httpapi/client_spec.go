@@ -64,6 +64,7 @@ type clientBodyField struct {
 	WireName string
 	Optional bool
 	IsArray  bool
+	IsFile   bool
 }
 
 type clientAuthRequirement struct {
@@ -175,7 +176,7 @@ func buildClientSpecWith(
 				}
 				registry.AddTypeOf(bodyType)
 				requestType = typeFn(bodyType)
-				if bodyMode == "form" {
+				if bodyMode == "form" || bodyMode == "multipart" {
 					fields, err := clientFormFieldsFor(bodyType)
 					if err != nil {
 						return clientSpec{}, err
@@ -409,6 +410,7 @@ func clientFormFieldsFor(t reflect.Type) ([]clientBodyField, error) {
 			WireName: wireName,
 			Optional: omit || field.Type.Kind() == reflect.Ptr,
 			IsArray:  isArrayType(field.Type),
+			IsFile:   isFileType(field.Type),
 		})
 	}
 	return fields, nil
@@ -418,9 +420,16 @@ func bodyModeForMediaType(mediaType string) string {
 	switch mediaType {
 	case MediaTypeFormURLEncoded:
 		return "form"
+	case MediaTypeMultipartForm:
+		return "multipart"
 	default:
 		return "json"
 	}
+}
+
+func isFileType(t reflect.Type) bool {
+	base := reflectutil.DerefType(t)
+	return base != nil && base.PkgPath() == "github.com/swetjen/virtuous/httpapi" && base.Name() == "File"
 }
 
 func clientAuthRequirements(spec SecuritySpec) []clientAuthRequirement {

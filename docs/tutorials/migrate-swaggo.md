@@ -41,7 +41,7 @@ Use this matrix to separate "supported now" from "known product limitations":
 | Mixed query + body requests | Supported when query and JSON use different struct fields. | Use separate fields; do not dual-tag a single field with both `query` and `json`. Tag aliases are literal wire names and can overlap across query/body on different fields. |
 | Multiple security schemes on one route | Normal guards compose as AND. `httpapi.AuthAny(...)` models runtime OR and emits matching OpenAPI/client alternatives. | Use normal guard lists for AND; use `AuthAny(...)` when legacy clients may send one of several credentials. |
 | Query/path param type fidelity | `query` and `path` struct tags preserve scalar Go types in OpenAPI and generated clients. | Use typed request fields for docs/client contracts; handlers still own runtime parsing from `net/http`. |
-| Form request bodies | Supported with `httpapi.FormBody(...)` and `form` tags. | Use `RequestBody: httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` callbacks. |
+| Form request bodies | Supported with `httpapi.FormBody(...)` / `httpapi.MultipartBody(...)` and `form` tags. | Use `FormBody(Req{})` for `application/x-www-form-urlencoded` callbacks and `MultipartBody(Req{})` with `httpapi.File` fields for file uploads. |
 | Swaggo annotation drift vs router wiring | Runtime registration drives OpenAPI and clients. | Treat router registration as source of truth. |
 
 ## Annotation mapping (Swaggo -> Virtuous)
@@ -57,7 +57,7 @@ Use this matrix to separate "supported now" from "known product limitations":
 | `@Security` | `guard.Guard` with `Spec()` + middleware | Security schemes are emitted from guard specs. |
 | `@Router /path [method]` | `router.HandleTyped("METHOD /path", ...)` (`httpapi`) or `router.HandleRPC(fn)` (`rpc`) | RPC path is inferred: `/{prefix}/{package}/{kebab(function)}`. |
 | Existing mounted route | `router.Describe(...)` (`httpapi`) | Emits OpenAPI/client metadata without installing a second runtime handler. |
-| `@Accept`, `@Produce` | Implicit JSON by default; override request media with `HandlerMeta.RequestBody` and response media with `HandlerMeta.Responses` | Use `FormBody(...)` for form callbacks and `ResponseSpec{MediaType: ...}` for typed custom response media types. |
+| `@Accept`, `@Produce` | Implicit JSON by default; override request media with `HandlerMeta.RequestBody` and response media with `HandlerMeta.Responses` | Use `FormBody(...)` for form callbacks, `MultipartBody(...)` for uploads, and `ResponseSpec{MediaType: ...}` for typed custom response media types. |
 
 ## Behavioral differences that matter
 

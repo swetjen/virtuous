@@ -24,6 +24,7 @@ type Router = httpapi.Router
 type NoResponse200 = httpapi.NoResponse200
 type NoResponse204 = httpapi.NoResponse204
 type NoResponse500 = httpapi.NoResponse500
+type File = httpapi.File
 
 type TypeOverride = httpapi.TypeOverride
 
@@ -54,8 +55,10 @@ const (
 	ParamInHeader = httpapi.ParamInHeader
 	ParamInCookie = httpapi.ParamInCookie
 
-	MediaTypeJSON           = httpapi.MediaTypeJSON
-	MediaTypeFormURLEncoded = httpapi.MediaTypeFormURLEncoded
+	MediaTypeJSON              = httpapi.MediaTypeJSON
+	MediaTypeFormURLEncoded    = httpapi.MediaTypeFormURLEncoded
+	MediaTypeMultipartForm     = httpapi.MediaTypeMultipartForm
+	MediaTypeMultipartFormData = httpapi.MediaTypeMultipartFormData
 )
 
 // Function shims for backwards compatibility.
@@ -101,6 +104,10 @@ func JSONBody(body any) *RequestBodySpec {
 
 func FormBody(body any) *RequestBodySpec {
 	return httpapi.FormBody(body)
+}
+
+func MultipartBody(body any) *RequestBodySpec {
+	return httpapi.MultipartBody(body)
 }
 
 func SecurityAny(guards ...GuardSpec) SecuritySpec {

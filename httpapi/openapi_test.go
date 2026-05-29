@@ -136,6 +136,11 @@ type formRequest struct {
 	VerifyToken string `form:"hub.verify_token" json:"verifyToken"`
 }
 
+type multipartUploadRequest struct {
+	File     File   `form:"file" json:"file" doc:"Asset file"`
+	ClientID string `form:"client_id,omitempty" json:"clientID"`
+}
+
 type optionalBodyRequest struct {
 	Name string `json:"name"`
 }
@@ -216,6 +221,19 @@ func (formBodyHandler) Metadata() HandlerMeta {
 		Service:     "Callbacks",
 		Method:      "FacebookCompliance",
 		RequestBody: FormBody(formRequest{}),
+	}
+}
+
+type multipartBodyHandler struct{}
+
+func (multipartBodyHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (multipartBodyHandler) RequestType() any                                 { return nil }
+func (multipartBodyHandler) ResponseType() any                                { return NoResponse200{} }
+func (multipartBodyHandler) Metadata() HandlerMeta {
+	return HandlerMeta{
+		Service:     "Assets",
+		Method:      "Upload",
+		RequestBody: MultipartBody(multipartUploadRequest{}),
 	}
 }
 
@@ -623,6 +641,43 @@ func TestOpenAPIExplicitFormRequestBody(t *testing.T) {
 	}
 	if _, ok := props["hub.verify_token"]; !ok {
 		t.Fatalf("form schema missing hub.verify_token property")
+	}
+}
+
+func TestOpenAPIExplicitMultipartRequestBody(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("POST /assets/upload", multipartBodyHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	paths := getMap(t, doc, "paths")
+	uploadPath := getMap(t, paths, "/assets/upload")
+	postOp := getMap(t, uploadPath, "post")
+	requestBody := getMap(t, postOp, "requestBody")
+	content := getMap(t, requestBody, "content")
+	multipart := getMap(t, content, MediaTypeMultipartForm)
+	bodySchema := getMap(t, multipart, "schema")
+	props := getMap(t, bodySchema, "properties")
+
+	fileProp := getMap(t, props, "file")
+	if fileProp["type"] != "string" || fileProp["format"] != "binary" {
+		t.Fatalf("file schema = %#v, want string/binary", fileProp)
+	}
+	if _, ok := props["client_id"]; !ok {
+		t.Fatalf("multipart schema missing client_id property")
+	}
+	required := getList(t, bodySchema, "required")
+	if !containsString(required, "file") {
+		t.Fatalf("multipart required = %#v, want file", required)
+	}
+	if containsString(required, "client_id") {
+		t.Fatalf("multipart required should not include optional client_id: %#v", required)
 	}
 }
 
