@@ -1,14 +1,11 @@
 package rpc
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/swetjen/virtuous/internal/adminui"
 )
@@ -18,11 +15,10 @@ type Module string
 
 const (
 	ModuleAPI           Module = "api"
-	ModuleDatabase      Module = "database"
 	ModuleObservability Module = "observability"
 )
 
-var allModules = []Module{ModuleAPI, ModuleDatabase, ModuleObservability}
+var allModules = []Module{ModuleAPI, ModuleObservability}
 
 // DefaultDocsHTML returns the integrated docs/admin UI HTML.
 func DefaultDocsHTML(openAPIPath string) string {
@@ -30,10 +26,6 @@ func DefaultDocsHTML(openAPIPath string) string {
 		Title:            "Virtuous RPC Docs",
 		OpenAPIURL:       openAPIPath,
 		Modules:          enabledModuleNames(defaultDocsOptions().enabledModules()),
-		SQLCatalogURL:    "./_admin/sql",
-		DBExplorerURL:    "./_admin/db",
-		DBPreviewURL:     "./_admin/db/preview",
-		DBQueryURL:       "./_admin/db/query",
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
 		LoggingStatusURL: "./_admin/logging",
@@ -52,8 +44,10 @@ type DocsOptions struct {
 	DocsFile    string
 	OpenAPIPath string
 	OpenAPIFile string
-	SQLRoot     string
 	Modules     []Module
+	DocsGuards  []Guard
+	AdminGuards []Guard
+	PublicAdmin bool
 	modulesSet  bool
 }
 
@@ -96,20 +90,34 @@ func WithOpenAPIFile(path string) DocOpt {
 	}
 }
 
-// WithSQLRoot sets the root folder scanned for db/sql schema and query files.
-func WithSQLRoot(path string) DocOpt {
-	return func(o *DocsOptions) {
-		if path != "" {
-			o.SQLRoot = path
-		}
-	}
-}
-
 // WithModules enables the docs modules shown in the UI.
 func WithModules(modules ...Module) DocOpt {
 	return func(o *DocsOptions) {
 		o.modulesSet = true
 		o.Modules = append([]Module(nil), modules...)
+	}
+}
+
+// WithDocsGuards applies guards to docs and OpenAPI endpoints.
+func WithDocsGuards(guards ...Guard) DocOpt {
+	return func(o *DocsOptions) {
+		o.DocsGuards = append(o.DocsGuards, guards...)
+	}
+}
+
+// WithAdminGuards applies guards to docs/admin endpoints.
+func WithAdminGuards(guards ...Guard) DocOpt {
+	return func(o *DocsOptions) {
+		o.AdminGuards = append(o.AdminGuards, guards...)
+	}
+}
+
+// WithPublicAdmin explicitly allows docs/admin endpoints without Virtuous guards.
+// Use this only when admin routes are protected by external middleware or are
+// intentionally public.
+func WithPublicAdmin() DocOpt {
+	return func(o *DocsOptions) {
+		o.PublicAdmin = true
 	}
 }
 
@@ -119,7 +127,6 @@ func defaultDocsOptions() DocsOptions {
 		DocsFile:    "docs.html",
 		OpenAPIPath: "/rpc/openapi.json",
 		OpenAPIFile: "openapi.json",
-		SQLRoot:     "db/sql",
 	}
 }
 
@@ -134,12 +141,10 @@ func applyDocOpts(opts ...DocOpt) DocsOptions {
 func (o DocsOptions) enabledModules() map[Module]bool {
 	enabled := map[Module]bool{
 		ModuleAPI:           false,
-		ModuleDatabase:      false,
 		ModuleObservability: false,
 	}
 	if !o.modulesSet {
 		enabled[ModuleAPI] = true
-		enabled[ModuleDatabase] = true
 		enabled[ModuleObservability] = true
 		return enabled
 	}
@@ -153,12 +158,17 @@ func (o DocsOptions) enabledModules() map[Module]bool {
 	return enabled
 }
 
+func (o DocsOptions) requireAdminProtection() {
+	if o.PublicAdmin || len(o.AdminGuards) > 0 {
+		return
+	}
+	panic("rpc: AdminHandler/ServeAdmin requires WithAdminGuards(...) or explicit WithPublicAdmin()")
+}
+
 func normalizeModule(module Module) Module {
 	switch strings.ToLower(strings.TrimSpace(string(module))) {
 	case string(ModuleAPI):
 		return ModuleAPI
-	case string(ModuleDatabase):
-		return ModuleDatabase
 	case string(ModuleObservability):
 		return ModuleObservability
 	default:
@@ -211,10 +221,6 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 		Title:            "Virtuous RPC Docs",
 		OpenAPIURL:       docsAssetURL(openAPIFile),
 		Modules:          enabledModuleNames(modules),
-		SQLCatalogURL:    "./_admin/sql",
-		DBExplorerURL:    "./_admin/db",
-		DBPreviewURL:     "./_admin/db/preview",
-		DBQueryURL:       "./_admin/db/query",
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
 		LoggingStatusURL: "./_admin/logging",
@@ -223,23 +229,26 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 
 	handler := http.NewServeMux()
 	handler.Handle("GET /{$}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		adminui.SetDocsSecurityHeaders(w)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(docsHTML))
 	}))
 
 	if modules[ModuleAPI] {
 		handler.Handle("GET /"+openAPIFile, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			adminui.SetDocsSecurityHeaders(w)
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_, _ = w.Write(openAPI)
 		}))
 	}
 
-	return handler
+	return wrapWithGuards(handler, config.DocsGuards)
 }
 
 // AdminHandler returns a mountable docs/admin handler with subtree-local admin endpoints.
 func (r *Router) AdminHandler(opts ...DocOpt) http.Handler {
 	config := applyDocOpts(opts...)
+	config.requireAdminProtection()
 	modules := config.enabledModules()
 
 	if r.events == nil {
@@ -247,53 +256,6 @@ func (r *Router) AdminHandler(opts ...DocOpt) http.Handler {
 	}
 
 	handler := http.NewServeMux()
-
-	if modules[ModuleDatabase] {
-		handler.Handle("GET /sql", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			catalog := adminui.LoadSQLCatalog(config.SQLRoot)
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			_ = json.NewEncoder(w).Encode(catalog)
-		}))
-		handler.Handle("GET /db", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			payload := dbExplorerPayloadFor(r, req.Context())
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			_ = json.NewEncoder(w).Encode(payload)
-		}))
-		handler.Handle("POST /db/preview", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			started := time.Now()
-			var input DBPreviewInput
-			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
-				result := DBQueryResult{Error: "invalid preview payload"}
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				w.WriteHeader(StatusInvalid)
-				_ = json.NewEncoder(w).Encode(result)
-				r.recordDBExplorerMetric("PreviewTable", req.URL.Path, req.Method, StatusInvalid, time.Since(started), result.Error)
-				return
-			}
-			result, status, errMessage := r.runDBPreview(req.Context(), input)
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(status)
-			_ = json.NewEncoder(w).Encode(result)
-			r.recordDBExplorerMetric("PreviewTable", req.URL.Path, req.Method, status, time.Since(started), errMessage)
-		}))
-		handler.Handle("POST /db/query", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			started := time.Now()
-			var input DBRunQueryInput
-			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
-				result := DBQueryResult{Error: "invalid query payload"}
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				w.WriteHeader(StatusInvalid)
-				_ = json.NewEncoder(w).Encode(result)
-				r.recordDBExplorerMetric("RunQuery", req.URL.Path, req.Method, StatusInvalid, time.Since(started), result.Error)
-				return
-			}
-			result, status, errMessage := r.runDBQuery(req.Context(), input)
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(status)
-			_ = json.NewEncoder(w).Encode(result)
-			r.recordDBExplorerMetric("RunQuery", req.URL.Path, req.Method, status, time.Since(started), errMessage)
-		}))
-	}
 
 	if modules[ModuleObservability] {
 		handler.Handle("GET /events", http.HandlerFunc(r.events.ServeJSON))
@@ -314,7 +276,7 @@ func (r *Router) AdminHandler(opts ...DocOpt) http.Handler {
 		handler.Handle("GET /metrics", http.HandlerFunc(r.observability.ServeJSON))
 	}
 
-	return handler
+	return wrapWithGuards(handler, config.AdminGuards)
 }
 
 // ServeDocs registers default docs and OpenAPI routes on the router.
@@ -332,9 +294,10 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 	}
 	docsIndex := docsBase + "/"
 
-	r.mux.Handle("GET "+docsBase, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	redirectDocs := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, docsIndex, http.StatusMovedPermanently)
-	}))
+	})
+	r.mux.Handle("GET "+docsBase, wrapWithGuards(redirectDocs, config.DocsGuards))
 	r.mux.Handle("GET "+docsIndex, http.StripPrefix(docsBase, r.DocsHandler(opts...)))
 
 	openAPIPath := ensureLeadingSlash(config.OpenAPIPath)
@@ -343,25 +306,29 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		r.mux.Handle("GET "+openAPIPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		openAPIHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			adminui.SetDocsSecurityHeaders(w)
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_, _ = w.Write(openAPI)
-		}))
+		})
+		r.mux.Handle("GET "+openAPIPath, wrapWithGuards(openAPIHandler, config.DocsGuards))
 	}
 
 	if modules[ModuleObservability] {
 		observabilityPath, observabilityAliases := r.observabilityPaths()
 		metricsPath, metricsAliases := r.metricsPaths()
-		r.mux.Handle("GET "+metricsPath, http.HandlerFunc(r.observability.ServeJSON))
+		metricsHandler := wrapWithGuards(http.HandlerFunc(r.observability.ServeJSON), config.DocsGuards)
+		r.mux.Handle("GET "+metricsPath, metricsHandler)
 		for _, alias := range metricsAliases {
-			r.mux.Handle("GET "+alias, http.HandlerFunc(r.observability.ServeJSON))
+			r.mux.Handle("GET "+alias, metricsHandler)
 		}
 		redirectObservability := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			http.Redirect(w, req, docsIndex+"#observability", http.StatusFound)
 		})
-		r.mux.Handle("GET "+observabilityPath, redirectObservability)
+		guardedRedirectObservability := wrapWithGuards(redirectObservability, config.DocsGuards)
+		r.mux.Handle("GET "+observabilityPath, guardedRedirectObservability)
 		for _, alias := range observabilityAliases {
-			r.mux.Handle("GET "+alias, redirectObservability)
+			r.mux.Handle("GET "+alias, guardedRedirectObservability)
 		}
 		r.events.RecordSystem("observability online: " + observabilityPath)
 	}
@@ -378,6 +345,7 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 // ServeAdmin registers docs/admin endpoints under the docs _admin subtree.
 func (r *Router) ServeAdmin(opts ...DocOpt) {
 	config := applyDocOpts(opts...)
+	config.requireAdminProtection()
 
 	if r.events == nil {
 		r.events = adminui.NewEventFeed(600)
@@ -394,69 +362,6 @@ func (r *Router) ServeAdmin(opts ...DocOpt) {
 	r.mux.Handle("GET "+adminIndex, handler)
 	r.mux.Handle("POST "+adminIndex, handler)
 	r.events.RecordSystem("admin docs online: " + adminIndex)
-}
-
-func (r *Router) runDBPreview(ctx context.Context, input DBPreviewInput) (DBQueryResult, int, string) {
-	if r == nil || r.dbExplorer == nil {
-		message := "db explorer is not configured"
-		return DBQueryResult{Error: message}, http.StatusNotFound, message
-	}
-	result, err := r.dbExplorer.PreviewTable(ctx, input)
-	if err != nil {
-		status := dbExplorerErrorStatus(err)
-		return DBQueryResult{Error: err.Error()}, status, err.Error()
-	}
-	return result, http.StatusOK, ""
-}
-
-func (r *Router) runDBQuery(ctx context.Context, input DBRunQueryInput) (DBQueryResult, int, string) {
-	if r == nil || r.dbExplorer == nil {
-		message := "db explorer is not configured"
-		return DBQueryResult{Error: message}, http.StatusNotFound, message
-	}
-	result, err := r.dbExplorer.RunQuery(ctx, input)
-	if err != nil {
-		status := dbExplorerErrorStatus(err)
-		return DBQueryResult{Error: err.Error()}, status, err.Error()
-	}
-	return result, http.StatusOK, ""
-}
-
-func dbExplorerErrorStatus(err error) int {
-	if err == nil {
-		return http.StatusOK
-	}
-	message := strings.ToLower(strings.TrimSpace(err.Error()))
-	switch {
-	case errors.Is(err, errDBExplorerDisabled):
-		return http.StatusNotFound
-	case strings.Contains(message, "required"),
-		strings.Contains(message, "not allowed"),
-		strings.Contains(message, "only select"),
-		strings.Contains(message, "disallowed"):
-		return StatusInvalid
-	default:
-		return StatusError
-	}
-}
-
-func (r *Router) recordDBExplorerMetric(operation, path, method string, status int, duration time.Duration, errorMessage string) {
-	if r == nil || r.observability == nil {
-		return
-	}
-	operation = strings.TrimSpace(operation)
-	if operation != "" {
-		errorMessage = strings.TrimSpace(operation + ": " + errorMessage)
-	}
-	r.observability.RecordRequest(adminui.RequestEvent{
-		RPCName:      "Admin.DBExplorer",
-		Path:         path,
-		HTTPMethod:   method,
-		StatusCode:   status,
-		DurationMS:   duration.Milliseconds(),
-		Timestamp:    time.Now().UTC(),
-		ErrorMessage: errorMessage,
-	}, nil)
 }
 
 func (r *Router) observabilityPaths() (string, []string) {

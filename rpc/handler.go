@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+
+	"github.com/swetjen/virtuous/internal/jsonlimit"
 )
 
 type handlerSpec struct {
@@ -120,20 +122,24 @@ func isStructType(t reflect.Type) bool {
 	return base != nil && base.Kind() == reflect.Struct
 }
 
-func buildRPCHandler(spec handlerSpec) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			setTraceError(r.Context(), "method not allowed")
+func (router *Router) buildRPCHandler(spec handlerSpec) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			setTraceError(req.Context(), "method not allowed")
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		args := make([]reflect.Value, 0, 2)
-		args = append(args, reflect.ValueOf(r.Context()))
+		args = append(args, reflect.ValueOf(req.Context()))
 
 		if spec.reqType != nil {
-			reqVal, err := decodeRequest(r, spec.reqType)
+			reqVal, err := decodeRequest(w, req, spec.reqType, router.maxBodyBytes)
 			if err != nil {
-				setTraceError(r.Context(), "invalid request body")
+				setTraceError(req.Context(), "invalid request body")
+				if jsonlimit.IsBodyTooLarge(err) {
+					writeJSON(w, http.StatusRequestEntityTooLarge, reflect.Zero(spec.respType))
+					return
+				}
 				writeJSON(w, StatusInvalid, reflect.Zero(spec.respType))
 				return
 			}
@@ -145,30 +151,37 @@ func buildRPCHandler(spec handlerSpec) http.Handler {
 		statusVal := out[1]
 		status := int(statusVal.Int())
 		if status != StatusOK && status != StatusInvalid && status != StatusError {
-			setTraceError(r.Context(), "invalid rpc status")
+			setTraceError(req.Context(), "invalid rpc status")
 			status = StatusError
 		}
 		if status >= 400 {
-			setTraceError(r.Context(), extractResponseErrorMessage(respVal))
+			setTraceError(req.Context(), extractResponseErrorMessage(respVal))
 		}
 		writeJSON(w, status, respVal)
 	})
 }
 
-func decodeRequest(r *http.Request, reqType reflect.Type) (reflect.Value, error) {
+func decodeRequest(w http.ResponseWriter, r *http.Request, reqType reflect.Type, maxBytes int64) (reflect.Value, error) {
 	if reqType == nil {
 		return reflect.Value{}, errors.New("rpc: request type missing")
 	}
+	if maxBytes <= 0 {
+		maxBytes = jsonlimit.DefaultMaxBytes
+	}
+	if r.ContentLength > maxBytes {
+		return reflect.Value{}, jsonlimit.ErrBodyTooLarge
+	}
+	body := jsonlimit.MaxBytesReader(w, r, maxBytes)
 	var target reflect.Value
 	if reqType.Kind() == reflect.Ptr {
 		target = reflect.New(reqType.Elem())
-		if err := json.NewDecoder(r.Body).Decode(target.Interface()); err != nil {
+		if err := json.NewDecoder(body).Decode(target.Interface()); err != nil {
 			return reflect.Value{}, err
 		}
 		return target, nil
 	}
 	target = reflect.New(reqType)
-	if err := json.NewDecoder(r.Body).Decode(target.Interface()); err != nil {
+	if err := json.NewDecoder(body).Decode(target.Interface()); err != nil {
 		return reflect.Value{}, err
 	}
 	return target.Elem(), nil

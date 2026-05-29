@@ -37,12 +37,6 @@ func BuildRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) *rp
 	routerOptions := []rpc.RouterOption{
 		rpc.WithPrefix("/rpc"),
 	}
-	if pool != nil {
-		routerOptions = append(routerOptions, rpc.WithDBExplorer(rpc.NewPGXDBExplorer(pool)))
-		slog.Info("byodb: db explorer attached", "driver", "pgxpool")
-	} else {
-		slog.Warn("byodb: db explorer disabled (nil database pool)")
-	}
 	router := rpc.NewRouter(routerOptions...)
 
 	router.HandleRPC(handlerSet.States.StatesGetMany)

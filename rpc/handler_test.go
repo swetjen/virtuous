@@ -27,6 +27,13 @@ func testHandler(_ context.Context, req testReq) (testResp, int) {
 	return testResp{Message: "hello " + req.Name}, StatusOK
 }
 
+var oversizedHandlerCalled bool
+
+func oversizedHandler(_ context.Context, req testReq) (testResp, int) {
+	oversizedHandlerCalled = true
+	return testResp{Message: req.Name}, StatusOK
+}
+
 func TestRPCHandleOK(t *testing.T) {
 	router := NewRouter()
 	router.HandleRPC(testHandler)
@@ -74,6 +81,24 @@ func TestRPCHandleInvalid(t *testing.T) {
 	}
 	if body.Error != "name required" {
 		t.Fatalf("unexpected error response: %q", body.Error)
+	}
+}
+
+func TestRPCOversizedJSONReturns413WithoutInvokingHandler(t *testing.T) {
+	oversizedHandlerCalled = false
+	router := NewRouter(WithMaxRequestBodyBytes(12))
+	router.HandleRPC(oversizedHandler)
+	path := router.Routes()[0].Path
+
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"payload too large"}`))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected status 413, got %d", rec.Code)
+	}
+	if oversizedHandlerCalled {
+		t.Fatalf("handler should not be invoked for oversized request body")
 	}
 }
 

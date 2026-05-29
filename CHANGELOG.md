@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.35
+
+- Remove the docs/admin database explorer and SQL catalog module, including runtime DB explorer adapters and `_admin/db*` endpoints.
+- Replace remote Swagger UI CDN usage in the integrated docs shell with an in-process OpenAPI reference renderer and add docs CSP headers.
+- Add bounded JSON request decoding for RPC handlers with configurable `rpc.WithMaxRequestBodyBytes(...)` and capped `httpapi.Decode(...)` helpers.
+- Add `WithDocsGuards(...)` / `WithAdminGuards(...)` for docs/admin protection and require `WithAdminGuards(...)` or explicit `WithPublicAdmin()` for admin endpoints.
+
 ## 0.0.34
 
 - Add first-class `httpapi.MultipartBody(...)` and `httpapi.File` support for `multipart/form-data` file uploads in OpenAPI, JS/TS/Python clients, and React Query TypeScript output.

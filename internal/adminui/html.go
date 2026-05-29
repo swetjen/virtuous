@@ -11,10 +11,6 @@ type DocsShellOptions struct {
 	Title            string
 	OpenAPIURL       string
 	Modules          []string
-	SQLCatalogURL    string
-	DBExplorerURL    string
-	DBPreviewURL     string
-	DBQueryURL       string
 	EventsURL        string
 	EventsStreamURL  string
 	LoggingStatusURL string
@@ -30,22 +26,6 @@ func DocsShellHTML(opts DocsShellOptions) string {
 	openAPIURL := strings.TrimSpace(opts.OpenAPIURL)
 	if openAPIURL == "" {
 		openAPIURL = "/openapi.json"
-	}
-	sqlCatalogURL := strings.TrimSpace(opts.SQLCatalogURL)
-	if sqlCatalogURL == "" {
-		sqlCatalogURL = "./_admin/sql"
-	}
-	dbExplorerURL := strings.TrimSpace(opts.DBExplorerURL)
-	if dbExplorerURL == "" {
-		dbExplorerURL = "./_admin/db"
-	}
-	dbPreviewURL := strings.TrimSpace(opts.DBPreviewURL)
-	if dbPreviewURL == "" {
-		dbPreviewURL = "./_admin/db/preview"
-	}
-	dbQueryURL := strings.TrimSpace(opts.DBQueryURL)
-	if dbQueryURL == "" {
-		dbQueryURL = "./_admin/db/query"
 	}
 	eventsURL := strings.TrimSpace(opts.EventsURL)
 	if eventsURL == "" {
@@ -64,7 +44,6 @@ func DocsShellHTML(opts DocsShellOptions) string {
 		metricsURL = "/rpc/_virtuous/metrics"
 	}
 	moduleAPI := true
-	moduleDatabase := true
 	moduleObservability := true
 	if len(opts.Modules) > 0 {
 		modules := make(map[string]struct{}, len(opts.Modules))
@@ -76,7 +55,6 @@ func DocsShellHTML(opts DocsShellOptions) string {
 			modules[module] = struct{}{}
 		}
 		_, moduleAPI = modules["api"]
-		_, moduleDatabase = modules["database"]
 		_, moduleObservability = modules["observability"]
 	}
 
@@ -84,12 +62,7 @@ func DocsShellHTML(opts DocsShellOptions) string {
 		"__TITLE__", html.EscapeString(title),
 		"__OPENAPI_URL__", strconv.Quote(openAPIURL),
 		"__MODULE_API__", strconv.FormatBool(moduleAPI),
-		"__MODULE_DATABASE__", strconv.FormatBool(moduleDatabase),
 		"__MODULE_OBSERVABILITY__", strconv.FormatBool(moduleObservability),
-		"__SQL_CATALOG_URL__", strconv.Quote(sqlCatalogURL),
-		"__DB_EXPLORER_URL__", strconv.Quote(dbExplorerURL),
-		"__DB_PREVIEW_URL__", strconv.Quote(dbPreviewURL),
-		"__DB_QUERY_URL__", strconv.Quote(dbQueryURL),
 		"__EVENTS_URL__", strconv.Quote(eventsURL),
 		"__EVENTS_STREAM_URL__", strconv.Quote(eventsStreamURL),
 		"__LOGGING_STATUS_URL__", strconv.Quote(loggingStatusURL),
@@ -104,7 +77,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>__TITLE__</title>
-	<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
 	<style>
 		* {
 			box-sizing: border-box;
@@ -229,10 +201,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 		}
 
 		body.reference-mode .tiles {
-			display: none;
-		}
-
-		body.database-mode .tiles {
 			display: none;
 		}
 
@@ -464,6 +432,100 @@ const docsShellTemplate = `<!DOCTYPE html>
 			min-height: 680px;
 		}
 
+		.reference-doc {
+			padding: 16px;
+			background: #f7fbfe;
+			min-height: 100%;
+		}
+
+		.reference-ops {
+			display: grid;
+			gap: 8px;
+		}
+
+		.reference-op,
+		.reference-schema {
+			border: 1px solid #d8e4ef;
+			border-radius: 10px;
+			background: #ffffff;
+			overflow: hidden;
+		}
+
+		.reference-op summary,
+		.reference-schema summary {
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 10px 12px;
+			font-size: 13px;
+			font-weight: 700;
+		}
+
+		.reference-path {
+			font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+			font-size: 12px;
+			color: #18354e;
+			overflow-wrap: anywhere;
+		}
+
+		.reference-method,
+		.reference-auth,
+		.reference-response {
+			border-radius: 999px;
+			padding: 3px 7px;
+			font-size: 11px;
+			font-weight: 800;
+			background: #dff5ea;
+			color: #0b7b4a;
+			white-space: nowrap;
+		}
+
+		.reference-auth {
+			background: #efe7da;
+			color: #7b5b2f;
+		}
+
+		.reference-op summary small {
+			margin-left: auto;
+			color: var(--muted);
+			font-weight: 600;
+		}
+
+		.reference-op-body,
+		.reference-schema p {
+			margin: 0;
+			padding: 12px;
+			border-top: 1px solid #e5edf4;
+			color: #405a71;
+			font-size: 13px;
+		}
+
+		.reference-op-body h3,
+		.reference-schemas h3 {
+			margin: 0 0 8px;
+			font-size: 14px;
+			color: #10283e;
+		}
+
+		.reference-responses {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+			margin-top: 10px;
+		}
+
+		.reference-response {
+			background: #e8eff6;
+			color: #30495f;
+		}
+
+		.reference-schemas {
+			margin-top: 16px;
+			display: grid;
+			gap: 8px;
+		}
+
 		.observability-grid {
 			display: grid;
 			grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -509,280 +571,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 			color: var(--muted);
 			border-top: 1px solid #e5edf4;
 			background: #fbfdff;
-		}
-
-		.db-layout {
-			display: grid;
-			grid-template-columns: 320px minmax(0, 1fr);
-			gap: 12px;
-			min-height: 520px;
-		}
-
-		.db-tree {
-			display: flex;
-			flex-direction: column;
-			overflow: hidden;
-		}
-
-		.db-tree-list {
-			padding: 8px;
-			overflow: auto;
-			background: #f8fbfd;
-			flex: 1;
-		}
-
-		.db-schema {
-			margin-bottom: 8px;
-			border: 1px solid #d8e4ef;
-			border-radius: 10px;
-			background: #ffffff;
-			overflow: hidden;
-		}
-
-		.db-schema-head {
-			padding: 8px 10px;
-			font-size: 12px;
-			font-weight: 700;
-			letter-spacing: 0.04em;
-			text-transform: uppercase;
-			color: #4b6175;
-			background: #eef4f9;
-			border-bottom: 1px solid #d8e4ef;
-		}
-
-		.db-schema-head small {
-			margin-left: 6px;
-			font-weight: 600;
-			color: #688196;
-		}
-
-		.db-table-list {
-			display: flex;
-			flex-direction: column;
-		}
-
-		.db-table-item {
-			all: unset;
-			display: block;
-			cursor: pointer;
-			padding: 8px 10px;
-			font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-			font-size: 12px;
-			border-bottom: 1px solid #e8eff5;
-			color: #17324a;
-		}
-
-		.db-table-item:hover,
-		.db-table-item.active {
-			background: #dff0fb;
-		}
-
-		.db-table-item small {
-			display: block;
-			margin-top: 2px;
-			font-size: 11px;
-			font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
-			color: #60768b;
-		}
-
-		.db-main {
-			display: grid;
-			grid-template-rows: auto minmax(220px, 1fr);
-			gap: 12px;
-		}
-
-		.db-editor-card,
-		.db-results-card {
-			display: flex;
-			flex-direction: column;
-			overflow: hidden;
-		}
-
-		.db-toolbar {
-			display: inline-flex;
-			gap: 8px;
-		}
-
-		.db-toolbar button {
-			all: unset;
-			cursor: pointer;
-			padding: 7px 12px;
-			border-radius: 9px;
-			border: 1px solid #cadae8;
-			background: #f4f9fd;
-			color: #16344d;
-			font-size: 12px;
-			font-weight: 700;
-		}
-
-		.db-toolbar button:hover {
-			background: #e6f1fa;
-			border-color: #bdd4e6;
-		}
-
-		#db-query-editor {
-			width: 100%;
-			min-height: 170px;
-			border: 0;
-			border-top: 1px solid #e5edf4;
-			border-bottom: 1px solid #e5edf4;
-			padding: 12px;
-			font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-			font-size: 12px;
-			line-height: 1.5;
-			color: #10283e;
-			background: #fdfefe;
-			resize: vertical;
-			outline: none;
-		}
-
-		.db-meta-bar {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 8px;
-			padding: 10px 12px;
-			background: #f8fbfd;
-			font-size: 12px;
-			color: #4f6579;
-		}
-
-		.db-meta-bar span {
-			padding: 3px 8px;
-			border-radius: 999px;
-			background: #e8eff6;
-		}
-
-		.db-results-wrap {
-			overflow: auto;
-			background: #ffffff;
-			flex: 1;
-		}
-
-		.db-results-wrap table {
-			width: 100%;
-			border-collapse: collapse;
-			font-size: 12px;
-		}
-
-		.db-results-wrap td,
-		.db-results-wrap th {
-			white-space: nowrap;
-		}
-
-		.db-disabled {
-			padding: 14px 16px;
-			border-radius: 12px;
-			background: #f7fbfe;
-			border: 1px solid #d9e7f2;
-		}
-
-		.db-disabled h3 {
-			margin: 0;
-			font-size: 15px;
-		}
-
-		.db-disabled p {
-			margin: 8px 0 0;
-			font-size: 13px;
-			color: #5d7488;
-		}
-
-		.db-disabled pre {
-			margin: 12px 0 0;
-			padding: 12px;
-			border-radius: 10px;
-			border: 1px solid #d5e4f0;
-			background: #ffffff;
-			font-size: 12px;
-			line-height: 1.5;
-			overflow: auto;
-		}
-
-		.sql-layout {
-			display: grid;
-			grid-template-columns: 240px 240px minmax(0, 1fr);
-			gap: 10px;
-			min-height: 560px;
-		}
-
-		.sql-list {
-			display: flex;
-			flex-direction: column;
-			border: 1px solid var(--line);
-			border-radius: 12px;
-			overflow: hidden;
-			background: #f8fbfd;
-		}
-
-		.sql-list h3 {
-			margin: 0;
-			padding: 10px 12px;
-			font-size: 13px;
-			text-transform: uppercase;
-			letter-spacing: 0.06em;
-			background: #eef4f9;
-			border-bottom: 1px solid var(--line);
-		}
-
-		.sql-items {
-			overflow: auto;
-		}
-
-		.sql-item {
-			display: block;
-			width: 100%;
-			text-align: left;
-			background: transparent;
-			border: 0;
-			border-bottom: 1px solid #dde7f0;
-			padding: 10px 12px;
-			font-size: 12px;
-			cursor: pointer;
-			color: #23384e;
-		}
-
-		.sql-item small {
-			display: block;
-			color: #627589;
-			margin-top: 2px;
-		}
-
-		.sql-item:hover,
-		.sql-item.active {
-			background: #dff0fb;
-		}
-
-		.sql-viewer {
-			display: flex;
-			flex-direction: column;
-			border: 1px solid var(--line);
-			border-radius: 12px;
-			overflow: hidden;
-			background: #f6fafc;
-		}
-
-		.sql-meta {
-			padding: 10px 12px;
-			background: #eef4f9;
-			border-bottom: 1px solid var(--line);
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			gap: 8px;
-			font-size: 12px;
-		}
-
-		#sql-content {
-			margin: 0;
-			padding: 12px;
-			font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
-			font-size: 12px;
-			line-height: 1.5;
-			overflow: auto;
-			white-space: pre;
-			background: #f6fafc;
-			color: #1c3349;
-			min-height: 520px;
 		}
 
 		table {
@@ -983,20 +771,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 				grid-template-columns: repeat(2, minmax(0, 1fr));
 			}
 
-			.sql-layout {
-				grid-template-columns: 1fr;
-				min-height: 0;
-			}
-
-			.db-layout {
-				grid-template-columns: 1fr;
-				min-height: 0;
-			}
-
-			.db-main {
-				grid-template-rows: auto auto;
-			}
-
 			.observability-grid {
 				grid-template-columns: 1fr;
 			}
@@ -1005,9 +779,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 				min-height: 420px;
 			}
 
-			#sql-content {
-				min-height: 360px;
-			}
 		}
 	</style>
 </head>
@@ -1015,11 +786,10 @@ const docsShellTemplate = `<!DOCTYPE html>
 	<header class="topbar">
 		<div class="brand-block">
 			<div class="brand">Virtuous Console</div>
-			<div class="brand-sub">docs + observability + sql + runtime logs</div>
+			<div class="brand-sub">docs + observability + runtime logs</div>
 		</div>
 		<nav class="nav" aria-label="Docs sections">
 			<button class="active" data-panel="reference" data-module="api">API</button>
-			<button data-panel="database" data-module="database">Database</button>
 			<button data-panel="observability" data-module="observability">Observability</button>
 		</nav>
 	</header>
@@ -1053,7 +823,7 @@ const docsShellTemplate = `<!DOCTYPE html>
 					<div class="section-head">
 						<div>
 							<h2>API Reference</h2>
-							<p>OpenAPI explorer (Swagger UI).</p>
+							<p>OpenAPI operations and schemas.</p>
 						</div>
 					</div>
 					<div class="card">
@@ -1204,105 +974,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 					</div>
 				</section>
 
-				<section id="panel-database" class="panel">
-					<div class="section-head">
-						<div>
-							<h2>Database Explorer</h2>
-							<p>Read-only runtime explorer with query execution and table previews.</p>
-						</div>
-						<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-							<span id="db-mode" class="metric-pill basic">offline</span>
-							<span id="db-root" class="stream-state">detached</span>
-						</div>
-					</div>
-
-					<div id="db-disabled" class="db-disabled" hidden>
-						<h3 id="db-disabled-title">Live DB explorer is not attached.</h3>
-						<p id="db-disabled-message">Attach it once to the RPC router using your runtime connection pool.</p>
-						<pre id="db-snippet"></pre>
-					</div>
-
-					<div id="db-layout" class="db-layout" hidden>
-						<div class="db-tree card">
-							<div class="card-head">
-								<div>
-									<h3>Explorer Tree</h3>
-									<p>Schemas and tables discovered from the active database.</p>
-								</div>
-							</div>
-							<div id="db-tree-list" class="db-tree-list">
-								<div class="observability-empty">Loading database metadata...</div>
-							</div>
-						</div>
-
-						<div class="db-main">
-							<div class="card db-editor-card">
-								<div class="card-head">
-									<div>
-										<h3>Query Editor</h3>
-										<p>SELECT-only, single statement, hard timeout, row cap enforced.</p>
-									</div>
-									<div class="db-toolbar">
-										<button id="db-run-btn" type="button">Run</button>
-										<button id="db-clear-btn" type="button">Clear</button>
-									</div>
-								</div>
-								<textarea id="db-query-editor" spellcheck="false" placeholder="SELECT * FROM public.users LIMIT 10;"></textarea>
-								<div class="db-meta-bar">
-									<span id="db-meta-status">idle</span>
-									<span id="db-meta-duration">-- ms</span>
-									<span id="db-meta-rows">0 rows</span>
-								</div>
-							</div>
-
-							<div class="card db-results-card">
-								<div class="card-head">
-									<div>
-										<h3>Results</h3>
-										<p>Tabular output from preview and ad hoc read-only queries.</p>
-									</div>
-								</div>
-								<div id="db-results-wrap" class="db-results-wrap">
-									<table>
-										<thead id="db-results-head"></thead>
-										<tbody id="db-results-body">
-											<tr><td class="observability-empty">Run a query to view results.</td></tr>
-										</tbody>
-									</table>
-								</div>
-							</div>
-						</div>
-					</div>
-
-					<div class="card">
-						<div class="card-head">
-							<div>
-								<h3>SQL Source Catalog</h3>
-								<p>Goose migrations and SQLC queries discovered from db/sql.</p>
-							</div>
-							<span id="sql-root" class="stream-state"></span>
-						</div>
-						<div id="sql-status" class="empty">Loading SQL catalog...</div>
-						<div id="sql-layout" class="sql-layout" hidden>
-							<div class="sql-list">
-								<h3>Schemas</h3>
-								<div id="schemas-list" class="sql-items"></div>
-							</div>
-							<div class="sql-list">
-								<h3>Queries</h3>
-								<div id="queries-list" class="sql-items"></div>
-							</div>
-							<div class="sql-viewer">
-								<div class="sql-meta">
-									<strong id="sql-file-path">Select a SQL file</strong>
-									<span id="sql-file-details"></span>
-								</div>
-								<pre id="sql-content"></pre>
-							</div>
-						</div>
-					</div>
-				</section>
-
 				<section id="panel-logs" class="panel">
 					<div class="section-head">
 						<div>
@@ -1337,19 +1008,12 @@ const docsShellTemplate = `<!DOCTYPE html>
 			</div>
 	</main>
 
-	<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-	<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
 	<script>
-	(function () {
-		const OPENAPI_URL = __OPENAPI_URL__
-		const MODULE_API = __MODULE_API__
-		const MODULE_DATABASE = __MODULE_DATABASE__
-		const MODULE_OBSERVABILITY = __MODULE_OBSERVABILITY__
-		const SQL_CATALOG_URL = __SQL_CATALOG_URL__
-		const DB_EXPLORER_URL = __DB_EXPLORER_URL__
-		const DB_PREVIEW_URL = __DB_PREVIEW_URL__
-		const DB_QUERY_URL = __DB_QUERY_URL__
-		const EVENTS_URL = __EVENTS_URL__
+		(function () {
+			const OPENAPI_URL = __OPENAPI_URL__
+			const MODULE_API = __MODULE_API__
+			const MODULE_OBSERVABILITY = __MODULE_OBSERVABILITY__
+			const EVENTS_URL = __EVENTS_URL__
 		const EVENTS_STREAM_URL = __EVENTS_STREAM_URL__
 		const LOGGING_STATUS_URL = __LOGGING_STATUS_URL__
 		const METRICS_URL = __METRICS_URL__
@@ -1360,10 +1024,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 		let streamConnected = false
 		let eventSource = null
 		let reconnectTimer = null
-		let selected = { kind: "", index: 0 }
-		let sqlCatalog = { schemas: [], queries: [] }
-		let dbExplorer = { enabled: false, state: null, snippet: "", error: "" }
-		let dbSelected = { schema: "", table: "" }
 		let loggingStatus = { enabled: false, active: false, snippet: "" }
 		let metricsSnapshot = null
 
@@ -1371,16 +1031,12 @@ const docsShellTemplate = `<!DOCTYPE html>
 		const panels = {
 			reference: document.getElementById("panel-reference"),
 			observability: document.getElementById("panel-observability"),
-			database: document.getElementById("panel-database"),
 			logs: document.getElementById("panel-logs"),
 		}
 
 		function moduleEnabled(moduleName) {
 			if (moduleName === "api") {
 				return MODULE_API
-			}
-			if (moduleName === "database") {
-				return MODULE_DATABASE
 			}
 			if (moduleName === "observability") {
 				return MODULE_OBSERVABILITY
@@ -1392,9 +1048,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 			if (panelName === "reference") {
 				return MODULE_API
 			}
-			if (panelName === "database") {
-				return MODULE_DATABASE
-			}
 			if (panelName === "observability" || panelName === "logs") {
 				return MODULE_OBSERVABILITY
 			}
@@ -1404,9 +1057,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 		function firstEnabledPanel() {
 			if (MODULE_API) {
 				return "reference"
-			}
-			if (MODULE_DATABASE) {
-				return "database"
 			}
 			if (MODULE_OBSERVABILITY) {
 				return "observability"
@@ -1446,7 +1096,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 				panels[key].classList.toggle("active", active)
 			})
 			document.body.classList.toggle("reference-mode", name === "reference")
-			document.body.classList.toggle("database-mode", name === "database")
 			document.body.classList.remove("logs-mode")
 			if (name === "reference") {
 				mountReference()
@@ -1466,9 +1115,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 		if (!MODULE_API) {
 			panels.reference.hidden = true
 		}
-		if (!MODULE_DATABASE) {
-			panels.database.hidden = true
-		}
 		if (!MODULE_OBSERVABILITY) {
 			panels.observability.hidden = true
 			panels.logs.hidden = true
@@ -1479,7 +1125,7 @@ const docsShellTemplate = `<!DOCTYPE html>
 			if (hash === "logs") {
 				hash = "observability"
 			}
-			if (hash === "database" || hash === "reference" || hash === "observability") {
+			if (hash === "reference" || hash === "observability") {
 				if (panelEnabled(hash)) {
 					return hash
 				}
@@ -1487,7 +1133,7 @@ const docsShellTemplate = `<!DOCTYPE html>
 			return firstEnabledPanel()
 		}
 
-		if (!MODULE_API && !MODULE_DATABASE && !MODULE_OBSERVABILITY) {
+		if (!MODULE_API && !MODULE_OBSERVABILITY) {
 			navButtons.forEach(function (button) {
 				button.hidden = true
 			})
@@ -1501,10 +1147,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 
 		function shouldLoadReference() {
 			return MODULE_API
-		}
-
-		function shouldLoadDatabase() {
-			return MODULE_DATABASE
 		}
 
 		function shouldLoadObservability() {
@@ -1581,6 +1223,60 @@ const docsShellTemplate = `<!DOCTYPE html>
 			}
 		}
 
+		function renderReference(spec) {
+			const root = document.getElementById("scalar-root")
+			const paths = spec && spec.paths ? spec.paths : {}
+			const methods = ["get", "post", "put", "patch", "delete", "options", "head"]
+			const operations = []
+			Object.keys(paths).sort().forEach(function (path) {
+				const item = paths[path] || {}
+				methods.forEach(function (method) {
+					const op = item[method]
+					if (!op || typeof op !== "object") {
+						return
+					}
+					operations.push({
+						method: method.toUpperCase(),
+						path: path,
+						tag: Array.isArray(op.tags) && op.tags.length ? op.tags[0] : "API",
+						summary: op.summary || op.operationId || path,
+						description: op.description || "",
+						security: Array.isArray(op.security) && op.security.length ? op.security : null,
+						responses: op.responses || {},
+					})
+				})
+			})
+
+			if (operations.length === 0) {
+				root.innerHTML = "<div class='empty'>No OpenAPI operations found.</div>"
+				return
+			}
+
+			const schemas = spec && spec.components && spec.components.schemas ? spec.components.schemas : {}
+			const operationHTML = operations.map(function (op) {
+				const responses = Object.keys(op.responses).sort().map(function (status) {
+					const response = op.responses[status] || {}
+					return "<span class='reference-response'>" + escapeHTML(status) + " " + escapeHTML(response.description || "") + "</span>"
+				}).join("")
+				const auth = op.security ? "<span class='reference-auth'>auth</span>" : ""
+				return "<details class='reference-op'>" +
+					"<summary><span class='reference-method'>" + escapeHTML(op.method) + "</span><span class='reference-path'>" + escapeHTML(op.path) + "</span>" + auth + "<small>" + escapeHTML(op.tag) + "</small></summary>" +
+					"<div class='reference-op-body'>" +
+						"<h3>" + escapeHTML(op.summary) + "</h3>" +
+						(op.description ? "<p>" + escapeHTML(op.description) + "</p>" : "") +
+						"<div class='reference-responses'>" + responses + "</div>" +
+					"</div>" +
+				"</details>"
+			}).join("")
+			const schemaNames = Object.keys(schemas).sort()
+			const schemaHTML = schemaNames.length ? "<section class='reference-schemas'><h3>Schemas</h3>" + schemaNames.map(function (name) {
+				const schema = schemas[name] || {}
+				const props = schema.properties ? Object.keys(schema.properties).sort().join(", ") : ""
+				return "<details class='reference-schema'><summary>" + escapeHTML(name) + "</summary><p>" + escapeHTML(props || schema.type || "schema") + "</p></details>"
+			}).join("") + "</section>" : ""
+			root.innerHTML = "<div class='reference-doc'><section class='reference-ops'>" + operationHTML + "</section>" + schemaHTML + "</div>"
+		}
+
 		function mountReference() {
 			if (referenceMounted) {
 				return
@@ -1590,22 +1286,7 @@ const docsShellTemplate = `<!DOCTYPE html>
 				.then(function (response) { return response.json() })
 				.then(function (spec) {
 					installFetchAuthPrefixer(buildPrefixMap(spec))
-					if (typeof SwaggerUIBundle === "undefined") {
-						document.getElementById("scalar-root").innerHTML = "<div class='empty'>Unable to load OpenAPI explorer.</div>"
-						return
-					}
-					SwaggerUIBundle({
-						url: OPENAPI_URL,
-						dom_id: "#scalar-root",
-						deepLinking: true,
-						displayRequestDuration: true,
-						docExpansion: "none",
-						presets: [
-							SwaggerUIBundle.presets.apis,
-							SwaggerUIStandalonePreset,
-						],
-						layout: "BaseLayout",
-					})
+					renderReference(spec)
 				})
 				.catch(function () {
 					document.getElementById("scalar-root").innerHTML = "<div class='empty'>Unable to load OpenAPI document.</div>"
@@ -1906,330 +1587,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 				})
 		}
 
-		function quoteSQLIdentifier(value) {
-			return "\"" + String(value || "").replace(/"/g, "\"\"") + "\""
-		}
-
-		function defaultPreviewQuery(schema, table, limit) {
-			const rowLimit = Number(limit || 10)
-			if (!schema || schema === "main") {
-				return "SELECT * FROM " + quoteSQLIdentifier(table) + " LIMIT " + String(rowLimit) + ";"
-			}
-			return "SELECT * FROM " + quoteSQLIdentifier(schema) + "." + quoteSQLIdentifier(table) + " LIMIT " + String(rowLimit) + ";"
-		}
-
-		function setDBMeta(status, duration, rows) {
-			document.getElementById("db-meta-status").textContent = status || "idle"
-			document.getElementById("db-meta-duration").textContent = (duration || "--") + " ms"
-			document.getElementById("db-meta-rows").textContent = String(rows || 0) + " rows"
-		}
-
-		function renderDBResult(result) {
-			const head = document.getElementById("db-results-head")
-			const body = document.getElementById("db-results-body")
-			head.innerHTML = ""
-			body.innerHTML = ""
-
-			if (!result) {
-				body.innerHTML = "<tr><td class='observability-empty'>Run a query to view results.</td></tr>"
-				setDBMeta("idle", "--", 0)
-				return
-			}
-			if (result.error) {
-				body.innerHTML = "<tr><td class='observability-empty'>" + escapeHTML(result.error) + "</td></tr>"
-				setDBMeta("error", result.executionMs || 0, result.rowCount || 0)
-				return
-			}
-
-			const columns = Array.isArray(result.columns) ? result.columns : []
-			if (columns.length === 0) {
-				body.innerHTML = "<tr><td class='observability-empty'>Query returned no columns.</td></tr>"
-				setDBMeta("ok", result.executionMs || 0, result.rowCount || 0)
-				return
-			}
-
-			head.innerHTML = "<tr>" + columns.map(function (column) {
-				const type = column && column.databaseType ? "<small style='display:block;font-size:10px;color:#6e8397;font-weight:600;'>" + escapeHTML(column.databaseType) + "</small>" : ""
-				return "<th>" + escapeHTML(column && column.name ? column.name : "-") + type + "</th>"
-			}).join("") + "</tr>"
-
-			const rows = Array.isArray(result.rows) ? result.rows : []
-			if (rows.length === 0) {
-				body.innerHTML = "<tr><td class='observability-empty' colspan='" + String(columns.length) + "'>No rows returned.</td></tr>"
-				setDBMeta("ok", result.executionMs || 0, result.rowCount || 0)
-				return
-			}
-
-			body.innerHTML = rows.map(function (row) {
-				const values = Array.isArray(row) ? row : []
-				return "<tr>" + columns.map(function (_, index) {
-					const value = index < values.length ? values[index] : null
-					return "<td>" + escapeHTML(value === null || typeof value === "undefined" ? "NULL" : String(value)) + "</td>"
-				}).join("") + "</tr>"
-			}).join("")
-			setDBMeta("ok", result.executionMs || 0, result.rowCount || rows.length)
-		}
-
-		function renderDBTree(state) {
-			const node = document.getElementById("db-tree-list")
-			const schemas = state && Array.isArray(state.schemas) ? state.schemas : []
-			if (schemas.length === 0) {
-				node.innerHTML = "<div class='observability-empty'>No tables discovered.</div>"
-				return
-			}
-			node.innerHTML = schemas.map(function (schema) {
-				const schemaName = schema && schema.name ? schema.name : "default"
-				const tables = Array.isArray(schema.tables) ? schema.tables : []
-				const tableRows = tables.map(function (table) {
-					const name = table && table.name ? table.name : "table"
-					const key = schemaName + "." + name
-					const isActive = dbSelected.schema === schemaName && dbSelected.table === name
-					const est = table && table.rowEstimate !== null && typeof table.rowEstimate !== "undefined" ? ("est " + String(table.rowEstimate)) : "est n/a"
-					return "<button class='db-table-item " + (isActive ? "active" : "") + "' type='button' data-schema='" + escapeHTML(schemaName) + "' data-table='" + escapeHTML(name) + "' data-key='" + escapeHTML(key) + "'>" +
-						escapeHTML(name) +
-						"<small>" + escapeHTML((table && table.type ? table.type : "TABLE") + " | " + est) + "</small>" +
-					"</button>"
-				}).join("")
-				return "<section class='db-schema'>" +
-					"<div class='db-schema-head'>" + escapeHTML(schemaName) + "<small>" + String(schema && schema.tableCount || tables.length) + " tables</small></div>" +
-					"<div class='db-table-list'>" + tableRows + "</div>" +
-				"</section>"
-			}).join("")
-
-			Array.from(node.querySelectorAll(".db-table-item")).forEach(function (button) {
-				button.addEventListener("click", function () {
-					const schema = button.getAttribute("data-schema") || ""
-					const table = button.getAttribute("data-table") || ""
-					dbSelected = { schema: schema, table: table }
-					document.getElementById("db-query-editor").value = defaultPreviewQuery(schema, table, state.previewRows || 10)
-					renderDBTree(state)
-					runDBPreview(schema, table)
-				})
-			})
-		}
-
-		function runDBPreview(schema, table) {
-			const payload = { schema: schema, table: table }
-			setDBMeta("running", "--", 0)
-			return fetch(DB_PREVIEW_URL, {
-				method: "POST",
-				headers: { "Content-Type": "application/json", "Accept": "application/json" },
-				body: JSON.stringify(payload),
-			})
-				.then(function (response) { return response.json() })
-				.then(function (result) {
-					renderDBResult(result)
-				})
-				.catch(function (err) {
-					renderDBResult({ error: err.message || "preview failed" })
-				})
-		}
-
-		function runDBQuery() {
-			const query = (document.getElementById("db-query-editor").value || "").trim()
-			if (!query) {
-				renderDBResult({ error: "Query is required." })
-				return Promise.resolve()
-			}
-			setDBMeta("running", "--", 0)
-			return fetch(DB_QUERY_URL, {
-				method: "POST",
-				headers: { "Content-Type": "application/json", "Accept": "application/json" },
-				body: JSON.stringify({ query: query }),
-			})
-				.then(function (response) { return response.json() })
-				.then(function (result) {
-					renderDBResult(result)
-				})
-				.catch(function (err) {
-					renderDBResult({ error: err.message || "query failed" })
-				})
-		}
-
-		function renderDBExplorer(payload) {
-			dbExplorer = payload || { enabled: false, state: null, snippet: "", error: "" }
-			const mode = document.getElementById("db-mode")
-			const root = document.getElementById("db-root")
-			const disabled = document.getElementById("db-disabled")
-			const layout = document.getElementById("db-layout")
-			const snippet = document.getElementById("db-snippet")
-			const disabledTitle = document.getElementById("db-disabled-title")
-			const disabledMessage = document.getElementById("db-disabled-message")
-
-			if (!dbExplorer.enabled) {
-				mode.textContent = "detached"
-				mode.className = "metric-pill basic"
-				root.textContent = "no db"
-				layout.hidden = true
-				disabled.hidden = false
-				disabledTitle.textContent = "Live DB explorer is not attached."
-				disabledMessage.textContent = "Attach it once to the RPC router using your runtime connection pool."
-				snippet.textContent = dbExplorer.snippet || "router := rpc.NewRouter(rpc.WithPrefix(\"/rpc\"))"
-				renderDBResult(null)
-				return
-			}
-
-			if (dbExplorer.error) {
-				mode.textContent = "error"
-				mode.className = "metric-pill basic"
-				root.textContent = "unavailable"
-				layout.hidden = true
-				disabled.hidden = false
-				disabledTitle.textContent = "Live DB explorer failed to initialize."
-				disabledMessage.textContent = "The explorer is attached, but metadata lookup failed."
-				snippet.textContent = dbExplorer.error
-				renderDBResult({ error: dbExplorer.error })
-				return
-			}
-
-			const state = dbExplorer.state || {}
-			mode.textContent = state.dialect || "attached"
-			mode.className = "metric-pill advanced"
-			root.textContent = (state.source && state.source.connection ? state.source.connection : "connected") + " | timeout " + String(state.timeoutMs || 0) + "ms | cap " + String(state.maxRows || 0)
-			disabled.hidden = true
-			layout.hidden = false
-			renderDBTree(state)
-		}
-
-		function loadDBExplorer() {
-			return fetch(DB_EXPLORER_URL, { headers: { "Accept": "application/json" } })
-				.then(function (response) {
-					return response.json()
-						.then(function (payload) {
-							return {
-								ok: response.ok,
-								status: response.status,
-								payload: payload,
-							}
-						})
-						.catch(function () {
-							return {
-								ok: response.ok,
-								status: response.status,
-								payload: null,
-							}
-						})
-				})
-				.then(function (result) {
-					if (result.ok) {
-						renderDBExplorer(result.payload)
-						return
-					}
-					const payload = result.payload || {}
-					renderDBExplorer({ enabled: true, error: payload.error || ("status " + result.status) })
-				})
-				.catch(function (err) {
-					renderDBExplorer({ enabled: true, error: err.message || "failed to load db explorer" })
-				})
-		}
-
-		function formatFileMeta(file) {
-			const tags = []
-			tags.push(String(file.lines || 0) + " lines")
-			tags.push(formatBytes(file.bytes || 0))
-			if (file.truncated) {
-				tags.push("truncated")
-			}
-			return tags.join(" | ")
-		}
-
-		function showSQLFile(kind, index) {
-			const list = kind === "schemas" ? sqlCatalog.schemas : sqlCatalog.queries
-			if (!Array.isArray(list) || list.length === 0 || index < 0 || index >= list.length) {
-				return
-			}
-			selected = { kind: kind, index: index }
-			const file = list[index]
-			document.getElementById("sql-file-path").textContent = file.path || file.name || "SQL file"
-			document.getElementById("sql-file-details").textContent = formatFileMeta(file)
-			document.getElementById("sql-content").textContent = file.content || ""
-			renderSQLLists()
-		}
-
-		function renderSQLList(containerID, kind, items) {
-			const node = document.getElementById(containerID)
-			node.innerHTML = ""
-			if (!Array.isArray(items) || items.length === 0) {
-				const empty = document.createElement("div")
-				empty.className = "empty"
-				empty.textContent = "No SQL files found"
-				node.appendChild(empty)
-				return
-			}
-			items.forEach(function (file, index) {
-				const button = document.createElement("button")
-				button.className = "sql-item"
-				if (selected.kind === kind && selected.index === index) {
-					button.classList.add("active")
-				}
-				button.type = "button"
-				button.textContent = file.name || file.path || (kind + "-" + String(index + 1))
-				const meta = document.createElement("small")
-				meta.textContent = formatFileMeta(file)
-				button.appendChild(meta)
-				button.addEventListener("click", function () {
-					showSQLFile(kind, index)
-				})
-				node.appendChild(button)
-			})
-		}
-
-		function renderSQLLists() {
-			renderSQLList("schemas-list", "schemas", sqlCatalog.schemas)
-			renderSQLList("queries-list", "queries", sqlCatalog.queries)
-		}
-
-		function renderSQLCatalog(catalog) {
-			sqlCatalog = catalog || { schemas: [], queries: [] }
-			document.getElementById("sql-root").textContent = sqlCatalog.root || "db/sql"
-			const status = document.getElementById("sql-status")
-			const layout = document.getElementById("sql-layout")
-			if (sqlCatalog.error) {
-				status.textContent = "SQL catalog error: " + sqlCatalog.error
-				status.hidden = false
-				layout.hidden = true
-				return
-			}
-			if (sqlCatalog.missing) {
-				status.textContent = "No db/sql folder found from current working directory."
-				status.hidden = false
-				layout.hidden = true
-				return
-			}
-			status.hidden = true
-			layout.hidden = false
-			renderSQLLists()
-			if ((!selected.kind || selected.kind === "schemas") && Array.isArray(sqlCatalog.schemas) && sqlCatalog.schemas.length > 0) {
-				showSQLFile("schemas", Math.min(selected.index, sqlCatalog.schemas.length - 1))
-				return
-			}
-			if (selected.kind === "queries" && Array.isArray(sqlCatalog.queries) && sqlCatalog.queries.length > 0) {
-				showSQLFile("queries", Math.min(selected.index, sqlCatalog.queries.length - 1))
-				return
-			}
-			if (Array.isArray(sqlCatalog.queries) && sqlCatalog.queries.length > 0) {
-				showSQLFile("queries", 0)
-				return
-			}
-			document.getElementById("sql-file-path").textContent = "No SQL file selected"
-			document.getElementById("sql-file-details").textContent = ""
-			document.getElementById("sql-content").textContent = ""
-		}
-
-		function loadSQLCatalog() {
-			fetch(SQL_CATALOG_URL, { headers: { "Accept": "application/json" } })
-				.then(function (response) {
-					if (!response.ok) {
-						throw new Error("status " + response.status)
-					}
-					return response.json()
-				})
-				.then(renderSQLCatalog)
-				.catch(function (err) {
-					document.getElementById("sql-status").textContent = "Failed to load SQL catalog: " + err.message
-				})
-		}
-
 		function renderLoggingState(status) {
 			loggingStatus = status || { enabled: false, active: false, snippet: "" }
 			const disabled = document.getElementById("logs-disabled")
@@ -2325,22 +1682,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 			}
 		}
 
-		if (shouldLoadDatabase()) {
-			document.getElementById("db-run-btn").addEventListener("click", function () {
-				runDBQuery()
-			})
-			document.getElementById("db-clear-btn").addEventListener("click", function () {
-				document.getElementById("db-query-editor").value = ""
-				renderDBResult(null)
-			})
-			document.getElementById("db-query-editor").addEventListener("keydown", function (event) {
-				if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-					event.preventDefault()
-					runDBQuery()
-				}
-			})
-		}
-
 		showPanel(activePanelOrFallback())
 		if (shouldLoadReference()) {
 			mountReference()
@@ -2358,10 +1699,6 @@ const docsShellTemplate = `<!DOCTYPE html>
 			})
 		} else {
 			setStreamState("disabled")
-		}
-		if (shouldLoadDatabase()) {
-			loadDBExplorer()
-			loadSQLCatalog()
 		}
 	})()
 	</script>

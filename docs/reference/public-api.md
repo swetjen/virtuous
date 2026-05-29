@@ -15,21 +15,16 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.WithGuards(guards ...rpc.Guard)`
 - `rpc.WithAdvancedObservability(opts ...rpc.AdvancedObservabilityOption)`
 - `rpc.WithObservabilitySampling(rate float64)`
+- `rpc.WithMaxRequestBodyBytes(maxBytes int64)`
 - `type rpc.Module`
 - `rpc.ModuleAPI`
-- `rpc.ModuleDatabase`
 - `rpc.ModuleObservability`
 - `rpc.WithModules(modules ...rpc.Module)`
+- `rpc.WithDocsGuards(guards ...rpc.Guard)`
+- `rpc.WithAdminGuards(guards ...rpc.Guard)`
+- `rpc.WithPublicAdmin()`
 - `rpc.WithDocsPath(path string)`
 - `rpc.WithOpenAPIPath(path string)`
-- `rpc.WithSQLRoot(path string)`
-- `rpc.WithDBExplorer(explorer rpc.DBExplorer)`
-- `rpc.WithDBExplorerTimeout(timeout time.Duration)`
-- `rpc.WithDBExplorerMaxRows(maxRows int)`
-- `rpc.WithDBExplorerPreviewRows(previewRows int)`
-- `rpc.WithDBExplorerSystemSchemas(enabled bool)`
-- `rpc.NewSQLDBExplorer(db *sql.DB, opts ...rpc.DBExplorerOption)`
-- `rpc.NewPGXDBExplorer(pool *pgxpool.Pool, opts ...rpc.DBExplorerOption)`
 - `(*rpc.Router).HandleRPC(fn any, guards ...rpc.Guard)`
 - `(*rpc.Router).DocsHandler(opts ...rpc.DocOpt)`
 - `(*rpc.Router).AdminHandler(opts ...rpc.DocOpt)`
@@ -66,14 +61,19 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.SecurityAny(guards ...httpapi.GuardSpec)`
 - `httpapi.SecurityAll(guards ...httpapi.GuardSpec)`
 - `httpapi.AuthAny(guards ...httpapi.Guard)`
+- `httpapi.Decode[T any](r *http.Request)`
+- `httpapi.DecodeWithMaxBytes[T any](r *http.Request, maxBytes int64)`
+- `httpapi.ErrRequestBodyTooLarge`
+- `httpapi.IsRequestBodyTooLarge(err error)`
 - `type httpapi.Module`
 - `httpapi.ModuleAPI`
-- `httpapi.ModuleDatabase`
 - `httpapi.ModuleObservability`
 - `httpapi.WithModules(modules ...httpapi.Module)`
+- `httpapi.WithDocsGuards(guards ...httpapi.Guard)`
+- `httpapi.WithAdminGuards(guards ...httpapi.Guard)`
+- `httpapi.WithPublicAdmin()`
 - `httpapi.WithDocsPath(path string)`
 - `httpapi.WithOpenAPIPath(path string)`
-- `httpapi.WithSQLRoot(path string)`
 - `(*httpapi.Router).DocsHandler(opts ...httpapi.DocOpt)`
 - `(*httpapi.Router).AdminHandler(opts ...httpapi.DocOpt)`
 - `(*httpapi.Router).ServeDocs(opts ...httpapi.DocOpt)`

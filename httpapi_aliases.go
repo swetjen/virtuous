@@ -47,7 +47,6 @@ type OpenAPIExternalDocs = httpapi.OpenAPIExternalDocs
 
 const (
 	ModuleAPI           = httpapi.ModuleAPI
-	ModuleDatabase      = httpapi.ModuleDatabase
 	ModuleObservability = httpapi.ModuleObservability
 
 	ParamInPath   = httpapi.ParamInPath
@@ -60,6 +59,8 @@ const (
 	MediaTypeMultipartForm     = httpapi.MediaTypeMultipartForm
 	MediaTypeMultipartFormData = httpapi.MediaTypeMultipartFormData
 )
+
+var ErrRequestBodyTooLarge = httpapi.ErrRequestBodyTooLarge
 
 // Function shims for backwards compatibility.
 func NewRouter() *Router {
@@ -130,6 +131,14 @@ func Decode[T any](r *http.Request) (T, error) {
 	return httpapi.Decode[T](r)
 }
 
+func DecodeWithMaxBytes[T any](r *http.Request, maxBytes int64) (T, error) {
+	return httpapi.DecodeWithMaxBytes[T](r, maxBytes)
+}
+
+func IsRequestBodyTooLarge(err error) bool {
+	return httpapi.IsRequestBodyTooLarge(err)
+}
+
 func DefaultDocsHTML(openAPIPath string) string {
 	return httpapi.DefaultDocsHTML(openAPIPath)
 }
@@ -156,6 +165,18 @@ func WithOpenAPIFile(path string) DocOpt {
 
 func WithModules(modules ...httpapi.Module) DocOpt {
 	return httpapi.WithModules(modules...)
+}
+
+func WithDocsGuards(guards ...httpapi.Guard) DocOpt {
+	return httpapi.WithDocsGuards(guards...)
+}
+
+func WithAdminGuards(guards ...httpapi.Guard) DocOpt {
+	return httpapi.WithAdminGuards(guards...)
+}
+
+func WithPublicAdmin() DocOpt {
+	return httpapi.WithPublicAdmin()
 }
 
 func WithAllowedOrigins(origins ...string) CORSOption {

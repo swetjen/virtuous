@@ -21,7 +21,7 @@ You are implementing a Virtuous RPC API.
 - Put handlers in package folders (states, users, admin).
 - Use func(ctx, req) (Resp, int).
 - Register handlers in router.go and call router.ServeAllDocs().
-- If docs need a custom path/guard, use router.DocsHandler(...) and mount it on mux. Mount router.AdminHandler(...) separately when database or observability admin endpoints are exposed.
+- If docs need a custom path/guard, use router.DocsHandler(...) with WithDocsGuards(...) and mount it on mux. Mount router.AdminHandler(...) separately with WithAdminGuards(...) when observability admin endpoints are exposed.
 - Use httpapi only for legacy handlers.
 ```
 
@@ -53,5 +53,6 @@ That tutorial is the canonical transformation guide, including mapping rules, mi
 - For httpapi compatibility routes, use `path:"..."`, `query:"..."`, `form:"..."`, `httpapi.FormBody(...)`, `httpapi.MultipartBody(...)`, and `httpapi.AuthAny(...)` where the source OpenAPI contract requires them.
 - Keep section names consistent across documents for reliable agent parsing.
 - During migrations, treat runtime router registration as source of truth over stale annotations.
-- Use `WithModules(...)` when agent output must limit docs surface (`api`, `database`, `observability`).
-- Missing logger/DB attachments should produce docs zero-state messaging, not runtime panics.
+- Use `WithModules(...)` when agent output must limit docs surface (`api`, `observability`).
+- Use `WithPublicAdmin()` only when the admin subtree is protected by external middleware or intentionally public.
+- Missing logger attachments should produce docs zero-state messaging, not runtime panics.

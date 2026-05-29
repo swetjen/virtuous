@@ -36,12 +36,6 @@ func BuildRouter(cfg config.Config, queries *db.Queries, pool *sql.DB) *rpc.Rout
 	routerOptions := []rpc.RouterOption{
 		rpc.WithPrefix("/rpc"),
 	}
-	if pool != nil {
-		routerOptions = append(routerOptions, rpc.WithDBExplorer(rpc.NewSQLDBExplorer(pool)))
-		slog.Info("byodb-sqlite: db explorer attached", "driver", "database/sql")
-	} else {
-		slog.Warn("byodb-sqlite: db explorer disabled (nil database pool)")
-	}
 	router := rpc.NewRouter(routerOptions...)
 
 	router.HandleRPC(handlerSet.States.StatesGetMany)

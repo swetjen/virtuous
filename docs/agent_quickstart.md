@@ -31,12 +31,11 @@ _ = server.ListenAndServe()
 
 - `ServeDocs()` is the convenience path for default docs wiring (`/rpc/docs`, `/rpc/openapi.json`).
 - `ServeAllDocs()` adds generated clients (`/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`).
-- `WithModules(...)` controls visible docs modules: `api`, `database`, `observability`.
+- `WithModules(...)` controls visible docs modules: `api`, `observability`.
 - `DocsHandler(...)` returns a mountable docs subtree handler for custom route placement and docs-only middleware.
-- `AdminHandler(...)` returns mountable admin endpoints for enabled database or observability modules; mount it explicitly under a guarded `_admin` subtree when those modules are exposed.
+- `AdminHandler(...)` returns mountable admin endpoints for enabled observability modules; mount it explicitly under a guarded `_admin` subtree when those modules are exposed.
 - `/rpc/_virtuous/observability` redirects into the docs observability panel.
 - `/rpc/_virtuous/metrics` serves live JSON aggregates.
-- `/rpc/docs/_admin/db` and related endpoints power the docs database explorer only when `AdminHandler(...)` or `ServeAdmin(...)` is explicitly mounted and `rpc.WithDBExplorer(...)` is configured.
 
 Mountable docs example:
 
@@ -46,6 +45,7 @@ docs := router.DocsHandler(
 )
 admin := router.AdminHandler(
 	rpc.WithModules(rpc.ModuleObservability),
+	rpc.WithAdminGuards(adminGuard{}),
 )
 
 mux := http.NewServeMux()
@@ -132,5 +132,4 @@ Rules:
 
 ## Common zero-state causes
 
-- `Database` module visible but no live data: attach `rpc.WithDBExplorer(...)` to the router.
 - `Observability` module visible but no live route feed: wrap top-level handler with `router.AttachLogger(...)`.

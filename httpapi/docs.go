@@ -17,11 +17,10 @@ type Module string
 
 const (
 	ModuleAPI           Module = "api"
-	ModuleDatabase      Module = "database"
 	ModuleObservability Module = "observability"
 )
 
-var allModules = []Module{ModuleAPI, ModuleDatabase, ModuleObservability}
+var allModules = []Module{ModuleAPI, ModuleObservability}
 
 // DefaultDocsHTML returns the integrated docs/admin UI HTML.
 func DefaultDocsHTML(openAPIPath string) string {
@@ -29,10 +28,6 @@ func DefaultDocsHTML(openAPIPath string) string {
 		Title:            "Virtuous API Docs",
 		OpenAPIURL:       openAPIPath,
 		Modules:          enabledModuleNames(defaultDocsOptions().enabledModules()),
-		SQLCatalogURL:    "./_admin/sql",
-		DBExplorerURL:    "./_admin/db",
-		DBPreviewURL:     "./_admin/db/preview",
-		DBQueryURL:       "./_admin/db/query",
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
 		LoggingStatusURL: "./_admin/logging",
@@ -51,8 +46,10 @@ type DocsOptions struct {
 	DocsFile    string
 	OpenAPIPath string
 	OpenAPIFile string
-	SQLRoot     string
 	Modules     []Module
+	DocsGuards  []Guard
+	AdminGuards []Guard
+	PublicAdmin bool
 	modulesSet  bool
 }
 
@@ -95,20 +92,34 @@ func WithOpenAPIFile(path string) DocOpt {
 	}
 }
 
-// WithSQLRoot sets the root folder scanned for db/sql schema and query files.
-func WithSQLRoot(path string) DocOpt {
-	return func(o *DocsOptions) {
-		if path != "" {
-			o.SQLRoot = path
-		}
-	}
-}
-
 // WithModules enables the docs modules shown in the UI.
 func WithModules(modules ...Module) DocOpt {
 	return func(o *DocsOptions) {
 		o.modulesSet = true
 		o.Modules = append([]Module(nil), modules...)
+	}
+}
+
+// WithDocsGuards applies guards to docs and OpenAPI endpoints.
+func WithDocsGuards(guards ...Guard) DocOpt {
+	return func(o *DocsOptions) {
+		o.DocsGuards = append(o.DocsGuards, guards...)
+	}
+}
+
+// WithAdminGuards applies guards to docs/admin endpoints.
+func WithAdminGuards(guards ...Guard) DocOpt {
+	return func(o *DocsOptions) {
+		o.AdminGuards = append(o.AdminGuards, guards...)
+	}
+}
+
+// WithPublicAdmin explicitly allows docs/admin endpoints without Virtuous guards.
+// Use this only when admin routes are protected by external middleware or are
+// intentionally public.
+func WithPublicAdmin() DocOpt {
+	return func(o *DocsOptions) {
+		o.PublicAdmin = true
 	}
 }
 
@@ -118,7 +129,6 @@ func defaultDocsOptions() DocsOptions {
 		DocsFile:    "docs.html",
 		OpenAPIPath: "/openapi.json",
 		OpenAPIFile: "openapi.json",
-		SQLRoot:     "db/sql",
 	}
 }
 
@@ -133,12 +143,10 @@ func applyDocOpts(opts ...DocOpt) DocsOptions {
 func (o DocsOptions) enabledModules() map[Module]bool {
 	enabled := map[Module]bool{
 		ModuleAPI:           false,
-		ModuleDatabase:      false,
 		ModuleObservability: false,
 	}
 	if !o.modulesSet {
 		enabled[ModuleAPI] = true
-		enabled[ModuleDatabase] = true
 		enabled[ModuleObservability] = true
 		return enabled
 	}
@@ -152,12 +160,17 @@ func (o DocsOptions) enabledModules() map[Module]bool {
 	return enabled
 }
 
+func (o DocsOptions) requireAdminProtection() {
+	if o.PublicAdmin || len(o.AdminGuards) > 0 {
+		return
+	}
+	panic("httpapi: AdminHandler/ServeAdmin requires WithAdminGuards(...) or explicit WithPublicAdmin()")
+}
+
 func normalizeModule(module Module) Module {
 	switch strings.ToLower(strings.TrimSpace(string(module))) {
 	case string(ModuleAPI):
 		return ModuleAPI
-	case string(ModuleDatabase):
-		return ModuleDatabase
 	case string(ModuleObservability):
 		return ModuleObservability
 	default:
@@ -231,10 +244,6 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 		Title:            "Virtuous API Docs",
 		OpenAPIURL:       docsAssetURL(openAPIFile),
 		Modules:          enabledModuleNames(modules),
-		SQLCatalogURL:    "./_admin/sql",
-		DBExplorerURL:    "./_admin/db",
-		DBPreviewURL:     "./_admin/db/preview",
-		DBQueryURL:       "./_admin/db/query",
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
 		LoggingStatusURL: "./_admin/logging",
@@ -243,23 +252,26 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 
 	handler := http.NewServeMux()
 	handler.Handle("GET /{$}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		adminui.SetDocsSecurityHeaders(w)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(docsHTML))
 	}))
 
 	if modules[ModuleAPI] {
 		handler.Handle("GET /"+openAPIFile, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			adminui.SetDocsSecurityHeaders(w)
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_, _ = w.Write(openAPI)
 		}))
 	}
 
-	return handler
+	return wrapWithGuards(handler, config.DocsGuards)
 }
 
 // AdminHandler returns a mountable docs/admin handler with subtree-local admin endpoints.
 func (r *Router) AdminHandler(opts ...DocOpt) http.Handler {
 	config := applyDocOpts(opts...)
+	config.requireAdminProtection()
 	modules := config.enabledModules()
 
 	if r.events == nil {
@@ -267,37 +279,6 @@ func (r *Router) AdminHandler(opts ...DocOpt) http.Handler {
 	}
 
 	handler := http.NewServeMux()
-
-	if modules[ModuleDatabase] {
-		handler.Handle("GET /sql", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			catalog := adminui.LoadSQLCatalog(config.SQLRoot)
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			_ = json.NewEncoder(w).Encode(catalog)
-		}))
-		handler.Handle("GET /db", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			payload := struct {
-				Enabled bool   `json:"enabled"`
-				Snippet string `json:"snippet"`
-			}{
-				Enabled: false,
-				Snippet: "Live DB explorer is currently available on rpc.NewRouter with rpc.WithDBExplorer(...).",
-			}
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			_ = json.NewEncoder(w).Encode(payload)
-		}))
-		rejectDBMutation := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			payload := struct {
-				Error string `json:"error"`
-			}{
-				Error: "db explorer query endpoints are not available on httpapi router",
-			}
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(http.StatusNotFound)
-			_ = json.NewEncoder(w).Encode(payload)
-		})
-		handler.Handle("POST /db/preview", rejectDBMutation)
-		handler.Handle("POST /db/query", rejectDBMutation)
-	}
 
 	if modules[ModuleObservability] {
 		handler.Handle("GET /metrics", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -321,7 +302,7 @@ func (r *Router) AdminHandler(opts ...DocOpt) http.Handler {
 		}))
 	}
 
-	return handler
+	return wrapWithGuards(handler, config.AdminGuards)
 }
 
 // ServeDocs registers default docs and OpenAPI routes on the router.
@@ -339,9 +320,10 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 	}
 	docsIndex := docsBase + "/"
 
-	r.mux.Handle("GET "+docsBase, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	redirectDocs := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, docsIndex, http.StatusMovedPermanently)
-	}))
+	})
+	r.mux.Handle("GET "+docsBase, wrapWithGuards(redirectDocs, config.DocsGuards))
 	r.mux.Handle("GET "+docsIndex, http.StripPrefix(docsBase, r.DocsHandler(opts...)))
 
 	openAPIPath := ensureLeadingSlash(config.OpenAPIPath)
@@ -350,10 +332,12 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		r.mux.Handle("GET "+openAPIPath, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		openAPIHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			adminui.SetDocsSecurityHeaders(w)
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_, _ = w.Write(openAPI)
-		}))
+		})
+		r.mux.Handle("GET "+openAPIPath, wrapWithGuards(openAPIHandler, config.DocsGuards))
 	}
 
 	r.events.RecordSystem("docs online: " + docsIndex)
@@ -368,6 +352,7 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 // ServeAdmin registers docs/admin endpoints under the docs _admin subtree.
 func (r *Router) ServeAdmin(opts ...DocOpt) {
 	config := applyDocOpts(opts...)
+	config.requireAdminProtection()
 
 	if r.events == nil {
 		r.events = adminui.NewEventFeed(600)

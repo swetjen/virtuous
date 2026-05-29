@@ -8,14 +8,13 @@ RPC routers can serve docs and clients at runtime. Specs and clients are generat
 
 `DocsHandler(...)` is the low-level mountable handler when you want custom route placement, guards, or middleware at the docs boundary.
 
-`AdminHandler(...)` is the explicit mountable handler for database and observability admin endpoints used by those docs modules.
+`AdminHandler(...)` is the explicit mountable handler for observability admin endpoints used by the docs console.
 
 ## Modules
 
-The docs shell has three modules:
+The docs shell has two modules:
 
 - `rpc.ModuleAPI`
-- `rpc.ModuleDatabase`
 - `rpc.ModuleObservability`
 
 By default, all modules are enabled. To restrict the surface:
@@ -38,12 +37,12 @@ router.ServeDocs(
 - Observability redirect: `/rpc/_virtuous/observability` (when `observability` module enabled)
 - Metrics JSON: `/rpc/_virtuous/metrics` (when `observability` module enabled)
 
-Admin endpoints are not mounted by `ServeDocs()`. Call `ServeAdmin(...)` or mount `AdminHandler(...)` explicitly when the database or observability modules need live endpoints under `/rpc/docs/_admin/...`.
+Admin endpoints are not mounted by `ServeDocs()`. Call `ServeAdmin(...)` or mount `AdminHandler(...)` explicitly when the observability module needs live endpoints under `/rpc/docs/_admin/...`.
 
 ## DocsHandler and AdminHandler (mountable)
 
 Use `DocsHandler(...)` when docs must live under a custom path or be wrapped with auth.
-Use `AdminHandler(...)` when database or observability admin endpoints should be exposed.
+Use `AdminHandler(...)` when observability admin endpoints should be exposed.
 
 ```go
 router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
@@ -54,6 +53,7 @@ docs := router.DocsHandler(
 )
 admin := router.AdminHandler(
 	rpc.WithModules(rpc.ModuleObservability),
+	rpc.WithAdminGuards(adminGuard{}),
 )
 
 mux := http.NewServeMux()
@@ -75,8 +75,9 @@ Docs-handler-local endpoints:
 
 Admin-handler-local endpoints:
 
-- `GET /sql`, `GET /db`, `POST /db/preview`, `POST /db/query` when `database` module enabled
 - `GET /events`, `GET /events.stream`, `GET /logging`, `GET /metrics` when `observability` module enabled
+
+`AdminHandler(...)` and `ServeAdmin(...)` require either `WithAdminGuards(...)` or explicit `WithPublicAdmin()`. Use `WithPublicAdmin()` only when the admin subtree is protected by external middleware or intentionally public.
 
 ## ServeAllDocs
 
@@ -108,37 +109,6 @@ handler := router.AttachLogger(mux) // attach once at top-level
 ```
 
 If logging is not attached, the docs `Observability` view shows a zero-state with the required snippet.
-
-## DB Explorer
-
-The `Database` module includes SQL catalog visibility and a live read-only explorer.
-
-Enable live explorer with the same runtime pool used by your app:
-
-```go
-router := rpc.NewRouter(
-	rpc.WithPrefix("/rpc"),
-	rpc.WithDBExplorer(rpc.NewPGXDBExplorer(pool)),
-)
-```
-
-SQLite:
-
-```go
-router := rpc.NewRouter(
-	rpc.WithPrefix("/rpc"),
-	rpc.WithDBExplorer(rpc.NewSQLDBExplorer(pool)),
-)
-```
-
-Safety defaults:
-
-- Single statement only
-- `SELECT`/`WITH` queries only
-- Hard timeout (default `5s`)
-- Hard row cap (default `1000`)
-
-If DB explorer is not attached, the docs `Database` view shows a zero-state with the setup snippet instead of failing.
 
 ## Hash endpoints
 

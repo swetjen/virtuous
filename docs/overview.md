@@ -58,7 +58,7 @@ router.ServeAllDocs()
 ```
 
 To mount docs under a custom path (and optionally wrap docs-only auth/middleware), use `DocsHandler(...)`.
-Mount admin endpoints separately with `AdminHandler(...)` when database or observability modules are enabled:
+Mount admin endpoints separately with `AdminHandler(...)` when the observability module is enabled:
 
 ```go
 docs := router.DocsHandler(
@@ -66,6 +66,7 @@ docs := router.DocsHandler(
 )
 admin := router.AdminHandler(
 	rpc.WithModules(rpc.ModuleObservability),
+	rpc.WithAdminGuards(adminGuard{}),
 )
 
 mux := http.NewServeMux()
@@ -94,18 +95,17 @@ Default `ServeAllDocs()` endpoints:
 Docs module endpoints:
 
 - `Api`: `/openapi.json`
-- `Database`: `/sql`, `/db`, `/db/preview`, `/db/query` under an explicitly mounted `AdminHandler(...)`
 - `Observability`: `/events`, `/events.stream`, `/logging`, `/metrics` under an explicitly mounted `AdminHandler(...)`
 
-Use `WithModules(...)` to toggle docs modules (`api`, `database`, `observability`). By default all are enabled.
+Use `WithModules(...)` to toggle docs modules (`api`, `observability`). By default both are enabled.
 
 ### Observability
 
 - Basic per-RPC request counts, status classes, and latency windows are tracked in memory by default.
 - Use `rpc.WithAdvancedObservability()` to enable grouped 5xx fingerprints, guard allow/deny metrics, and sampled trace capture.
 - Attach live request/event feed once at mux boundary with `router.AttachLogger(next)`.
-- The docs shell includes an `Observability` tab alongside API reference and SQL workbench.
-- If logger or DB explorer is not attached, the corresponding docs module shows a setup snippet (zero-state) instead of failing.
+- The docs shell includes an `Observability` tab alongside the API reference.
+- If logger attachment is missing, the docs module shows a setup snippet (zero-state) instead of failing.
 
 ## httpapi (legacy)
 

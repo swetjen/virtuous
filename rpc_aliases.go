@@ -1,13 +1,6 @@
 package virtuous
 
-import (
-	"database/sql"
-	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/swetjen/virtuous/rpc"
-)
+import "github.com/swetjen/virtuous/rpc"
 
 // RPC type aliases for convenience.
 type RPCGuard = rpc.Guard
@@ -30,20 +23,9 @@ type RPCOpenAPILicense = rpc.OpenAPILicense
 type RPCOpenAPIExternalDocs = rpc.OpenAPIExternalDocs
 type RPCAdvancedObservabilityOptions = rpc.AdvancedObservabilityOptions
 type RPCAdvancedObservabilityOption = rpc.AdvancedObservabilityOption
-type RPCDBExplorer = rpc.DBExplorer
-type RPCDBExplorerOptions = rpc.DBExplorerOptions
-type RPCDBExplorerOption = rpc.DBExplorerOption
-type RPCDBExplorerState = rpc.DBExplorerState
-type RPCDBSchema = rpc.DBSchema
-type RPCDBTable = rpc.DBTable
-type RPCDBPreviewInput = rpc.DBPreviewInput
-type RPCDBRunQueryInput = rpc.DBRunQueryInput
-type RPCDBQueryResult = rpc.DBQueryResult
-type RPCDBQueryColumn = rpc.DBQueryColumn
 
 const (
 	RPCModuleAPI           = rpc.ModuleAPI
-	RPCModuleDatabase      = rpc.ModuleDatabase
 	RPCModuleObservability = rpc.ModuleObservability
 
 	RPCStatusOK      = rpc.StatusOK
@@ -64,40 +46,16 @@ func RPCWithGuards(guards ...rpc.Guard) rpc.RouterOption {
 	return rpc.WithGuards(guards...)
 }
 
+func RPCWithMaxRequestBodyBytes(maxBytes int64) rpc.RouterOption {
+	return rpc.WithMaxRequestBodyBytes(maxBytes)
+}
+
 func RPCWithAdvancedObservability(opts ...rpc.AdvancedObservabilityOption) rpc.RouterOption {
 	return rpc.WithAdvancedObservability(opts...)
 }
 
 func RPCWithObservabilitySampling(rate float64) rpc.AdvancedObservabilityOption {
 	return rpc.WithObservabilitySampling(rate)
-}
-
-func RPCWithDBExplorer(explorer rpc.DBExplorer) rpc.RouterOption {
-	return rpc.WithDBExplorer(explorer)
-}
-
-func RPCWithDBExplorerTimeout(timeout time.Duration) rpc.DBExplorerOption {
-	return rpc.WithDBExplorerTimeout(timeout)
-}
-
-func RPCWithDBExplorerMaxRows(maxRows int) rpc.DBExplorerOption {
-	return rpc.WithDBExplorerMaxRows(maxRows)
-}
-
-func RPCWithDBExplorerPreviewRows(previewRows int) rpc.DBExplorerOption {
-	return rpc.WithDBExplorerPreviewRows(previewRows)
-}
-
-func RPCWithDBExplorerSystemSchemas(enabled bool) rpc.DBExplorerOption {
-	return rpc.WithDBExplorerSystemSchemas(enabled)
-}
-
-func RPCNewSQLDBExplorer(db *sql.DB, opts ...rpc.DBExplorerOption) rpc.DBExplorer {
-	return rpc.NewSQLDBExplorer(db, opts...)
-}
-
-func RPCNewPGXDBExplorer(pool *pgxpool.Pool, opts ...rpc.DBExplorerOption) rpc.DBExplorer {
-	return rpc.NewPGXDBExplorer(pool, opts...)
 }
 
 func RPCDefaultDocsHTML(openAPIPath string) string {
@@ -126,6 +84,18 @@ func RPCWithOpenAPIFile(path string) RPCDocOpt {
 
 func RPCWithModules(modules ...rpc.Module) RPCDocOpt {
 	return rpc.WithModules(modules...)
+}
+
+func RPCWithDocsGuards(guards ...rpc.Guard) RPCDocOpt {
+	return rpc.WithDocsGuards(guards...)
+}
+
+func RPCWithAdminGuards(guards ...rpc.Guard) RPCDocOpt {
+	return rpc.WithAdminGuards(guards...)
+}
+
+func RPCWithPublicAdmin() RPCDocOpt {
+	return rpc.WithPublicAdmin()
 }
 
 func RPCWithDocsOptions(opts ...rpc.DocOpt) RPCServeAllDocsOpt {

@@ -198,6 +198,7 @@ docs := router.DocsHandler(
 )
 admin := router.AdminHandler(
 	rpc.WithModules(rpc.ModuleObservability),
+	rpc.WithPublicAdmin(), // protected by docsBasicAuth below
 )
 
 mux := http.NewServeMux()
@@ -247,7 +248,7 @@ func (g bearerOrAPIKeyGuard) Middleware() func(http.Handler) http.Handler {
 
 #### 5) Minimal docs modules
 
-By default docs show all modules (`Api`, `Database`, `Observability`). Restrict the visible modules with `WithModules(...)`.
+By default docs show the API and Observability modules. Restrict the visible modules with `WithModules(...)`.
 
 ```go
 router := rpc.NewRouter(rpc.WithPrefix("/rpc"))
@@ -292,7 +293,7 @@ Default `ServeAllDocs()` paths:
 - Metrics JSON: `/rpc/_virtuous/metrics`
 - Responses should include a canonical `error` field (string or struct) when errors occur.
 
-If you need custom placement or docs-only middleware, use `router.DocsHandler(...)` and mount it on your mux. Mount `router.AdminHandler(...)` separately when exposing database or observability admin endpoints.
+If you need custom placement or docs-only middleware, use `router.DocsHandler(...)` and mount it on your mux. Mount `router.AdminHandler(...)` separately when exposing observability admin endpoints. Admin endpoints require `WithAdminGuards(...)` or explicit `WithPublicAdmin()` when protected by external middleware.
 
 ### Observability
 
@@ -323,39 +324,6 @@ handler := router.AttachLogger(mux) // attach once at top-level
 ```
 
 If logger attachment is missing, the docs `Observability` view shows a zero-data setup snippet.
-
-### DB Explorer
-
-Virtuous can attach a read-only runtime DB explorer to the `Database` tab in `/rpc/docs/`.
-
-```go
-router := rpc.NewRouter(
-	rpc.WithPrefix("/rpc"),
-	rpc.WithDBExplorer(
-		rpc.NewPGXDBExplorer(pool),
-	),
-)
-```
-
-SQLite:
-
-```go
-router := rpc.NewRouter(
-	rpc.WithPrefix("/rpc"),
-	rpc.WithDBExplorer(
-		rpc.NewSQLDBExplorer(pool),
-	),
-)
-```
-
-The explorer uses the same runtime credentials/pool and enforces:
-
-- read-only `SELECT`/`WITH` queries
-- single statement only
-- hard timeout (default `5s`)
-- hard row cap (default `1000`)
-
-If DB explorer is not attached, the docs `Database` view stays available and shows a setup snippet.
 
 ## HTTP API (httpapi)
 
@@ -544,6 +512,7 @@ docs := router.DocsHandler(
 )
 admin := router.AdminHandler(
 	httpapi.WithModules(httpapi.ModuleObservability),
+	httpapi.WithPublicAdmin(), // protected by docsBasicAuth below
 )
 
 mux := http.NewServeMux()

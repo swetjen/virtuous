@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/swetjen/virtuous/internal/adminui"
+	"github.com/swetjen/virtuous/internal/jsonlimit"
 )
 
 // Router registers RPC handlers and exposes documentation metadata.
@@ -16,11 +17,11 @@ type Router struct {
 	logger         *slog.Logger
 	events         *adminui.EventFeed
 	observability  *adminui.ObservabilityTracker
-	dbExplorer     DBExplorer
 	loggerAttached uint32
 	loggerActive   uint32
 	typeOverrides  map[string]TypeOverride
 	openAPIOptions *OpenAPIOptions
+	maxBodyBytes   int64
 }
 
 // RouterOptions configures a Router.
@@ -28,7 +29,7 @@ type RouterOptions struct {
 	Prefix                string
 	Guards                []Guard
 	AdvancedObservability *AdvancedObservabilityOptions
-	DBExplorer            DBExplorer
+	MaxRequestBodyBytes   int64
 }
 
 // RouterOption mutates RouterOptions.
@@ -48,10 +49,20 @@ func WithGuards(guards ...Guard) RouterOption {
 	}
 }
 
+// WithMaxRequestBodyBytes overrides the default RPC JSON request body cap.
+func WithMaxRequestBodyBytes(maxBytes int64) RouterOption {
+	return func(o *RouterOptions) {
+		if maxBytes > 0 {
+			o.MaxRequestBodyBytes = maxBytes
+		}
+	}
+}
+
 // NewRouter returns a new Router.
 func NewRouter(opts ...RouterOption) *Router {
 	config := RouterOptions{
-		Prefix: "/rpc",
+		Prefix:              "/rpc",
+		MaxRequestBodyBytes: jsonlimit.DefaultMaxBytes,
 	}
 	for _, opt := range opts {
 		opt(&config)
@@ -66,7 +77,7 @@ func NewRouter(opts ...RouterOption) *Router {
 			Advanced:   config.AdvancedObservability != nil,
 			SampleRate: observabilitySampleRate(config.AdvancedObservability),
 		}),
-		dbExplorer: config.DBExplorer,
+		maxBodyBytes: config.MaxRequestBodyBytes,
 	}
 }
 
@@ -129,7 +140,7 @@ func (r *Router) HandleRPC(fn any, guards ...Guard) {
 	allGuards := append([]Guard(nil), r.guards...)
 	allGuards = append(allGuards, guards...)
 
-	handler := buildRPCHandler(spec)
+	handler := r.buildRPCHandler(spec)
 	handler = r.wrapRPCHandler(spec, handler, allGuards)
 	r.mux.Handle(spec.path, handler)
 
