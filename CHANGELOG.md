@@ -3,6 +3,7 @@
 ## 0.0.36
 
 - Add optional strict JSON request decoding for RPC and `httpapi`, rejecting unknown fields, duplicate object keys, and trailing JSON tokens.
+- Keep React Query TypeScript client validation compatible with TypeScript 6 deprecation checks.
 
 ## 0.0.35
 

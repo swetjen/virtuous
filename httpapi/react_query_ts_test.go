@@ -94,7 +94,7 @@ func TestGeneratedReactQueryTSClientCompilesWithInstalledTanStackTypes(t *testin
 	}
 	linkInstalledPackage(t, dir, packagePath)
 
-	if err := runCommand("tsc", "--noEmit", "--target", "ES2017", "--lib", "ES2017,DOM", "--jsx", "react-jsx", "--module", "commonjs", "--moduleResolution", "node", "--skipLibCheck", reactQueryPath); err != nil {
+	if err := runCommand("tsc", "--noEmit", "--target", "ES2017", "--lib", "ES2017,DOM", "--jsx", "react-jsx", "--module", "Node16", "--moduleResolution", "node16", "--skipLibCheck", reactQueryPath); err != nil {
 		t.Fatalf("tsc check with installed @tanstack/react-query failed: %v", err)
 	}
 }
@@ -313,7 +313,7 @@ func compileReactQueryTS(t *testing.T, router *Router) string {
 	}
 	writeReactQueryStub(t, dir)
 
-	if err := runCommand("tsc", "--noEmit", "--target", "ES2017", "--lib", "ES2017,DOM", "--module", "commonjs", "--moduleResolution", "node", reactQueryPath); err != nil {
+	if err := runCommand("tsc", "--noEmit", "--target", "ES2017", "--lib", "ES2017,DOM", "--module", "Node16", "--moduleResolution", "node16", reactQueryPath); err != nil {
 		t.Fatalf("tsc check failed: %v", err)
 	}
 	return string(reactQueryTS)
