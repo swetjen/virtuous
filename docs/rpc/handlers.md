@@ -33,6 +33,7 @@ Any other status is treated as 500.
 
 - If the handler has a request parameter, the request body is JSON.
 - If there is no request parameter, no request body is included in OpenAPI.
+- Use `rpc.WithStrictJSONDecoding()` to reject unknown fields, duplicate object keys, and trailing JSON tokens before the handler runs.
 
 ## Response bodies
 

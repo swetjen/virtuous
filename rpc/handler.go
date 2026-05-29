@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/swetjen/virtuous/internal/jsondecode"
 	"github.com/swetjen/virtuous/internal/jsonlimit"
 )
 
@@ -133,7 +134,7 @@ func (router *Router) buildRPCHandler(spec handlerSpec) http.Handler {
 		args = append(args, reflect.ValueOf(req.Context()))
 
 		if spec.reqType != nil {
-			reqVal, err := decodeRequest(w, req, spec.reqType, router.maxBodyBytes)
+			reqVal, err := decodeRequest(w, req, spec.reqType, router.maxBodyBytes, router.strictJSON)
 			if err != nil {
 				setTraceError(req.Context(), "invalid request body")
 				if jsonlimit.IsBodyTooLarge(err) {
@@ -161,7 +162,7 @@ func (router *Router) buildRPCHandler(spec handlerSpec) http.Handler {
 	})
 }
 
-func decodeRequest(w http.ResponseWriter, r *http.Request, reqType reflect.Type, maxBytes int64) (reflect.Value, error) {
+func decodeRequest(w http.ResponseWriter, r *http.Request, reqType reflect.Type, maxBytes int64, strictJSON bool) (reflect.Value, error) {
 	if reqType == nil {
 		return reflect.Value{}, errors.New("rpc: request type missing")
 	}
@@ -172,16 +173,20 @@ func decodeRequest(w http.ResponseWriter, r *http.Request, reqType reflect.Type,
 		return reflect.Value{}, jsonlimit.ErrBodyTooLarge
 	}
 	body := jsonlimit.MaxBytesReader(w, r, maxBytes)
+	opts := jsondecode.Options{}
+	if strictJSON {
+		opts = jsondecode.StrictOptions()
+	}
 	var target reflect.Value
 	if reqType.Kind() == reflect.Ptr {
 		target = reflect.New(reqType.Elem())
-		if err := json.NewDecoder(body).Decode(target.Interface()); err != nil {
+		if err := jsondecode.Decode(body, target.Interface(), opts); err != nil {
 			return reflect.Value{}, err
 		}
 		return target, nil
 	}
 	target = reflect.New(reqType)
-	if err := json.NewDecoder(body).Decode(target.Interface()); err != nil {
+	if err := jsondecode.Decode(body, target.Interface(), opts); err != nil {
 		return reflect.Value{}, err
 	}
 	return target.Elem(), nil

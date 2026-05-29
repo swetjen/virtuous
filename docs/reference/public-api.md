@@ -16,6 +16,7 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.WithAdvancedObservability(opts ...rpc.AdvancedObservabilityOption)`
 - `rpc.WithObservabilitySampling(rate float64)`
 - `rpc.WithMaxRequestBodyBytes(maxBytes int64)`
+- `rpc.WithStrictJSONDecoding()`
 - `type rpc.Module`
 - `rpc.ModuleAPI`
 - `rpc.ModuleObservability`
@@ -63,6 +64,8 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.AuthAny(guards ...httpapi.Guard)`
 - `httpapi.Decode[T any](r *http.Request)`
 - `httpapi.DecodeWithMaxBytes[T any](r *http.Request, maxBytes int64)`
+- `httpapi.DecodeStrict[T any](r *http.Request)`
+- `httpapi.DecodeStrictWithMaxBytes[T any](r *http.Request, maxBytes int64)`
 - `httpapi.ErrRequestBodyTooLarge`
 - `httpapi.IsRequestBodyTooLarge(err error)`
 - `type httpapi.Module`

@@ -22,6 +22,7 @@ type Router struct {
 	typeOverrides  map[string]TypeOverride
 	openAPIOptions *OpenAPIOptions
 	maxBodyBytes   int64
+	strictJSON     bool
 }
 
 // RouterOptions configures a Router.
@@ -30,6 +31,7 @@ type RouterOptions struct {
 	Guards                []Guard
 	AdvancedObservability *AdvancedObservabilityOptions
 	MaxRequestBodyBytes   int64
+	StrictJSONDecoding    bool
 }
 
 // RouterOption mutates RouterOptions.
@@ -58,6 +60,14 @@ func WithMaxRequestBodyBytes(maxBytes int64) RouterOption {
 	}
 }
 
+// WithStrictJSONDecoding rejects unknown fields, duplicate object keys, and
+// trailing JSON tokens in RPC request bodies.
+func WithStrictJSONDecoding() RouterOption {
+	return func(o *RouterOptions) {
+		o.StrictJSONDecoding = true
+	}
+}
+
 // NewRouter returns a new Router.
 func NewRouter(opts ...RouterOption) *Router {
 	config := RouterOptions{
@@ -78,6 +88,7 @@ func NewRouter(opts ...RouterOption) *Router {
 			SampleRate: observabilitySampleRate(config.AdvancedObservability),
 		}),
 		maxBodyBytes: config.MaxRequestBodyBytes,
+		strictJSON:   config.StrictJSONDecoding,
 	}
 }
 

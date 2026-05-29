@@ -39,7 +39,12 @@ type reader struct {
 
 func (r *reader) Read(p []byte) (int, error) {
 	if r.remaining <= 0 {
-		return 0, ErrBodyTooLarge
+		var one [1]byte
+		n, err := r.r.Read(one[:])
+		if n > 0 {
+			return 0, ErrBodyTooLarge
+		}
+		return 0, err
 	}
 	if int64(len(p)) > r.remaining {
 		p = p[:r.remaining]

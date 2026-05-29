@@ -94,7 +94,7 @@ func SearchUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	req, err := httpapi.Decode[SearchRequest](r)
+	req, err := httpapi.DecodeStrict[SearchRequest](r)
 	if err != nil && !errors.Is(err, io.EOF) {
 		httpapi.Encode(w, r, http.StatusBadRequest, map[string]string{"error": "invalid request"})
 		return

@@ -13,6 +13,7 @@ httpapi is a compatibility layer for legacy `net/http` handlers and existing RES
 - Use `HandlerMeta.Responses` when a route needs multiple statuses or a custom response media type such as `image/png` or `text/html`.
 - Use `HandlerMeta.RequestBody` with `httpapi.FormBody(Req{})` for `application/x-www-form-urlencoded` bodies or `httpapi.MultipartBody(Req{})` with `httpapi.File` for uploads.
 - Request bodies are required by default when present; use `httpapi.Optional[Req]()` to mark optional bodies in generated docs/clients.
+- Use `httpapi.DecodeStrict[T](r)` when handlers should reject unknown fields, duplicate object keys, and trailing JSON tokens.
 - Untyped routes still run normally but are skipped in generated OpenAPI and clients.
 - Route registration is source of truth for path/method (including trailing slashes).
 - Query and path params preserve scalar Go types in generated docs/clients; handlers still parse runtime values from `net/http`.

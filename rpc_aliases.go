@@ -50,6 +50,10 @@ func RPCWithMaxRequestBodyBytes(maxBytes int64) rpc.RouterOption {
 	return rpc.WithMaxRequestBodyBytes(maxBytes)
 }
 
+func RPCWithStrictJSONDecoding() rpc.RouterOption {
+	return rpc.WithStrictJSONDecoding()
+}
+
 func RPCWithAdvancedObservability(opts ...rpc.AdvancedObservabilityOption) rpc.RouterOption {
 	return rpc.WithAdvancedObservability(opts...)
 }

@@ -28,9 +28,15 @@ func testHandler(_ context.Context, req testReq) (testResp, int) {
 }
 
 var oversizedHandlerCalled bool
+var strictHandlerCalled bool
 
 func oversizedHandler(_ context.Context, req testReq) (testResp, int) {
 	oversizedHandlerCalled = true
+	return testResp{Message: req.Name}, StatusOK
+}
+
+func strictHandler(_ context.Context, req testReq) (testResp, int) {
+	strictHandlerCalled = true
 	return testResp{Message: req.Name}, StatusOK
 }
 
@@ -99,6 +105,46 @@ func TestRPCOversizedJSONReturns413WithoutInvokingHandler(t *testing.T) {
 	}
 	if oversizedHandlerCalled {
 		t.Fatalf("handler should not be invoked for oversized request body")
+	}
+}
+
+func TestRPCStrictJSONRejectsUnknownFieldsDuplicateKeysAndTrailingTokens(t *testing.T) {
+	router := NewRouter(WithStrictJSONDecoding())
+	router.HandleRPC(strictHandler)
+	path := router.Routes()[0].Path
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "unknown field",
+			body: `{"name":"Virtuous","extra":true}`,
+		},
+		{
+			name: "duplicate key",
+			body: `{"name":"first","name":"second"}`,
+		},
+		{
+			name: "trailing token",
+			body: `{"name":"Virtuous"} {"name":"again"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			strictHandlerCalled = false
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(tt.body))
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != StatusInvalid {
+				t.Fatalf("expected status %d, got %d", StatusInvalid, rec.Code)
+			}
+			if strictHandlerCalled {
+				t.Fatalf("handler should not be invoked for invalid strict JSON")
+			}
+		})
 	}
 }
 

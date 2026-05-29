@@ -135,6 +135,14 @@ func DecodeWithMaxBytes[T any](r *http.Request, maxBytes int64) (T, error) {
 	return httpapi.DecodeWithMaxBytes[T](r, maxBytes)
 }
 
+func DecodeStrict[T any](r *http.Request) (T, error) {
+	return httpapi.DecodeStrict[T](r)
+}
+
+func DecodeStrictWithMaxBytes[T any](r *http.Request, maxBytes int64) (T, error) {
+	return httpapi.DecodeStrictWithMaxBytes[T](r, maxBytes)
+}
+
 func IsRequestBodyTooLarge(err error) bool {
 	return httpapi.IsRequestBodyTooLarge(err)
 }

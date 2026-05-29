@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.36
+
+- Add optional strict JSON request decoding for RPC and `httpapi`, rejecting unknown fields, duplicate object keys, and trailing JSON tokens.
+
 ## 0.0.35
 
 - Remove the docs/admin database explorer and SQL catalog module, including runtime DB explorer adapters and `_admin/db*` endpoints.
