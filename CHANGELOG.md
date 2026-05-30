@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.37
+
+- Add `AbortSignal` forwarding to the standalone React Query TypeScript client output and expose generated `RequestOptions` with an `AuthOptions` compatibility alias.
+- Document `react-query.client.gen.ts` as the canonical standalone React Query client filename.
+
 ## 0.0.36
 
 - Add optional strict JSON request decoding for RPC and `httpapi`, rejecting unknown fields, duplicate object keys, and trailing JSON tokens.

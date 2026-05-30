@@ -6,10 +6,10 @@ Generate either or both artifacts:
 
 ```go
 router.WriteClientTSFile("client.gen.ts")
-router.WriteReactQueryTSFile("react-query.gen.ts")
+router.WriteReactQueryTSFile("react-query.client.gen.ts")
 ```
 
-The React Query artifact does not import `client.gen.ts` or any local generated file. It embeds the raw client, `AuthOptions`, and request/response interfaces directly, then exports its own client instance:
+The React Query artifact does not import `client.gen.ts` or any local generated file. It embeds the raw client, `RequestOptions`, auth compatibility aliases, and request/response interfaces directly, then exports its own client instance:
 
 ```ts
 export const reactQueryClient = createClient('')
@@ -32,15 +32,19 @@ export function getApiV1MeQueryKey() {
 	return ['GET /api/v1/me'] as const
 }
 
-export function getApiV1MeQueryOptions(requestOptions?: AuthOptions) {
+export function getApiV1MeQueryOptions(requestOptions?: RequestOptions) {
 	return {
 		queryKey: getApiV1MeQueryKey(),
-		queryFn: () => reactQueryClient.API.getApiV1Me(requestOptions),
+		queryFn: ({ signal }: { signal?: AbortSignal }) =>
+			reactQueryClient.API.getApiV1Me({
+				...requestOptions,
+				signal: signal ?? requestOptions?.signal,
+			}),
 	}
 }
 
 export function useGetApiV1Me(
-	requestOptions?: AuthOptions,
+	requestOptions?: RequestOptions,
 	queryOptions?: Omit<UseQueryOptions<MeResponse, Error>, 'queryKey' | 'queryFn'>,
 ) {
 	return useQuery({
@@ -64,13 +68,15 @@ enabled: !!pathParams && pathParams.id !== undefined && pathParams.id !== null
 
 Caller-provided `queryOptions` are spread last. If a caller overrides `enabled: true` while required path params are still missing, the generated query function will call the raw client with missing params and the raw client may throw.
 
+Generated query functions pass TanStack Query's `AbortSignal` through to the raw client's `fetch` call. You can also pass `signal` manually in `RequestOptions` when calling raw generated methods outside React Query.
+
 ## Mutations
 
 Non-`GET`/`HEAD` routes generate `useMutation` hooks with typed variable objects.
 
 ```ts
 export function useCreateReport(
-	requestOptions?: AuthOptions,
+	requestOptions?: RequestOptions,
 	mutationOptions?: UseMutationOptions<ReportResponse, Error, { request: ReportCreateRequest }>,
 ) {
 	return useMutation({
@@ -95,13 +101,13 @@ mutationFn: (variables?: { request?: UpdateRequest }) =>
 `ServeAllDocs()` does not expose the React Query client by default. Opt in with an explicit path:
 
 ```go
-router.ServeAllDocs(httpapi.WithReactQueryTSPath("/react-query.gen.ts"))
+router.ServeAllDocs(httpapi.WithReactQueryTSPath("/react-query.client.gen.ts"))
 ```
 
 You can also mount the handler yourself:
 
 ```go
-mux.HandleFunc("GET /react-query.gen.ts", router.ServeReactQueryTS)
+mux.HandleFunc("GET /react-query.client.gen.ts", router.ServeReactQueryTS)
 ```
 
 ## Naming

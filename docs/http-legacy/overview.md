@@ -36,13 +36,13 @@ Generate the framework-agnostic TypeScript client and optional standalone React 
 
 ```go
 router.WriteClientTSFile("client.gen.ts")
-router.WriteReactQueryTSFile("react-query.gen.ts")
+router.WriteReactQueryTSFile("react-query.client.gen.ts")
 ```
 
 To serve the React Query client from `ServeAllDocs`, opt in with an explicit path:
 
 ```go
-router.ServeAllDocs(httpapi.WithReactQueryTSPath("/react-query.gen.ts"))
+router.ServeAllDocs(httpapi.WithReactQueryTSPath("/react-query.client.gen.ts"))
 ```
 
 See [React Query client](./react-query.md) for the generated API shape and path-param `enabled` behavior.

@@ -13,6 +13,7 @@ import (
 type reactQueryTSSpec struct {
 	HasQueries     bool
 	HasMutations   bool
+	AuthParams     []clientAuthGuard
 	ClientServices []clientService
 	Objects        []clientObject
 	Services       []reactQueryTSService
@@ -63,10 +64,16 @@ var reactQueryTSTemplate = template.Must(template.New("virtuous-react-query-ts")
 import { {{ if .HasMutations }}useMutation{{ end }}{{ if and .HasQueries .HasMutations }}, {{ end }}{{ if .HasQueries }}useQuery{{ end }}{{ if or .HasQueries .HasMutations }}, {{ end }}{{ if .HasMutations }}type UseMutationOptions{{ end }}{{ if and .HasQueries .HasMutations }}, {{ end }}{{ if .HasQueries }}type UseQueryOptions{{ end }} } from '@tanstack/react-query'
 {{ end }}
 
-export type AuthOptions = {
+export type RequestOptions = {
 	auth?: string
-	[key: string]: string | undefined
+{{- range $param := .AuthParams }}
+	{{ $param.ParamName }}?: string
+{{- end }}
+	signal?: AbortSignal
+	[key: string]: string | AbortSignal | undefined
 }
+
+export type AuthOptions = RequestOptions
 {{range $object := .Objects}}
 export interface {{$object.Name}} {
 {{- range $field := $object.Fields}}
@@ -79,7 +86,7 @@ export function createClient(basepath: string = "/") {
 {{- range $service := .ClientServices }}
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
-			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: { {{- range $param := $method.PathParams }}{{ $param.Name }}: {{ $param.Type }}; {{- end }} }, {{ end }}{{ if $method.HasBody }}request{{ if $method.BodyOptional }}?{{ end }}: {{ $method.RequestType }}, {{ end }}{{ if $method.HasQuery }}query?: { {{- range $param := $method.QueryParams }}{{ $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ $param.Type }}; {{- end }} }, {{ end }}options?: AuthOptions): Promise<{{ if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}> {
+			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: { {{- range $param := $method.PathParams }}{{ $param.Name }}: {{ $param.Type }}; {{- end }} }, {{ end }}{{ if $method.HasBody }}request{{ if $method.BodyOptional }}?{{ end }}: {{ $method.RequestType }}, {{ end }}{{ if $method.HasQuery }}query?: { {{- range $param := $method.QueryParams }}{{ $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ $param.Type }}; {{- end }} }, {{ end }}options?: RequestOptions): Promise<{{ if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}> {
 				const headers: Record<string, string> = {
 					"Accept": "{{ $method.AcceptType }}",
 {{- if $method.HasBody }}
@@ -239,6 +246,7 @@ export function createClient(basepath: string = "/") {
 {{- if $method.HasCookieAuth }}
 					credentials: "same-origin",
 {{- end }}
+					signal: options?.signal,
 {{- if $method.HasBody }}
 {{- if $method.BodyOptional }}
 					body: request === undefined || request === null ? undefined : {{ if eq $method.BodyMode "form" }}encodeForm(request){{ else if eq $method.BodyMode "multipart" }}encodeMultipart(request){{ else }}JSON.stringify(request){{ end }},
@@ -303,7 +311,7 @@ export function {{ $method.QueryKeyName }}({{ $method.QueryKeyParams }}) {
 export function {{ $method.QueryOptionsName }}({{ $method.QueryOptionsParams }}) {
 	return {
 		queryKey: {{ $method.QueryKeyName }}({{ $method.QueryKeyCallArgs }}),
-		queryFn: () => reactQueryClient.{{ $method.ServiceName }}.{{ $method.Name }}({{ $method.QueryCallArgs }}),
+		queryFn: ({ signal }: { signal?: AbortSignal }) => reactQueryClient.{{ $method.ServiceName }}.{{ $method.Name }}({{ $method.QueryCallArgs }}),
 {{- if $method.EnabledExpr }}
 		enabled: {{ $method.EnabledExpr }},
 {{- end }}
@@ -395,6 +403,7 @@ func (r *Router) reactQueryTSHash() (string, error) {
 
 func buildReactQueryTSSpec(spec clientSpec) reactQueryTSSpec {
 	out := reactQueryTSSpec{
+		AuthParams:     reactQueryAuthParams(spec),
 		ClientServices: spec.Services,
 		Objects:        spec.Objects,
 	}
@@ -412,6 +421,23 @@ func buildReactQueryTSSpec(spec clientSpec) reactQueryTSSpec {
 			rqService.Methods = append(rqService.Methods, rqMethod)
 		}
 		out.Services = append(out.Services, rqService)
+	}
+	return out
+}
+
+func reactQueryAuthParams(spec clientSpec) []clientAuthGuard {
+	seen := map[string]struct{}{"auth": {}}
+	var out []clientAuthGuard
+	for _, service := range spec.Services {
+		for _, method := range service.Methods {
+			for _, param := range method.AuthParams {
+				if _, ok := seen[param.ParamName]; ok {
+					continue
+				}
+				seen[param.ParamName] = struct{}{}
+				out = append(out, param)
+			}
+		}
 	}
 	return out
 }
@@ -498,11 +524,11 @@ func fillReactQueryQueryArgs(method *reactQueryTSMethod) {
 		hookParams = append(hookParams, "query?: "+method.QueryParamsType)
 		rawCallArgs = append(rawCallArgs, "query")
 	}
-	optionsParams = append(optionsParams, "requestOptions?: AuthOptions")
+	optionsParams = append(optionsParams, "requestOptions?: RequestOptions")
 	optionsArgs = append(optionsArgs, "requestOptions")
-	hookParams = append(hookParams, "requestOptions?: AuthOptions")
+	hookParams = append(hookParams, "requestOptions?: RequestOptions")
 	hookParams = append(hookParams, "queryOptions?: Omit<UseQueryOptions<"+method.ResponseType+", Error>, 'queryKey' | 'queryFn'>")
-	rawCallArgs = append(rawCallArgs, "requestOptions")
+	rawCallArgs = append(rawCallArgs, "{ ...requestOptions, signal: signal ?? requestOptions?.signal }")
 
 	method.QueryKeyParams = strings.Join(keyParams, ", ")
 	method.QueryKeyArgs = reactQueryKeyArgs(method, keyArgs)
@@ -525,7 +551,7 @@ func fillReactQueryMutationArgs(method *reactQueryTSMethod) {
 		}
 	}
 
-	method.HookParams = "requestOptions?: AuthOptions, mutationOptions?: UseMutationOptions<" + method.ResponseType + ", Error, "
+	method.HookParams = "requestOptions?: RequestOptions, mutationOptions?: UseMutationOptions<" + method.ResponseType + ", Error, "
 	if method.MutationOptionsVarsType == "" {
 		method.HookParams += "void"
 	} else {
