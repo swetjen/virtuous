@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.42
+
+- Change native `httpapi` Python model names to use API-contextual route/domain prefixes instead of bare Go type names or package-qualified fallbacks when route context is available.
+
 ## 0.0.41
 
 - Change native `httpapi` Python client method names to use stable path-then-verb `operationId` names, preserving explicit `HandlerMeta.OperationID` overrides and leaving JS/TS client naming unchanged.

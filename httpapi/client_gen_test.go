@@ -11,6 +11,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	testa "github.com/swetjen/virtuous/internal/testtypes/a"
+	testb "github.com/swetjen/virtuous/internal/testtypes/b"
 )
 
 type testState struct {
@@ -47,6 +50,26 @@ type keywordPythonPayload struct {
 
 type keywordPythonPathRequest struct {
 	From string `path:"from"`
+}
+
+type InstanceCreateRequest struct {
+	Name string `json:"name"`
+}
+
+type InstanceCreateResponse struct {
+	ID string `json:"id"`
+}
+
+type HealthcheckCreateRequest struct {
+	Status string `json:"status"`
+}
+
+type SlackMessageRequest struct {
+	Channel string `json:"channel"`
+}
+
+type Organization struct {
+	ID string `json:"id"`
 }
 
 type responseSpecClientError struct {
@@ -270,7 +293,7 @@ func TestPythonClientSanitizesIdentifiersAndPreservesWireNames(t *testing.T) {
 	assertContains(t, pyText, `else_: str = field(metadata={"wire": "else"})`)
 	assertContains(t, pyText, `from_2: str = field(metadata={"wire": "from_"})`)
 	assertContains(t, pyText, `def keyword_from_get(self, from_: str, try_: Optional[str] = None)`)
-	assertContains(t, pyText, `def class_(self, body: Optional["KeywordkeywordPythonPayload"] = None)`)
+	assertContains(t, pyText, `def class_(self, body: Optional["KeywordPythonPayload"] = None)`)
 	assertContains(t, pyText, `self.class_ = _classService(basepath)`)
 
 	dir := t.TempDir()
@@ -282,7 +305,7 @@ func TestPythonClientSanitizesIdentifiersAndPreservesWireNames(t *testing.T) {
 		t.Fatalf("python py_compile failed: %v", err)
 	}
 	snippet := pythonImportSnippet(pyPath) + `
-payload = mod._decode_value(mod.KeywordkeywordPythonPayload, {
+payload = mod._decode_value(mod.KeywordPythonPayload, {
     "date_from": "2026-01-01",
     "total_spend": 42.5,
     "from": "2026-01-01",
@@ -308,6 +331,62 @@ assert encoded["total_spend"] == 42.5
 `
 	if err := runCommand("python3", "-c", snippet); err != nil {
 		t.Fatalf("python keyword round trip failed: %v", err)
+	}
+}
+
+func TestPythonClientUsesRouteContextualModelNames(t *testing.T) {
+	router := NewRouter()
+	router.Describe("POST /api/v1/personas/instances", InstanceCreateRequest{}, InstanceCreateResponse{}, HandlerMeta{
+		Service: "Personas",
+		Method:  "CreateInstance",
+	})
+	router.Describe("POST /api/v1/client/healthcheck", HealthcheckCreateRequest{}, NoResponse200{}, HandlerMeta{
+		Service: "Internal",
+		Method:  "CreateHealthcheck",
+		Tags:    []string{"Client"},
+	})
+	router.Describe("POST /api/v1/client/slack-message", SlackMessageRequest{}, NoResponse200{}, HandlerMeta{
+		Service: "Client",
+		Method:  "SendSlackMessage",
+	})
+	router.Describe("POST /api/v1/organizations", Organization{}, Organization{}, HandlerMeta{
+		Method: "CreateOrganization",
+	})
+	router.Describe("POST /api/v1/admin/users", testa.User{}, NoResponse200{}, HandlerMeta{
+		Service: "Admin",
+		Method:  "CreateUser",
+		Tags:    []string{"Admin"},
+	})
+	router.Describe("POST /api/v1/public/users", testb.User{}, NoResponse200{}, HandlerMeta{
+		Service: "Public",
+		Method:  "CreateUser",
+		Tags:    []string{"Public"},
+	})
+
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+	pyText := string(py)
+
+	assertContains(t, pyText, "class PersonasInstanceCreateRequest")
+	assertContains(t, pyText, "class PersonasInstanceCreateResponse")
+	assertContains(t, pyText, "class ClientHealthcheckCreateRequest")
+	assertContains(t, pyText, "class ClientSlackMessageRequest")
+	assertContains(t, pyText, "class OrganizationsOrganization")
+	assertContains(t, pyText, "class AdminUser")
+	assertContains(t, pyText, "class PublicUser")
+	if strings.Contains(pyText, "github_com_swetjen_virtuous_internal_testtypes") {
+		t.Fatalf("python client should prefer API-context model names over package-qualified names")
+	}
+
+	dir := t.TempDir()
+	pyPath := filepath.Join(dir, "client.gen.py")
+	if err := os.WriteFile(pyPath, py, 0644); err != nil {
+		t.Fatalf("write python client: %v", err)
+	}
+	if err := runCommand("python3", "-m", "py_compile", pyPath); err != nil {
+		t.Fatalf("python py_compile failed: %v", err)
+	}
+	if err := runCommand("python3", "-c", pythonImportSnippet(pyPath)); err != nil {
+		t.Fatalf("python import failed: %v", err)
 	}
 }
 

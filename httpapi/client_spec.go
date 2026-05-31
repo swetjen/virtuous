@@ -77,16 +77,29 @@ type clientAuthGuard struct {
 	ParamName string
 }
 
+type clientSchemaNaming struct {
+	PreferredName  func(Route, reflect.Type) string
+	CollisionNames func([]Route) map[reflect.Type]string
+}
+
 func buildClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
 	return buildClientSpecWith(routes, overrides, func(registry *schema.Registry) func(reflect.Type) string {
 		return registry.JSTypeOf
-	}, "Uint8Array")
+	}, "Uint8Array", clientSchemaNaming{
+		PreferredName: func(route Route, t reflect.Type) string {
+			return preferredSchemaName(route.Meta, t)
+		},
+		CollisionNames: routeCollisionSchemaNames,
+	})
 }
 
 func buildPythonClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
 	return buildClientSpecWith(routes, overrides, func(registry *schema.Registry) func(reflect.Type) string {
 		return registry.PyTypeOf
-	}, "bytes")
+	}, "bytes", clientSchemaNaming{
+		PreferredName:  preferredPythonSchemaName,
+		CollisionNames: routeContextCollisionSchemaNames,
+	})
 }
 
 func buildClientSpecWith(
@@ -94,10 +107,14 @@ func buildClientSpecWith(
 	overrides map[string]TypeOverride,
 	typeFnFactory func(*schema.Registry) func(reflect.Type) string,
 	byteType string,
+	naming clientSchemaNaming,
 ) (clientSpec, error) {
 	serviceMap := make(map[string]*clientService)
 	registry := schema.NewRegistry(overrides)
-	collisionNames := routeCollisionSchemaNames(routes)
+	collisionNames := map[reflect.Type]string{}
+	if naming.CollisionNames != nil {
+		collisionNames = naming.CollisionNames(routes)
+	}
 	for typ, name := range collisionNames {
 		registry.PreferNameOf(typ, name)
 	}
@@ -126,7 +143,7 @@ func buildClientSpecWith(
 		var bodyFields []clientBodyField
 		if reqInfo.Present {
 			reqReflect := reqInfo.Type
-			if preferred := preferredSchemaName(route.Meta, reqReflect); preferred != "" && collisionNames[reflectutil.DerefType(reqReflect)] == "" {
+			if preferred := preferredClientSchemaName(naming, route, reqReflect); preferred != "" && collisionNames[reflectutil.DerefType(reqReflect)] == "" {
 				registry.PreferNameOf(reqReflect, preferred)
 			}
 			inferredPathParams, err := clientPathParamsFor(route, reqReflect, typeFn)
@@ -172,7 +189,7 @@ func buildClientSpecWith(
 			reqInfo.Optional = !route.Meta.RequestBody.Required
 			bodyType := reflect.TypeOf(content.Body)
 			if bodyType != nil {
-				if preferred := preferredSchemaName(route.Meta, bodyType); preferred != "" && collisionNames[reflectutil.DerefType(bodyType)] == "" {
+				if preferred := preferredClientSchemaName(naming, route, bodyType); preferred != "" && collisionNames[reflectutil.DerefType(bodyType)] == "" {
 					registry.PreferNameOf(bodyType, preferred)
 				}
 				registry.AddTypeOf(bodyType)
@@ -213,7 +230,7 @@ func buildClientSpecWith(
 				if isByteSliceResponse(respReflect) {
 					responseType = byteType
 				} else {
-					if preferred := preferredSchemaName(route.Meta, respReflect); preferred != "" && collisionNames[reflectutil.DerefType(respReflect)] == "" {
+					if preferred := preferredClientSchemaName(naming, route, respReflect); preferred != "" && collisionNames[reflectutil.DerefType(respReflect)] == "" {
 						registry.PreferNameOf(respReflect, preferred)
 					}
 					registry.AddTypeOf(respReflect)
@@ -268,6 +285,118 @@ func buildClientSpecWith(
 		Services: services,
 		Objects:  registry.ObjectsWith(typeFn),
 	}, nil
+}
+
+func preferredClientSchemaName(naming clientSchemaNaming, route Route, t reflect.Type) string {
+	if naming.PreferredName == nil {
+		return ""
+	}
+	return naming.PreferredName(route, t)
+}
+
+func routeContextCollisionSchemaNames(routes []Route) map[reflect.Type]string {
+	contextNames := routeContextSchemaNames(routes)
+	types := map[reflect.Type]struct{}{}
+	for _, route := range routes {
+		if route.Handler == nil {
+			continue
+		}
+		reqInfo := resolveRequestType(route.Handler.RequestType())
+		if reqInfo.Present {
+			collectSchemaTypes(types, reqInfo.Type)
+		}
+		collectSchemaTypes(types, responseBodyType(route.Handler.ResponseType()))
+		if route.Meta.RequestBody != nil {
+			for _, content := range route.Meta.RequestBody.Content {
+				collectSchemaTypes(types, reflect.TypeOf(content.Body))
+			}
+		}
+		for _, response := range route.Meta.Responses {
+			collectSchemaTypes(types, reflect.TypeOf(response.Body))
+		}
+		for _, param := range route.Meta.Params {
+			collectSchemaTypes(types, reflect.TypeOf(param.Type))
+		}
+	}
+
+	byName := map[string][]reflect.Type{}
+	for typ := range types {
+		if typ.Name() == "" || typ.PkgPath() == "" {
+			continue
+		}
+		byName[typ.Name()] = append(byName[typ.Name()], typ)
+	}
+
+	out := map[reflect.Type]string{}
+	for _, named := range byName {
+		if len(named) < 2 {
+			continue
+		}
+		sort.Slice(named, func(i, j int) bool {
+			return schema.QualifiedNameOf(named[i]) < schema.QualifiedNameOf(named[j])
+		})
+		counts := map[string]int{}
+		for _, typ := range named {
+			if name := contextNames[typ]; name != "" {
+				counts[name]++
+			}
+		}
+		for _, typ := range named {
+			if name := contextNames[typ]; name != "" && counts[name] == 1 {
+				out[typ] = name
+				continue
+			}
+			out[typ] = schema.QualifiedNameOf(typ)
+		}
+	}
+	return out
+}
+
+func routeContextSchemaNames(routes []Route) map[reflect.Type]string {
+	candidates := map[reflect.Type]map[string]struct{}{}
+	add := func(route Route, t reflect.Type) {
+		base := reflectutil.DerefType(t)
+		if base == nil || base.Name() == "" {
+			return
+		}
+		name := preferredPythonSchemaName(route, base)
+		if name == "" {
+			return
+		}
+		if candidates[base] == nil {
+			candidates[base] = map[string]struct{}{}
+		}
+		candidates[base][name] = struct{}{}
+	}
+	for _, route := range routes {
+		if route.Handler == nil {
+			continue
+		}
+		reqInfo := resolveRequestType(route.Handler.RequestType())
+		if reqInfo.Present {
+			add(route, reqInfo.Type)
+		}
+		add(route, responseBodyType(route.Handler.ResponseType()))
+		if route.Meta.RequestBody != nil {
+			for _, content := range route.Meta.RequestBody.Content {
+				add(route, reflect.TypeOf(content.Body))
+			}
+		}
+		for _, response := range route.Meta.Responses {
+			add(route, reflect.TypeOf(response.Body))
+		}
+	}
+
+	out := map[reflect.Type]string{}
+	for typ, names := range candidates {
+		ordered := make([]string, 0, len(names))
+		for name := range names {
+			ordered = append(ordered, name)
+		}
+		sort.Strings(ordered)
+		out[typ] = ordered[0]
+	}
+	return out
 }
 
 func authParamName(name string) string {
