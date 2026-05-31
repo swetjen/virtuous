@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"text/template"
 )
 
@@ -12,7 +13,7 @@ var clientPyTemplate = template.Must(template.New("virtuous-rpc-py").Parse(`# Co
 
 """Runtime-generated Python client for Virtuous RPC routes."""
 
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass
 import http
 import json
 import types
@@ -22,7 +23,7 @@ from urllib import error, parse, request
 # Type definitions
 {{- range $i, $object := .Objects }}
 {{- if gt $i 0 }}{{ "\n" }}{{ end }}
-@dataclass
+@dataclass(kw_only=True)
 class {{ $object.Name }}:
 {{- if not $object.Fields }}
     pass
@@ -31,7 +32,7 @@ class {{ $object.Name }}:
 {{- if $field.Doc }}
     # {{ $field.Doc }}
 {{- end }}
-    {{ $field.Name }}: {{ $field.Type }}{{ if or $field.Optional $field.Nullable }} | None = None{{ end }}
+    {{ $field.Declaration }}
 {{- end }}
 {{- end }}
 
@@ -44,7 +45,7 @@ class RPCError(RuntimeError):
         self.body = body
 
 {{- range $service := .Services }}
-class _{{ $service.Name }}Service:
+class {{ $service.ClassName }}:
     def __init__(self, basepath: str):
         self._basepath = basepath
 
@@ -107,7 +108,7 @@ class Client:
     def __init__(self, basepath: str = "/"):
         self._basepath = basepath
 {{- range $service := .Services }}
-        self.{{ $service.Name }} = _{{ $service.Name }}Service(basepath)
+        self.{{ $service.AttrName }} = {{ $service.ClassName }}(basepath)
 {{- end }}
 
 
@@ -154,9 +155,10 @@ def _decode_dataclass(cls: type[Any], data: Any) -> Any:
     type_hints = get_type_hints(cls)
     kwargs: dict[str, Any] = {}
     for field in fields(cls):
-        if field.name in data:
+        wire_name = field.metadata.get("wire", field.name)
+        if wire_name in data:
             field_type = type_hints.get(field.name, Any)
-            kwargs[field.name] = _decode_value(field_type, data[field.name])
+            kwargs[field.name] = _decode_value(field_type, data[wire_name])
     return cls(**kwargs)
 
 
@@ -164,7 +166,7 @@ def _encode_value(value: Any) -> Any:
     if value is None:
         return None
     if is_dataclass(value):
-        return {field.name: _encode_value(getattr(value, field.name)) for field in fields(value)}
+        return {field.metadata.get("wire", field.name): _encode_value(getattr(value, field.name)) for field in fields(value)}
     if isinstance(value, list):
         return [_encode_value(item) for item in value]
     if isinstance(value, dict):
@@ -179,6 +181,142 @@ def _append_query(url: str, key: str, value: str) -> str:
     new_query = parse.urlencode(query)
     return parse.urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
 `))
+
+type pythonClientSpec struct {
+	Services []pythonClientService
+	Objects  []pythonClientObject
+}
+
+type pythonClientService struct {
+	ClassName string
+	AttrName  string
+	Methods   []pythonClientMethod
+}
+
+type pythonClientMethod struct {
+	Name         string
+	Path         string
+	HasBody      bool
+	HasAuth      bool
+	Auth         GuardSpec
+	AuthParam    string
+	RequestType  string
+	ResponseType string
+	ErrorType    string
+}
+
+type pythonClientObject struct {
+	Name   string
+	Fields []pythonClientField
+}
+
+type pythonClientField struct {
+	Name        string
+	WireName    string
+	Declaration string
+	Doc         string
+}
+
+func buildPythonClientRenderSpec(spec clientSpec) pythonClientSpec {
+	typeNames := pythonObjectNameMap(spec.Objects)
+	out := pythonClientSpec{
+		Objects: pythonObjects(spec.Objects, typeNames),
+	}
+	serviceAttrs := map[string]struct{}{"_basepath": {}}
+	serviceClasses := map[string]struct{}{}
+	for _, service := range spec.Services {
+		pyService := pythonClientService{
+			ClassName: clientgen.UniquePythonIdentifier("_"+service.Name+"Service", serviceClasses),
+			AttrName:  clientgen.UniquePythonIdentifier(service.Name, serviceAttrs),
+		}
+		methodNames := map[string]struct{}{}
+		for _, method := range service.Methods {
+			pyService.Methods = append(pyService.Methods, pythonMethod(method, typeNames, methodNames))
+		}
+		out.Services = append(out.Services, pyService)
+	}
+	return out
+}
+
+func pythonObjectNameMap(objects []clientObject) map[string]string {
+	used := map[string]struct{}{}
+	out := make(map[string]string, len(objects))
+	for _, object := range objects {
+		out[object.Name] = clientgen.UniquePythonIdentifier(object.Name, used)
+	}
+	return out
+}
+
+func pythonObjects(objects []clientObject, typeNames map[string]string) []pythonClientObject {
+	out := make([]pythonClientObject, 0, len(objects))
+	for _, object := range objects {
+		pyObject := pythonClientObject{Name: typeNames[object.Name]}
+		fieldNames := map[string]struct{}{}
+		for _, field := range object.Fields {
+			name := clientgen.UniquePythonIdentifier(field.Name, fieldNames)
+			fieldType := pythonTypeName(field.Type, typeNames)
+			pyObject.Fields = append(pyObject.Fields, pythonClientField{
+				Name:        name,
+				WireName:    field.Name,
+				Declaration: pythonFieldDeclaration(name, field.Name, fieldType, field.Optional || field.Nullable),
+				Doc:         field.Doc,
+			})
+		}
+		out = append(out, pyObject)
+	}
+	return out
+}
+
+func pythonFieldDeclaration(name, wireName, fieldType string, optional bool) string {
+	if fieldType == "" {
+		fieldType = "Any"
+	}
+	typeExpr := fieldType
+	if optional {
+		typeExpr = fieldType + " | None"
+	}
+	if name == wireName {
+		if optional {
+			return name + ": " + typeExpr + " = None"
+		}
+		return name + ": " + typeExpr
+	}
+	meta := `metadata={"wire": ` + clientgen.PythonStringLiteral(wireName) + `}`
+	if optional {
+		return name + ": " + typeExpr + " = field(default=None, " + meta + ")"
+	}
+	return name + ": " + typeExpr + " = field(" + meta + ")"
+}
+
+func pythonMethod(method clientMethod, typeNames map[string]string, methodNames map[string]struct{}) pythonClientMethod {
+	usedParams := map[string]struct{}{"self": {}}
+	if method.HasBody {
+		usedParams["body"] = struct{}{}
+	}
+	pyMethod := pythonClientMethod{
+		Name:         clientgen.UniquePythonIdentifier(method.Name, methodNames),
+		Path:         method.Path,
+		HasBody:      method.HasBody,
+		HasAuth:      method.HasAuth,
+		Auth:         method.Auth,
+		AuthParam:    clientgen.UniquePythonIdentifier(method.AuthParam, usedParams),
+		RequestType:  pythonTypeName(method.RequestType, typeNames),
+		ResponseType: pythonTypeName(method.ResponseType, typeNames),
+		ErrorType:    pythonTypeName(method.ErrorType, typeNames),
+	}
+	return pyMethod
+}
+
+func pythonTypeName(typeName string, names map[string]string) string {
+	out := typeName
+	for oldName, newName := range names {
+		if oldName == newName {
+			continue
+		}
+		out = strings.ReplaceAll(out, `"`+oldName+`"`, `"`+newName+`"`)
+	}
+	return out
+}
 
 // WriteClientPY writes a runtime-generated Python client to w.
 func (r *Router) WriteClientPY(w io.Writer) error {
@@ -232,7 +370,7 @@ func (r *Router) ServeClientPYHash(w http.ResponseWriter, _ *http.Request) {
 
 func (r *Router) clientPYBody() ([]byte, error) {
 	spec := buildPythonClientSpec(r.Routes(), r.typeOverrides)
-	return clientgen.RenderTemplate(clientPyTemplate, spec)
+	return clientgen.RenderTemplate(clientPyTemplate, buildPythonClientRenderSpec(spec))
 }
 
 func (r *Router) clientPYHash() (string, error) {

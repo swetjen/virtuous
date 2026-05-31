@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.39
+
+- Fix native Python client generation for reserved JSON field names by emitting Python-safe dataclass attributes with wire-name metadata and preserving JSON encode/decode names.
+- Emit Python DTOs as keyword-only dataclasses so optional fields can precede required fields without import-time dataclass errors.
+- Sanitize generated Python service attributes, method names, path parameters, and auth parameters for legal Python identifiers.
+
 ## 0.0.38
 
 - Move standalone React Query TypeScript auth to centralized `configureVirtuousClient(...)` / `ClientOptions.auth` configuration, resolving auth at request execution time instead of hook construction time.

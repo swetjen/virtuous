@@ -34,6 +34,21 @@ type optionalClientRequest struct {
 	Name string `json:"name"`
 }
 
+type keywordPythonPayload struct {
+	DateFrom      *string `json:"date_from,omitempty"`
+	TotalSpend    float64 `json:"total_spend"`
+	From          string  `json:"from"`
+	To            *string `json:"to,omitempty"`
+	Class         string  `json:"class"`
+	Try           string  `json:"try"`
+	Else          string  `json:"else"`
+	FromDuplicate string  `json:"from_"`
+}
+
+type keywordPythonPathRequest struct {
+	From string `path:"from"`
+}
+
 type responseSpecClientError struct {
 	Error string `json:"error"`
 }
@@ -167,6 +182,9 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if err := runCommand("python3", "-c", pythonImportSnippet(pyPath)); err != nil {
 		t.Fatalf("python import failed: %v", err)
 	}
+	if err := runCommand("python3", "-m", "py_compile", pyPath); err != nil {
+		t.Fatalf("python py_compile failed: %v", err)
+	}
 
 	jsText := string(js)
 	if !strings.Contains(jsText, "queryParts") || !strings.Contains(jsText, "appendQuery") {
@@ -221,6 +239,66 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	}
 	if !strings.Contains(pyText, "_encode_multipart") || !strings.Contains(pyText, `("file", "file", True)`) || !strings.Contains(pyText, `("client_id", "clientID", False)`) {
 		t.Fatalf("py client missing multipart encoding")
+	}
+}
+
+func TestPythonClientSanitizesIdentifiersAndPreservesWireNames(t *testing.T) {
+	router := NewRouter()
+	router.Describe("POST /keyword", keywordPythonPayload{}, keywordPythonPayload{}, HandlerMeta{
+		Service: "Keyword",
+		Method:  "RoundTrip",
+	})
+	router.Describe("GET /keyword/{from}", keywordPythonPathRequest{}, keywordPythonPayload{}, HandlerMeta{
+		Service: "class",
+		Method:  "class",
+	}, testGuard{name: "try", in: "header", param: "X-Try"})
+
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+	pyText := string(py)
+	assertContains(t, pyText, "@dataclass(kw_only=True)")
+	assertContains(t, pyText, `from_: str = field(metadata={"wire": "from"})`)
+	assertContains(t, pyText, `class_: str = field(metadata={"wire": "class"})`)
+	assertContains(t, pyText, `try_: str = field(metadata={"wire": "try"})`)
+	assertContains(t, pyText, `else_: str = field(metadata={"wire": "else"})`)
+	assertContains(t, pyText, `from_2: str = field(metadata={"wire": "from_"})`)
+	assertContains(t, pyText, `def class_(self, from_: str, try_: Optional[str] = None)`)
+	assertContains(t, pyText, `self.class_ = _classService(basepath)`)
+
+	dir := t.TempDir()
+	pyPath := filepath.Join(dir, "client.gen.py")
+	if err := os.WriteFile(pyPath, py, 0644); err != nil {
+		t.Fatalf("write python client: %v", err)
+	}
+	if err := runCommand("python3", "-m", "py_compile", pyPath); err != nil {
+		t.Fatalf("python py_compile failed: %v", err)
+	}
+	snippet := pythonImportSnippet(pyPath) + `
+payload = mod._decode_value(mod.KeywordkeywordPythonPayload, {
+    "date_from": "2026-01-01",
+    "total_spend": 42.5,
+    "from": "2026-01-01",
+    "to": "2026-01-31",
+    "class": "campaign",
+    "try": "attempt",
+    "else": "fallback",
+    "from_": "literal",
+})
+assert payload.from_ == "2026-01-01"
+assert payload.to == "2026-01-31"
+assert payload.class_ == "campaign"
+assert payload.try_ == "attempt"
+assert payload.else_ == "fallback"
+assert payload.from_2 == "literal"
+encoded = mod._encode_value(payload)
+assert encoded["from"] == "2026-01-01"
+assert encoded["class"] == "campaign"
+assert encoded["try"] == "attempt"
+assert encoded["else"] == "fallback"
+assert encoded["from_"] == "literal"
+assert encoded["total_spend"] == 42.5
+`
+	if err := runCommand("python3", "-c", snippet); err != nil {
+		t.Fatalf("python keyword round trip failed: %v", err)
 	}
 }
 

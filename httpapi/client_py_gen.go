@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"text/template"
 )
 
@@ -12,7 +13,7 @@ var clientPyTemplate = template.Must(template.New("virtuous-py").Parse(`# Code g
 
 """Generated Python client for Virtuous routes."""
 
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import datetime
 import http
 import json
@@ -24,7 +25,7 @@ from urllib import error, parse, request
 # Type definitions
 {{- range $i, $object := .Objects }}
 {{- if gt $i 0 }}{{ "\n" }}{{ end }}
-@dataclass
+@dataclass(kw_only=True)
 class {{ $object.Name }}:
 {{- if not $object.Fields }}
     pass
@@ -33,19 +34,19 @@ class {{ $object.Name }}:
 {{- if $field.Doc }}
     # {{ $field.Doc }}
 {{- end }}
-    {{ $field.Name }}: {{- if or $field.Optional $field.Nullable }} Optional[{{ $field.Type }}] = None{{ else }} {{ $field.Type }}{{ end }}
+    {{ $field.Declaration }}
 {{- end }}
 {{- end }}
 
 {{- end }}
 
 {{- range $service := .Services }}
-class _{{ $service.Name }}Service:
+class {{ $service.ClassName }}:
     def __init__(self, basepath: str):
         self._basepath = basepath
 
 {{- range $method := $service.Methods }}
-    def {{ $method.Name }}(self{{- if $method.PathParams }}{{- range $param := $method.PathParams }}, {{ $param.Name }}: {{ $param.Type }}{{- end }}{{- end }}{{- if $method.HasBody }}, body: Optional[{{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}] = None{{- end }}{{- if $method.HasQuery }}, query: Optional[dict[str, Any]] = None{{- end }}{{- if $method.HasAuth }}{{- range $auth := $method.AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}) -> {{- if eq $method.ResponseMode "none" }}None{{- else if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}Any{{- end }}:
+    def {{ $method.Name }}(self{{- if $method.PathParams }}{{- range $param := $method.PathParams }}, {{ $param.VarName }}: {{ $param.Type }}{{- end }}{{- end }}{{- if $method.HasBody }}, body: Optional[{{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}] = None{{- end }}{{- if $method.HasQuery }}, query: Optional[dict[str, Any]] = None{{- end }}{{- if $method.HasAuth }}{{- range $auth := $method.AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}) -> {{- if eq $method.ResponseMode "none" }}None{{- else if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}Any{{- end }}:
         headers = {
             "Accept": "{{ $method.AcceptType }}",
 {{- if $method.HasBody }}
@@ -57,7 +58,7 @@ class _{{ $service.Name }}Service:
         url = self._basepath + "{{ $method.Path }}"
 {{- if $method.PathParams }}
 {{- range $param := $method.PathParams }}
-        url = url.replace("{{ printf "{%s}" $param.Name }}", parse.quote(str({{ $param.Name }})))
+        url = url.replace("{{ printf "{%s}" $param.Name }}", parse.quote(str({{ $param.VarName }})))
 {{- end }}
 {{- end }}
 {{- if $method.HasQuery }}
@@ -121,13 +122,13 @@ class _{{ $service.Name }}Service:
 {{- if eq $method.BodyMode "form" }}
             data = _encode_form(body, [
 {{- range $field := $method.BodyFields }}
-                ("{{ $field.WireName }}", "{{ $field.Name }}"),
+                ("{{ $field.WireName }}", "{{ $field.ValueName }}"),
 {{- end }}
             ]).encode("utf-8")
 {{- else if eq $method.BodyMode "multipart" }}
             data, content_type = _encode_multipart(body, [
 {{- range $field := $method.BodyFields }}
-                ("{{ $field.WireName }}", "{{ $field.Name }}", {{ if $field.IsFile }}True{{ else }}False{{ end }}),
+                ("{{ $field.WireName }}", "{{ $field.ValueName }}", {{ if $field.IsFile }}True{{ else }}False{{ end }}),
 {{- end }}
             ])
             headers["Content-Type"] = content_type
@@ -186,7 +187,7 @@ class Client:
     def __init__(self, basepath: str = "/"):
         self._basepath = basepath
 {{- range $service := .Services }}
-        self.{{ $service.Name }} = _{{ $service.Name }}Service(basepath)
+        self.{{ $service.AttrName }} = {{ $service.ClassName }}(basepath)
 {{- end }}
 
 
@@ -233,9 +234,10 @@ def _decode_dataclass(cls: type[Any], data: Any) -> Any:
     type_hints = get_type_hints(cls)
     kwargs: dict[str, Any] = {}
     for field in fields(cls):
-        if field.name in data:
+        wire_name = field.metadata.get("wire", field.name)
+        if wire_name in data:
             field_type = type_hints.get(field.name, Any)
-            kwargs[field.name] = _decode_value(field_type, data[field.name])
+            kwargs[field.name] = _decode_value(field_type, data[wire_name])
     return cls(**kwargs)
 
 
@@ -243,7 +245,7 @@ def _encode_value(value: Any) -> Any:
     if value is None:
         return None
     if is_dataclass(value):
-        return {field.name: _encode_value(getattr(value, field.name)) for field in fields(value)}
+        return {field.metadata.get("wire", field.name): _encode_value(getattr(value, field.name)) for field in fields(value)}
     if isinstance(value, list):
         return [_encode_value(item) for item in value]
     if isinstance(value, dict):
@@ -347,6 +349,213 @@ def _append_query(url: str, key: str, value: str) -> str:
     return parse.urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
 `))
 
+type pythonClientSpec struct {
+	Services []pythonClientService
+	Objects  []pythonClientObject
+}
+
+type pythonClientService struct {
+	ClassName string
+	AttrName  string
+	Methods   []pythonClientMethod
+}
+
+type pythonClientMethod struct {
+	Name         string
+	HTTPMethod   string
+	Path         string
+	PathParams   []pythonPathParam
+	HasBody      bool
+	BodyOptional bool
+	BodyMode     string
+	BodyFields   []pythonBodyField
+	RequestMedia string
+	HasQuery     bool
+	QueryParams  []clientQueryParam
+	AcceptType   string
+	ResponseMode string
+	HasAuth      bool
+	AuthReqs     []pythonAuthRequirement
+	AuthParams   []pythonAuthGuard
+	RequestType  string
+	ResponseType string
+}
+
+type pythonClientObject struct {
+	Name   string
+	Fields []pythonClientField
+}
+
+type pythonClientField struct {
+	Name        string
+	WireName    string
+	Declaration string
+	Doc         string
+}
+
+type pythonPathParam struct {
+	Name    string
+	VarName string
+	Type    string
+}
+
+type pythonBodyField struct {
+	WireName  string
+	ValueName string
+	IsFile    bool
+}
+
+type pythonAuthRequirement struct {
+	Guards []pythonAuthGuard
+}
+
+type pythonAuthGuard struct {
+	Spec      GuardSpec
+	ParamName string
+}
+
+func buildPythonClientRenderSpec(spec clientSpec) pythonClientSpec {
+	typeNames := pythonObjectNameMap(spec.Objects)
+	out := pythonClientSpec{
+		Objects: pythonObjects(spec.Objects, typeNames),
+	}
+	serviceAttrs := map[string]struct{}{"_basepath": {}}
+	serviceClasses := map[string]struct{}{}
+	for _, service := range spec.Services {
+		pyService := pythonClientService{
+			ClassName: clientgen.UniquePythonIdentifier("_"+service.Name+"Service", serviceClasses),
+			AttrName:  clientgen.UniquePythonIdentifier(service.Name, serviceAttrs),
+		}
+		methodNames := map[string]struct{}{}
+		for _, method := range service.Methods {
+			pyService.Methods = append(pyService.Methods, pythonMethod(method, typeNames, methodNames))
+		}
+		out.Services = append(out.Services, pyService)
+	}
+	return out
+}
+
+func pythonObjectNameMap(objects []clientObject) map[string]string {
+	used := map[string]struct{}{}
+	out := make(map[string]string, len(objects))
+	for _, object := range objects {
+		out[object.Name] = clientgen.UniquePythonIdentifier(object.Name, used)
+	}
+	return out
+}
+
+func pythonObjects(objects []clientObject, typeNames map[string]string) []pythonClientObject {
+	out := make([]pythonClientObject, 0, len(objects))
+	for _, object := range objects {
+		pyObject := pythonClientObject{Name: typeNames[object.Name]}
+		fieldNames := map[string]struct{}{}
+		for _, field := range object.Fields {
+			name := clientgen.UniquePythonIdentifier(field.Name, fieldNames)
+			fieldType := pythonTypeName(field.Type, typeNames)
+			pyObject.Fields = append(pyObject.Fields, pythonClientField{
+				Name:        name,
+				WireName:    field.Name,
+				Declaration: pythonFieldDeclaration(name, field.Name, fieldType, field.Optional || field.Nullable),
+				Doc:         field.Doc,
+			})
+		}
+		out = append(out, pyObject)
+	}
+	return out
+}
+
+func pythonFieldDeclaration(name, wireName, fieldType string, optional bool) string {
+	if fieldType == "" {
+		fieldType = "Any"
+	}
+	typeExpr := fieldType
+	if optional {
+		typeExpr = "Optional[" + fieldType + "]"
+	}
+	if name == wireName {
+		if optional {
+			return name + ": " + typeExpr + " = None"
+		}
+		return name + ": " + typeExpr
+	}
+	meta := `metadata={"wire": ` + clientgen.PythonStringLiteral(wireName) + `}`
+	if optional {
+		return name + ": " + typeExpr + " = field(default=None, " + meta + ")"
+	}
+	return name + ": " + typeExpr + " = field(" + meta + ")"
+}
+
+func pythonMethod(method clientMethod, typeNames map[string]string, methodNames map[string]struct{}) pythonClientMethod {
+	usedParams := map[string]struct{}{"self": {}}
+	if method.HasBody {
+		usedParams["body"] = struct{}{}
+	}
+	if method.HasQuery {
+		usedParams["query"] = struct{}{}
+	}
+	pyMethod := pythonClientMethod{
+		Name:         clientgen.UniquePythonIdentifier(method.Name, methodNames),
+		HTTPMethod:   method.HTTPMethod,
+		Path:         method.Path,
+		HasBody:      method.HasBody,
+		BodyOptional: method.BodyOptional,
+		BodyMode:     method.BodyMode,
+		RequestMedia: method.RequestMedia,
+		HasQuery:     method.HasQuery,
+		QueryParams:  method.QueryParams,
+		AcceptType:   method.AcceptType,
+		ResponseMode: method.ResponseMode,
+		HasAuth:      method.HasAuth,
+		RequestType:  pythonTypeName(method.RequestType, typeNames),
+		ResponseType: pythonTypeName(method.ResponseType, typeNames),
+	}
+	for _, param := range method.PathParams {
+		pyMethod.PathParams = append(pyMethod.PathParams, pythonPathParam{
+			Name:    param.Name,
+			VarName: clientgen.UniquePythonIdentifier(param.Name, usedParams),
+			Type:    param.Type,
+		})
+	}
+	for _, field := range method.BodyFields {
+		pyMethod.BodyFields = append(pyMethod.BodyFields, pythonBodyField{
+			WireName:  field.WireName,
+			ValueName: field.Name,
+			IsFile:    field.IsFile,
+		})
+	}
+	authNames := map[string]string{}
+	for _, auth := range method.AuthParams {
+		name := clientgen.UniquePythonIdentifier(auth.ParamName, usedParams)
+		authNames[auth.ParamName] = name
+		pyMethod.AuthParams = append(pyMethod.AuthParams, pythonAuthGuard{
+			Spec:      auth.Spec,
+			ParamName: name,
+		})
+	}
+	for _, req := range method.AuthReqs {
+		pyReq := pythonAuthRequirement{Guards: make([]pythonAuthGuard, 0, len(req.Guards))}
+		for _, guard := range req.Guards {
+			pyReq.Guards = append(pyReq.Guards, pythonAuthGuard{
+				Spec:      guard.Spec,
+				ParamName: authNames[guard.ParamName],
+			})
+		}
+		pyMethod.AuthReqs = append(pyMethod.AuthReqs, pyReq)
+	}
+	return pyMethod
+}
+
+func pythonTypeName(typeName string, names map[string]string) string {
+	out := typeName
+	for oldName, newName := range names {
+		if oldName == newName {
+			continue
+		}
+		out = strings.ReplaceAll(out, `"`+oldName+`"`, `"`+newName+`"`)
+	}
+	return out
+}
+
 // WriteClientPY writes a generated Python client to w.
 func (r *Router) WriteClientPY(w io.Writer) error {
 	body, err := r.clientPYBody()
@@ -402,7 +611,7 @@ func (r *Router) clientPYBody() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return clientgen.RenderTemplate(clientPyTemplate, spec)
+	return clientgen.RenderTemplate(clientPyTemplate, buildPythonClientRenderSpec(spec))
 }
 
 func (r *Router) clientPYHash() (string, error) {
