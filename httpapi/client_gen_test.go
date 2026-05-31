@@ -251,8 +251,13 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 		t.Fatalf("ts client missing query serialization")
 	}
 	pyText := string(py)
-	if !strings.Contains(pyText, "def api_v1_lookup_states_code_get") || !strings.Contains(pyText, "query: Optional[dict[str, Any]]") {
-		t.Fatalf("py client missing query argument")
+	if !strings.Contains(pyText, "def api_v1_lookup_states_code_get(self, code: str, *, id: list[str]") ||
+		!strings.Contains(pyText, `append_query_param("q", q, True)`) ||
+		!strings.Contains(pyText, `append_query_param("id", id, False)`) {
+		t.Fatalf("py client missing keyword query arguments")
+	}
+	if strings.Contains(pyText, "query: Optional[dict[str, Any]]") {
+		t.Fatalf("py client should expose query params as keyword arguments")
 	}
 	if !strings.Contains(pyText, "id: int") {
 		t.Fatalf("py client missing typed path param")
@@ -265,6 +270,12 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	}
 	if !strings.Contains(pyText, "_encode_multipart") || !strings.Contains(pyText, `("file", "file", True)`) || !strings.Contains(pyText, `("client_id", "clientID", False)`) {
 		t.Fatalf("py client missing multipart encoding")
+	}
+	if !strings.Contains(pyText, "def create_client(base_url: str = \"/\", *, api_key_auth: Optional[str] = None, token_auth: Optional[str] = None)") {
+		t.Fatalf("py client missing base_url constructor auth defaults")
+	}
+	if !strings.Contains(pyText, "def secure_get(self, *, api_key_auth: Optional[str] = None, token_auth: Optional[str] = None)") {
+		t.Fatalf("py client missing snake_case per-call auth params")
 	}
 }
 
@@ -292,9 +303,9 @@ func TestPythonClientSanitizesIdentifiersAndPreservesWireNames(t *testing.T) {
 	assertContains(t, pyText, `try_: str = field(metadata={"wire": "try"})`)
 	assertContains(t, pyText, `else_: str = field(metadata={"wire": "else"})`)
 	assertContains(t, pyText, `from_2: str = field(metadata={"wire": "from_"})`)
-	assertContains(t, pyText, `def keyword_from_get(self, from_: str, try_: Optional[str] = None)`)
-	assertContains(t, pyText, `def class_(self, body: Optional["KeywordPythonPayload"] = None)`)
-	assertContains(t, pyText, `self.class_ = _classService(basepath)`)
+	assertContains(t, pyText, `def keyword_from_get(self, from_: str, *, try_: Optional[str] = None)`)
+	assertContains(t, pyText, `def class_(self, *, body: Optional["KeywordPythonPayload"] = None)`)
+	assertContains(t, pyText, `self.class_ = _classService(base_url, try_=try_)`)
 
 	dir := t.TempDir()
 	pyPath := filepath.Join(dir, "client.gen.py")
@@ -331,6 +342,73 @@ assert encoded["total_spend"] == 42.5
 `
 	if err := runCommand("python3", "-c", snippet); err != nil {
 		t.Fatalf("python keyword round trip failed: %v", err)
+	}
+}
+
+func TestPythonClientErgonomicAuthAndQueryCalls(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /api/v1/lookup/states/{code}", testHandler{})
+	router.HandleTyped("GET /secure", secureClientHandler{}, AuthAny(
+		testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"},
+		testGuard{name: "TokenAuth", in: "header", param: "Authorization"},
+	))
+
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+	dir := t.TempDir()
+	pyPath := filepath.Join(dir, "client.gen.py")
+	if err := os.WriteFile(pyPath, py, 0644); err != nil {
+		t.Fatalf("write python client: %v", err)
+	}
+
+	snippet := pythonImportSnippet(pyPath) + `
+from urllib import parse as urlparse
+
+calls = []
+
+class FakeResponse:
+    def __init__(self, body: bytes):
+        self._body = body
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        return False
+    def getcode(self):
+        return 200
+    def read(self):
+        return self._body
+
+def fake_urlopen(req):
+    calls.append(req)
+    if "/api/v1/lookup/states/" in req.full_url:
+        return FakeResponse(b'{"state":{"id":1,"code":"CA","name":"California"},"error":""}')
+    return FakeResponse(b"")
+
+mod.request.urlopen = fake_urlopen
+
+client = mod.create_client(base_url="https://core.example", token_auth="default-token")
+resp = client.api_v1_lookup_states_code_get("CA", id=["1", "2"], q="west")
+assert resp.state.code == "CA"
+parts = urlparse.urlsplit(calls[-1].full_url)
+assert parts.scheme + "://" + parts.netloc + parts.path == "https://core.example/api/v1/lookup/states/CA"
+query = urlparse.parse_qs(parts.query)
+assert query == {"q": ["west"], "id": ["1", "2"]}
+
+client.secure_get()
+assert calls[-1].get_header("Authorization") == "default-token"
+
+client.secure_get(token_auth="override-token")
+assert calls[-1].get_header("Authorization") == "override-token"
+
+before = len(calls)
+try:
+    mod.create_client(base_url="https://core.example").secure_get()
+    raise AssertionError("secure_get should fail before dispatch without auth")
+except RuntimeError as err:
+    assert "auth not configured" in str(err)
+assert len(calls) == before
+`
+	if err := runCommand("python3", "-c", snippet); err != nil {
+		t.Fatalf("python ergonomic client call failed: %v", err)
 	}
 }
 
@@ -542,7 +620,7 @@ func TestGeneratedClientsSupportPointerResponseSpecTypes(t *testing.T) {
 	}
 
 	pyText := string(py)
-	if !strings.Contains(pyText, "->\""+expectedType+"\"") || !strings.Contains(pyText, "_decode_value(\""+expectedType+"\"") {
+	if !strings.Contains(pyText, "class "+expectedType) || !strings.Contains(pyText, "_decode_value("+expectedType+", decoded)") {
 		t.Fatalf("python client missing pointer response spec type %q", expectedType)
 	}
 }

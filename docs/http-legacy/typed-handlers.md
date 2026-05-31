@@ -135,6 +135,12 @@ If metadata is omitted, the router infers `Service` and `Method` when possible.
 OpenAPI `operationId` defaults to a stable method/path-derived value such as `api_v1_reports_report_id_get`; set `OperationID` when a migration needs an exact downstream SDK method name. If `Tags` is empty, OpenAPI output derives one tag from the first meaningful path segment, such as `Creative` for `/api/v1/creative/...`.
 Native `httpapi` Python client methods also use the OpenAPI operation ID, so `GET /api/v1/reports/{report_id}` emits `api_v1_reports_report_id_get(...)`; JS and TS clients continue to use `HandlerMeta.Method`.
 Native `httpapi` Python model names use API context for route-owned request and response bodies: explicit `Tags[0]` wins, then `Service`, then the inferred path tag. For example, `InstanceCreateRequest` under `Personas` emits `PersonasInstanceCreateRequest`, and `Organization` under `/api/v1/organizations` emits `OrganizationsOrganization`.
+Native `httpapi` Python clients accept `base_url` and route auth defaults at construction time, expose operation methods directly on the client, and lift query params into typed keyword arguments:
+
+```python
+client = create_client(base_url="https://core.example", token_auth=token)
+resp = client.api_v1_clients_get(limit=100_000, offset=0)
+```
 
 ## Docs-only registration
 

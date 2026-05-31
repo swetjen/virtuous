@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.44
+
+- Improve native `httpapi` Python client ergonomics with `base_url` constructors, constructor-level auth defaults, keyword query parameters, snake_case auth names, direct client operation methods, local auth-missing errors, and dataclass response decoding from generated methods.
+
 ## 0.0.43
 
 - Move CORS middleware from `httpapi` to the root `virtuous` package so RPC-only apps can use it without importing the legacy typed HTTP API package.
