@@ -49,7 +49,7 @@ Use this matrix to separate "supported now" from "known product limitations":
 | Swaggo annotation | Virtuous equivalent | Notes |
 | --- | --- | --- |
 | `@title`, `@version`, `@description` | `router.SetOpenAPIOptions(...)` | Works for both `rpc` and `httpapi` routers. |
-| `@Summary`, `@Description`, `@Tags` | `httpapi.HandlerMeta{Summary, Description, Tags}` | RPC currently does not expose per-operation summary/description metadata. |
+| `@Summary`, `@Description`, `@Tags`, operation ID | `httpapi.HandlerMeta{Summary, Description, Tags, OperationID}` | `httpapi` derives stable path-based `operationId` values and path-based tags when omitted. RPC currently does not expose per-operation summary/description metadata. |
 | `@Param ... body` | Typed request struct with `json` tags | RPC request is always JSON body when request type exists. |
 | `@Param ... query` | Request struct fields with `query:"..."` tags (`httpapi`) | Scalar and array values are typed in docs/clients; nested structs/maps are not supported. |
 | `@Param ... path` | Method-prefixed route pattern with `{param}` plus optional request fields with `path:"..."` (`httpapi`) | `path` tags add type/docs metadata for matching route placeholders. |

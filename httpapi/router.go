@@ -12,6 +12,7 @@ import (
 type HandlerMeta struct {
 	Service     string
 	Method      string
+	OperationID string
 	Summary     string
 	Description string
 	Tags        []string

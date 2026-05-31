@@ -123,6 +123,7 @@ handler := httpapi.WrapFunc(
 
 - `Service`
 - `Method`
+- `OperationID`
 - `Summary`
 - `Description`
 - `Tags`
@@ -131,6 +132,7 @@ handler := httpapi.WrapFunc(
 - `Responses`
 
 If metadata is omitted, the router infers `Service` and `Method` when possible.
+OpenAPI `operationId` defaults to a stable method/path-derived value such as `api_v1_reports_report_id_get`; set `OperationID` when a migration needs an exact downstream SDK method name. If `Tags` is empty, OpenAPI output derives one tag from the first meaningful path segment, such as `Creative` for `/api/v1/creative/...`.
 
 ## Docs-only registration
 

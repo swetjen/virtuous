@@ -535,6 +535,68 @@ func TestOpenAPIExplicitParamEnumPreservesTypedValues(t *testing.T) {
 	}
 }
 
+func TestOpenAPIOperationIDAndTags(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /api/v1/clients/{client_id}", nil, nullableResponse{}, HandlerMeta{
+		Service: "Clients",
+		Method:  "Get",
+	})
+	router.Describe("POST /api/v1/creative/{creative_id}/timeseries", nil, nullableResponse{}, HandlerMeta{
+		Service:     "Creative",
+		Method:      "Timeseries",
+		OperationID: "getCreativeTimeseries",
+		Tags:        []string{"CreativeOverride"},
+	})
+	router.Describe("GET /health", nil, nullableResponse{}, HandlerMeta{
+		Service: "Health",
+		Method:  "Get",
+	})
+	router.Describe("GET /api/v2/client-activity/search", nil, nullableResponse{}, HandlerMeta{
+		Service: "ClientActivity",
+		Method:  "Search",
+	})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+	paths := getMap(t, doc, "paths")
+
+	clientOp := getMap(t, getMap(t, paths, "/api/v1/clients/{client_id}"), "get")
+	if clientOp["operationId"] != "api_v1_clients_client_id_get" {
+		t.Fatalf("client operationId = %v", clientOp["operationId"])
+	}
+	clientTags := getList(t, clientOp, "tags")
+	if len(clientTags) != 1 || clientTags[0] != "Clients" {
+		t.Fatalf("client tags = %#v", clientTags)
+	}
+
+	creativeOp := getMap(t, getMap(t, paths, "/api/v1/creative/{creative_id}/timeseries"), "post")
+	if creativeOp["operationId"] != "getCreativeTimeseries" {
+		t.Fatalf("creative operationId = %v", creativeOp["operationId"])
+	}
+	creativeTags := getList(t, creativeOp, "tags")
+	if len(creativeTags) != 1 || creativeTags[0] != "CreativeOverride" {
+		t.Fatalf("creative tags = %#v", creativeTags)
+	}
+
+	healthOp := getMap(t, getMap(t, paths, "/health"), "get")
+	healthTags := getList(t, healthOp, "tags")
+	if len(healthTags) != 1 || healthTags[0] != "Health" {
+		t.Fatalf("health tags = %#v", healthTags)
+	}
+
+	activityOp := getMap(t, getMap(t, paths, "/api/v2/client-activity/search"), "get")
+	activityTags := getList(t, activityOp, "tags")
+	if len(activityTags) != 1 || activityTags[0] != "ClientActivity" {
+		t.Fatalf("activity tags = %#v", activityTags)
+	}
+}
+
 func TestOpenAPIDescribeAddsDocsWithoutMountingHandler(t *testing.T) {
 	router := NewRouter()
 	router.Describe("GET /external/{id}", typedParamRequest{}, nullableResponse{}, HandlerMeta{

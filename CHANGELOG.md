@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.40
+
+- Emit stable `operationId` values in `httpapi` OpenAPI output, using explicit `HandlerMeta.OperationID` when set and deterministic method/path-derived IDs otherwise.
+- Infer OpenAPI operation tags from the first meaningful route path segment when `HandlerMeta.Tags` is empty, while preserving explicit route tags unchanged.
+- Document OpenAPI operation ID, inferred tag, and server configuration behavior for migration users.
+
 ## 0.0.39
 
 - Fix native Python client generation for reserved JSON field names by emitting Python-safe dataclass attributes with wire-name metadata and preserving JSON encode/decode names.

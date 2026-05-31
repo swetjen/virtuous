@@ -28,9 +28,10 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			continue
 		}
 		op := &openAPIOperation{
+			OperationID: operationIDForRoute(route),
 			Summary:     route.Meta.Summary,
 			Description: route.Meta.Description,
-			Tags:        route.Meta.Tags,
+			Tags:        operationTagsForRoute(route),
 			Responses:   map[string]openAPIResponse{},
 		}
 
@@ -586,6 +587,7 @@ type openAPISecurityScheme struct {
 }
 
 type openAPIOperation struct {
+	OperationID string                     `json:"operationId,omitempty"`
 	Summary     string                     `json:"summary,omitempty"`
 	Description string                     `json:"description,omitempty"`
 	Tags        []string                   `json:"tags,omitempty"`
@@ -688,6 +690,108 @@ func openAPIServers(servers []OpenAPIServer) []openAPIServer {
 		out = append(out, openAPIServer{URL: server.URL, Description: server.Description})
 	}
 	return out
+}
+
+func operationIDForRoute(route Route) string {
+	if route.Meta.OperationID != "" {
+		return route.Meta.OperationID
+	}
+	return operationIDFromPath(route.Method, route.Path)
+}
+
+func operationIDFromPath(method, path string) string {
+	parts := operationPathParts(path)
+	parts = append(parts, strings.ToLower(method))
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "_")
+}
+
+func operationTagsForRoute(route Route) []string {
+	if len(route.Meta.Tags) > 0 {
+		return route.Meta.Tags
+	}
+	if tag := operationTagFromPath(route.Path); tag != "" {
+		return []string{tag}
+	}
+	return nil
+}
+
+func operationTagFromPath(path string) string {
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "" || isPathParamSegment(segment) || isTagPrefixSegment(segment) {
+			continue
+		}
+		return pascalPathSegment(segment)
+	}
+	return ""
+}
+
+func operationPathParts(path string) []string {
+	var parts []string
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "" {
+			continue
+		}
+		segment = strings.Trim(segment, "{}")
+		segmentParts := normalizedPathSegmentParts(segment)
+		parts = append(parts, segmentParts...)
+	}
+	return parts
+}
+
+func isPathParamSegment(segment string) bool {
+	return strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") && len(segment) > 2
+}
+
+func isTagPrefixSegment(segment string) bool {
+	segment = strings.ToLower(segment)
+	if segment == "api" || segment == "rpc" || segment == "rest" {
+		return true
+	}
+	if len(segment) > 1 && segment[0] == 'v' {
+		for _, r := range segment[1:] {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func normalizedPathSegmentParts(segment string) []string {
+	var parts []string
+	var current []rune
+	flush := func() {
+		if len(current) == 0 {
+			return
+		}
+		parts = append(parts, strings.ToLower(string(current)))
+		current = current[:0]
+	}
+	for _, r := range segment {
+		if r >= 'A' && r <= 'Z' {
+			current = append(current, unicode.ToLower(r))
+			continue
+		}
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			current = append(current, r)
+			continue
+		}
+		flush()
+	}
+	flush()
+	return parts
+}
+
+func pascalPathSegment(segment string) string {
+	parts := normalizedPathSegmentParts(segment)
+	for i, part := range parts {
+		parts[i] = titleTag(part)
+	}
+	return strings.Join(parts, "")
 }
 
 func defaultString(value, fallback string) string {
