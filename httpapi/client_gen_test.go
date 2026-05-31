@@ -203,6 +203,9 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if !strings.Contains(tsText, "query?: {") || !strings.Contains(tsText, "q?: string") || !strings.Contains(tsText, "id: string[]") {
 		t.Fatalf("ts client missing query type")
 	}
+	if !strings.Contains(tsText, "async getByCode(") {
+		t.Fatalf("ts client method names should keep HandlerMeta.Method naming")
+	}
 	if !strings.Contains(tsText, "id: number") {
 		t.Fatalf("ts client missing typed path param")
 	}
@@ -225,7 +228,7 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 		t.Fatalf("ts client missing query serialization")
 	}
 	pyText := string(py)
-	if !strings.Contains(pyText, "def getByCode") || !strings.Contains(pyText, "query: Optional[dict[str, Any]]") {
+	if !strings.Contains(pyText, "def api_v1_lookup_states_code_get") || !strings.Contains(pyText, "query: Optional[dict[str, Any]]") {
 		t.Fatalf("py client missing query argument")
 	}
 	if !strings.Contains(pyText, "id: int") {
@@ -252,6 +255,11 @@ func TestPythonClientSanitizesIdentifiersAndPreservesWireNames(t *testing.T) {
 		Service: "class",
 		Method:  "class",
 	}, testGuard{name: "try", in: "header", param: "X-Try"})
+	router.Describe("POST /keyword/explicit", keywordPythonPayload{}, keywordPythonPayload{}, HandlerMeta{
+		Service:     "Keyword",
+		Method:      "Explicit",
+		OperationID: "class",
+	})
 
 	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
 	pyText := string(py)
@@ -261,7 +269,8 @@ func TestPythonClientSanitizesIdentifiersAndPreservesWireNames(t *testing.T) {
 	assertContains(t, pyText, `try_: str = field(metadata={"wire": "try"})`)
 	assertContains(t, pyText, `else_: str = field(metadata={"wire": "else"})`)
 	assertContains(t, pyText, `from_2: str = field(metadata={"wire": "from_"})`)
-	assertContains(t, pyText, `def class_(self, from_: str, try_: Optional[str] = None)`)
+	assertContains(t, pyText, `def keyword_from_get(self, from_: str, try_: Optional[str] = None)`)
+	assertContains(t, pyText, `def class_(self, body: Optional["KeywordkeywordPythonPayload"] = None)`)
 	assertContains(t, pyText, `self.class_ = _classService(basepath)`)
 
 	dir := t.TempDir()
@@ -351,7 +360,7 @@ func TestGeneratedClientsSupportTextAndBytesResponses(t *testing.T) {
 	}
 
 	pyText := string(py)
-	if !strings.Contains(pyText, "def getBytes") || !strings.Contains(pyText, "return payload") {
+	if !strings.Contains(pyText, "def assets_blob_get") || !strings.Contains(pyText, "return payload") {
 		t.Fatalf("python client missing bytes response handling")
 	}
 	if !strings.Contains(pyText, `"Accept": "text/plain"`) {

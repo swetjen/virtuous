@@ -494,7 +494,7 @@ func pythonMethod(method clientMethod, typeNames map[string]string, methodNames 
 		usedParams["query"] = struct{}{}
 	}
 	pyMethod := pythonClientMethod{
-		Name:         clientgen.UniquePythonIdentifier(method.Name, methodNames),
+		Name:         clientgen.UniquePythonIdentifier(method.OperationID, methodNames),
 		HTTPMethod:   method.HTTPMethod,
 		Path:         method.Path,
 		HasBody:      method.HasBody,

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.41
+
+- Change native `httpapi` Python client method names to use stable path-then-verb `operationId` names, preserving explicit `HandlerMeta.OperationID` overrides and leaving JS/TS client naming unchanged.
+
 ## 0.0.40
 
 - Emit stable `operationId` values in `httpapi` OpenAPI output, using explicit `HandlerMeta.OperationID` when set and deterministic method/path-derived IDs otherwise.

@@ -21,6 +21,7 @@ type clientService struct {
 type clientMethod struct {
 	Name          string
 	FlatName      string
+	OperationID   string
 	Summary       string
 	HTTPMethod    string
 	Path          string
@@ -222,6 +223,7 @@ func buildClientSpecWith(
 		}
 		method := clientMethod{
 			Name:         methodName,
+			OperationID:  operationIDForRoute(route),
 			Summary:      route.Meta.Summary,
 			HTTPMethod:   route.Method,
 			Path:         route.Path,
