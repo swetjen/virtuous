@@ -9,13 +9,30 @@ router.WriteClientTSFile("client.gen.ts")
 router.WriteReactQueryTSFile("react-query.client.gen.ts")
 ```
 
-The React Query artifact does not import `client.gen.ts` or any local generated file. It embeds the raw client, `RequestOptions`, auth compatibility aliases, and request/response interfaces directly, then exports its own client instance:
+The React Query artifact does not import `client.gen.ts` or any local generated file. It embeds the raw client, transport/auth types, and request/response interfaces directly, then exports its own client instance:
 
 ```ts
-export const reactQueryClient = createClient('')
+export const virtuousClient = createClient({ baseUrl: '' })
 ```
 
 Generated imports are limited to external packages such as `@tanstack/react-query`. The base client remains free of React dependencies, and the React Query client can be moved or emitted independently without local import path configuration.
+
+## Client auth
+
+Configure auth once on the generated client. Auth is resolved at request execution time, so generated mutation hooks do not capture a stale token during render.
+
+```ts
+configureVirtuousClient({
+	auth: async () => {
+		const token = await getFirebaseToken()
+		return token ? { auth: token } : null
+	},
+})
+```
+
+For routes with generated auth requirements, the raw client checks auth before `fetch`. If no declared auth value is available, it throws `AuthNotReadyError` without dispatching an unauthenticated request.
+
+Named auth guards use generated fields such as `apiKeyAuth`; `auth` is a convenience fallback for single-guard routes.
 
 ## Queries
 
@@ -32,23 +49,19 @@ export function getApiV1MeQueryKey() {
 	return ['GET /api/v1/me'] as const
 }
 
-export function getApiV1MeQueryOptions(requestOptions?: RequestOptions) {
+export function getApiV1MeQueryOptions() {
 	return {
 		queryKey: getApiV1MeQueryKey(),
 		queryFn: ({ signal }: { signal?: AbortSignal }) =>
-			reactQueryClient.API.getApiV1Me({
-				...requestOptions,
-				signal: signal ?? requestOptions?.signal,
-			}),
+			virtuousClient.API.getApiV1Me({ signal }),
 	}
 }
 
 export function useGetApiV1Me(
-	requestOptions?: RequestOptions,
 	queryOptions?: Omit<UseQueryOptions<MeResponse, Error>, 'queryKey' | 'queryFn'>,
 ) {
 	return useQuery({
-		...getApiV1MeQueryOptions(requestOptions),
+		...getApiV1MeQueryOptions(),
 		...queryOptions,
 	})
 }
@@ -76,12 +89,11 @@ Non-`GET`/`HEAD` routes generate `useMutation` hooks with typed variable objects
 
 ```ts
 export function useCreateReport(
-	requestOptions?: RequestOptions,
 	mutationOptions?: UseMutationOptions<ReportResponse, Error, { request: ReportCreateRequest }>,
 ) {
 	return useMutation({
 		mutationFn: (variables: { request: ReportCreateRequest }) =>
-			reactQueryClient.Reports.createReport(variables.request, requestOptions),
+			virtuousClient.Reports.createReport(variables.request),
 		...mutationOptions,
 	})
 }
@@ -93,7 +105,7 @@ Optional-body-only mutations accept either a variable object or no variables:
 
 ```ts
 mutationFn: (variables?: { request?: UpdateRequest }) =>
-	reactQueryClient.API.update(variables?.request, requestOptions)
+	virtuousClient.API.update(variables?.request)
 ```
 
 ## Serving

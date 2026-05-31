@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.38
+
+- Move standalone React Query TypeScript auth to centralized `configureVirtuousClient(...)` / `ClientOptions.auth` configuration, resolving auth at request execution time instead of hook construction time.
+- Add generated `AuthNotReadyError` preflight checks for guarded React Query client routes so protected calls fail locally before unauthenticated network dispatch.
+- Remove per-hook React Query `requestOptions` auth arguments while preserving per-call `AbortSignal` forwarding through raw generated methods.
+
 ## 0.0.37
 
 - Add `AbortSignal` forwarding to the standalone React Query TypeScript client output and expose generated `RequestOptions` with an `AuthOptions` compatibility alias.

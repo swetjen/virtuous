@@ -55,25 +55,29 @@ func TestGeneratedReactQueryTSClientIsValid(t *testing.T) {
 
 	tsText := compileReactQueryTS(t, router)
 
-	assertContains(t, tsText, "export const reactQueryClient = createClient('')")
+	assertContains(t, tsText, "export const virtuousClient = createClient({ baseUrl: '' })")
+	assertContains(t, tsText, "export function configureVirtuousClient(options: ClientOptions)")
 	assertContains(t, tsText, "export type RequestOptions = {")
+	assertContains(t, tsText, "export type RequestAuth = {")
 	assertContains(t, tsText, "apiKeyAuth?: string")
 	assertContains(t, tsText, "signal?: AbortSignal")
-	assertContains(t, tsText, "export type AuthOptions = RequestOptions")
-	assertContains(t, tsText, "export function createClient(basepath: string = \"/\")")
+	assertNotContains(t, tsText, "export type AuthOptions = RequestOptions")
+	assertContains(t, tsText, "export class AuthNotReadyError extends Error")
+	assertContains(t, tsText, "export function createClient(options: ClientOptions = {})")
 	assertNotContains(t, tsText, "from './")
 	assertNotContains(t, tsText, "from '../")
 	assertContains(t, tsText, "export function getUserQueryKey(pathParams?: { id: number }, query?: { limit?: number; active?: boolean; since?: string })")
 	assertContains(t, tsText, "return ['GET /users/{id}', pathParams, query] as const")
 	assertContains(t, tsText, "enabled: !!pathParams && pathParams.id !== undefined && pathParams.id !== null")
-	assertContains(t, tsText, "requestOptions?: RequestOptions")
-	assertContains(t, tsText, "queryFn: ({ signal }: { signal?: AbortSignal }) => reactQueryClient.Users.getUser(pathParams!, query, { ...requestOptions, signal: signal ?? requestOptions?.signal })")
+	assertContains(t, tsText, "queryFn: ({ signal }: { signal?: AbortSignal }) => virtuousClient.Users.getUser(pathParams!, query, { signal })")
+	assertContains(t, tsText, "const auth = await resolveAuth(clientOptions.auth)")
+	assertContains(t, tsText, "throw new AuthNotReadyError(\"GET /users/{id}\")")
 	assertContains(t, tsText, "signal: options?.signal,")
 	assertContains(t, tsText, "FormData")
 	assertContains(t, tsText, `appendMultipart("file"`)
 	assertNotContains(t, tsText, `"Content-Type": "multipart/form-data"`)
-	assertContains(t, tsText, "export function usePostApiV1Reports(requestOptions?: RequestOptions, mutationOptions?: UseMutationOptions<testResponse, Error, { request: optionalClientRequest }>)")
-	assertContains(t, tsText, "mutationFn: (variables: { request: optionalClientRequest }) => reactQueryClient.API.postApiV1Reports(variables.request, requestOptions)")
+	assertContains(t, tsText, "export function usePostApiV1Reports(mutationOptions?: UseMutationOptions<testResponse, Error, { request: optionalClientRequest }>)")
+	assertContains(t, tsText, "mutationFn: (variables: { request: optionalClientRequest }) => virtuousClient.API.postApiV1Reports(variables.request)")
 }
 
 func TestGeneratedReactQueryTSClientCompilesWithInstalledTanStackTypes(t *testing.T) {
@@ -113,9 +117,9 @@ func TestReactQueryTSNoParamQueryRoute(t *testing.T) {
 	tsText := compileReactQueryTS(t, router)
 	assertContains(t, tsText, "export function getApiV1MeQueryKey()")
 	assertContains(t, tsText, "return ['GET /api/v1/me'] as const")
-	assertContains(t, tsText, "export function getApiV1MeQueryOptions(requestOptions?: RequestOptions)")
-	assertContains(t, tsText, "queryFn: ({ signal }: { signal?: AbortSignal }) => reactQueryClient.API.getApiV1Me({ ...requestOptions, signal: signal ?? requestOptions?.signal })")
-	assertContains(t, tsText, "export function useGetApiV1Me(requestOptions?: RequestOptions, queryOptions?: Omit<UseQueryOptions<rqMeResponse, Error>, 'queryKey' | 'queryFn'>)")
+	assertContains(t, tsText, "export function getApiV1MeQueryOptions()")
+	assertContains(t, tsText, "queryFn: ({ signal }: { signal?: AbortSignal }) => virtuousClient.API.getApiV1Me({ signal })")
+	assertContains(t, tsText, "export function useGetApiV1Me(queryOptions?: Omit<UseQueryOptions<rqMeResponse, Error>, 'queryKey' | 'queryFn'>)")
 	assertNotContains(t, tsText, "(,")
 }
 
@@ -129,8 +133,8 @@ func TestReactQueryTSQueryRouteWithBody(t *testing.T) {
 	tsText := compileReactQueryTS(t, router)
 	assertContains(t, tsText, "export function searchQueryKey(request: ReportsrqGetWithBodyRequest, query?: { limit?: number })")
 	assertContains(t, tsText, "return ['GET /reports/search', request, query] as const")
-	assertContains(t, tsText, "queryFn: ({ signal }: { signal?: AbortSignal }) => reactQueryClient.Reports.search(request, query, { ...requestOptions, signal: signal ?? requestOptions?.signal })")
-	assertContains(t, tsText, "export function useSearch(request: ReportsrqGetWithBodyRequest, query?: { limit?: number }, requestOptions?: RequestOptions")
+	assertContains(t, tsText, "queryFn: ({ signal }: { signal?: AbortSignal }) => virtuousClient.Reports.search(request, query, { signal })")
+	assertContains(t, tsText, "export function useSearch(request: ReportsrqGetWithBodyRequest, query?: { limit?: number }, queryOptions?: Omit<UseQueryOptions<ReportsrqMutationResponse, Error>, 'queryKey' | 'queryFn'>)")
 }
 
 func TestReactQueryTSMutationVariableShapes(t *testing.T) {
@@ -147,8 +151,8 @@ func TestReactQueryTSMutationVariableShapes(t *testing.T) {
 				return router
 			},
 			want: []string{
-				"export function useCreate(requestOptions?: RequestOptions, mutationOptions?: UseMutationOptions<ReportsrqMutationResponse, Error, { request: ReportsoptionalClientRequest }>)",
-				"mutationFn: (variables: { request: ReportsoptionalClientRequest }) => reactQueryClient.Reports.create(variables.request, requestOptions)",
+				"export function useCreate(mutationOptions?: UseMutationOptions<ReportsrqMutationResponse, Error, { request: ReportsoptionalClientRequest }>)",
+				"mutationFn: (variables: { request: ReportsoptionalClientRequest }) => virtuousClient.Reports.create(variables.request)",
 			},
 		},
 		{
@@ -159,8 +163,8 @@ func TestReactQueryTSMutationVariableShapes(t *testing.T) {
 				return router
 			},
 			want: []string{
-				"export function useDelete(requestOptions?: RequestOptions, mutationOptions?: UseMutationOptions<void, Error, { pathParams: { id: string } }>)",
-				"mutationFn: (variables: { pathParams: { id: string } }) => reactQueryClient.Users.delete(variables.pathParams, requestOptions)",
+				"export function useDelete(mutationOptions?: UseMutationOptions<void, Error, { pathParams: { id: string } }>)",
+				"mutationFn: (variables: { pathParams: { id: string } }) => virtuousClient.Users.delete(variables.pathParams)",
 			},
 		},
 		{
@@ -172,7 +176,7 @@ func TestReactQueryTSMutationVariableShapes(t *testing.T) {
 			},
 			want: []string{
 				"UseMutationOptions<UsersrqMutationResponse, Error, { pathParams: { id: string }; request: UsersrqMutationRequest; query?: { dryRun?: boolean } }>",
-				"reactQueryClient.Users.update(variables.pathParams, variables.request, variables.query, requestOptions)",
+				"virtuousClient.Users.update(variables.pathParams, variables.request, variables.query)",
 			},
 		},
 		{
@@ -183,8 +187,8 @@ func TestReactQueryTSMutationVariableShapes(t *testing.T) {
 				return router
 			},
 			want: []string{
-				"export function usePing(requestOptions?: RequestOptions, mutationOptions?: UseMutationOptions<void, Error, void>)",
-				"mutationFn: () => reactQueryClient.API.ping(requestOptions)",
+				"export function usePing(mutationOptions?: UseMutationOptions<void, Error, void>)",
+				"mutationFn: () => virtuousClient.API.ping()",
 			},
 		},
 		{
@@ -196,7 +200,7 @@ func TestReactQueryTSMutationVariableShapes(t *testing.T) {
 			},
 			want: []string{
 				"UseMutationOptions<rqMutationResponse, Error, { request?: optionalClientRequest } | void>",
-				"mutationFn: (variables?: { request?: optionalClientRequest }) => reactQueryClient.API.optional(variables?.request, requestOptions)",
+				"mutationFn: (variables?: { request?: optionalClientRequest }) => virtuousClient.API.optional(variables?.request)",
 			},
 		},
 	}
@@ -218,7 +222,22 @@ func TestReactQueryTSNoResponseRoutes(t *testing.T) {
 
 	tsText := compileReactQueryTS(t, router)
 	assertContains(t, tsText, "queryOptions?: Omit<UseQueryOptions<void, Error>, 'queryKey' | 'queryFn'>")
-	assertContains(t, tsText, "export function useFlush(requestOptions?: RequestOptions, mutationOptions?: UseMutationOptions<void, Error, void>)")
+	assertContains(t, tsText, "export function useFlush(mutationOptions?: UseMutationOptions<void, Error, void>)")
+}
+
+func TestReactQueryTSAuthFallbackOnlyAppliesToSingleGuardRoutes(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /single", nil, NoResponse200{}, HandlerMeta{Service: "Secure", Method: "Single"}, testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"})
+	router.Describe("GET /either", nil, NoResponse200{}, HandlerMeta{Service: "Secure", Method: "Either"}, AuthAny(
+		testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"},
+		testGuard{name: "TokenAuth", in: "header", param: "Authorization"},
+	))
+
+	tsText := compileReactQueryTS(t, router)
+	assertContains(t, tsText, "const apiKeyAuthValue = auth && (auth.apiKeyAuth || auth.auth)")
+	assertContains(t, tsText, "const apiKeyAuthValue = auth && (auth.apiKeyAuth)")
+	assertContains(t, tsText, "const tokenAuthValue = auth && (auth.tokenAuth)")
+	assertContains(t, tsText, "throw new AuthNotReadyError(\"GET /either\")")
 }
 
 func TestReactQueryTSDuplicateMethodNamesAreServicePrefixed(t *testing.T) {

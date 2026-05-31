@@ -65,15 +65,41 @@ import { {{ if .HasMutations }}useMutation{{ end }}{{ if and .HasQueries .HasMut
 {{ end }}
 
 export type RequestOptions = {
+	signal?: AbortSignal
+}
+
+export type RequestAuth = {
 	auth?: string
 {{- range $param := .AuthParams }}
 	{{ $param.ParamName }}?: string
 {{- end }}
-	signal?: AbortSignal
-	[key: string]: string | AbortSignal | undefined
+	[key: string]: string | undefined
 }
 
-export type AuthOptions = RequestOptions
+type MaybePromise<T> = T | Promise<T>
+
+export type AuthProvider = RequestAuth | (() => MaybePromise<RequestAuth | null | undefined>)
+
+export type ClientOptions = {
+	baseUrl?: string
+	auth?: AuthProvider
+}
+
+export class AuthNotReadyError extends Error {
+	route: string
+	constructor(route: string) {
+		super("Auth is required for " + route + " but no auth value is available")
+		this.name = "AuthNotReadyError"
+		this.route = route
+	}
+}
+
+async function resolveAuth(provider: AuthProvider | undefined): Promise<RequestAuth | null | undefined> {
+	if (typeof provider === "function") {
+		return await provider()
+	}
+	return provider
+}
 {{range $object := .Objects}}
 export interface {{$object.Name}} {
 {{- range $field := $object.Fields}}
@@ -81,8 +107,18 @@ export interface {{$object.Name}} {
 {{- end}}
 }
 {{end}}
-export function createClient(basepath: string = "/") {
+export function createClient(options: ClientOptions = {}) {
+	let clientOptions: ClientOptions = {
+		baseUrl: options.baseUrl ?? "/",
+		auth: options.auth,
+	}
 	return {
+		configure(nextOptions: ClientOptions) {
+			clientOptions = {
+				...clientOptions,
+				...nextOptions,
+			}
+		},
 {{- range $service := .ClientServices }}
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
@@ -95,7 +131,7 @@ export function createClient(basepath: string = "/") {
 {{- end }}
 {{- end }}
 				}
-				let url = basepath + "{{ $method.Path }}"
+				let url = (clientOptions.baseUrl ?? "/") + "{{ $method.Path }}"
 {{- if $method.PathParams }}
 				if (!pathParams) {
 					throw new Error("pathParams is required")
@@ -144,6 +180,7 @@ export function createClient(basepath: string = "/") {
 				}
 {{- end }}
 {{- if $method.HasAuth }}
+				const auth = await resolveAuth(clientOptions.auth)
 				const applyAuth = (location: string, param: string, prefix: string, value: string) => {
 					const authValue = prefix ? prefix + " " + value : value
 					if (location === "header") {
@@ -160,23 +197,26 @@ export function createClient(basepath: string = "/") {
 				if (!authApplied) {
 {{- if eq (len $req.Guards) 1 }}
 {{- range $guard := $req.Guards }}
-					const {{ $guard.ParamName }}Value = options && (options.{{ $guard.ParamName }} || options.auth)
+					const {{ $guard.ParamName }}Value = auth && (auth.{{ $guard.ParamName }}{{ if eq (len $method.AuthReqs) 1 }} || auth.auth{{ end }})
 					if ({{ $guard.ParamName }}Value) {
 						applyAuth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", {{ $guard.ParamName }}Value)
 						authApplied = true
 					}
 {{- end }}
 {{- else }}
-					const hasAuthValues = true{{ range $guard := $req.Guards }} && !!(options && options.{{ $guard.ParamName }}){{ end }}
+					const hasAuthValues = true{{ range $guard := $req.Guards }} && !!(auth && auth.{{ $guard.ParamName }}){{ end }}
 					if (hasAuthValues) {
 {{- range $guard := $req.Guards }}
-						applyAuth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", options!.{{ $guard.ParamName }}!)
+						applyAuth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", auth!.{{ $guard.ParamName }}!)
 {{- end }}
 						authApplied = true
 					}
 {{- end }}
 				}
 {{- end }}
+				if (!authApplied) {
+					throw new AuthNotReadyError("{{ $method.HTTPMethod }} {{ $method.Path }}")
+				}
 {{- end }}
 {{- if and $method.HasBody (eq $method.BodyMode "form") }}
 				const encodeForm = (value: unknown): string => {
@@ -301,7 +341,11 @@ export function createClient(basepath: string = "/") {
 	}
 }
 
-export const reactQueryClient = createClient('')
+export const virtuousClient = createClient({ baseUrl: '' })
+
+export function configureVirtuousClient(options: ClientOptions) {
+	virtuousClient.configure(options)
+}
 {{ range $service := .Services }}{{ range $method := $service.Methods }}
 {{- if $method.IsQuery }}
 export function {{ $method.QueryKeyName }}({{ $method.QueryKeyParams }}) {
@@ -311,7 +355,7 @@ export function {{ $method.QueryKeyName }}({{ $method.QueryKeyParams }}) {
 export function {{ $method.QueryOptionsName }}({{ $method.QueryOptionsParams }}) {
 	return {
 		queryKey: {{ $method.QueryKeyName }}({{ $method.QueryKeyCallArgs }}),
-		queryFn: ({ signal }: { signal?: AbortSignal }) => reactQueryClient.{{ $method.ServiceName }}.{{ $method.Name }}({{ $method.QueryCallArgs }}),
+		queryFn: ({ signal }: { signal?: AbortSignal }) => virtuousClient.{{ $method.ServiceName }}.{{ $method.Name }}({{ $method.QueryCallArgs }}),
 {{- if $method.EnabledExpr }}
 		enabled: {{ $method.EnabledExpr }},
 {{- end }}
@@ -327,7 +371,7 @@ export function {{ $method.HookName }}({{ $method.HookParams }}) {
 {{- else }}
 export function {{ $method.HookName }}({{ $method.HookParams }}) {
 	return useMutation({
-		mutationFn: {{ if $method.MutationVarsArg }}({{ $method.MutationVarsArg }}){{ else }}(){{ end }} => reactQueryClient.{{ $method.ServiceName }}.{{ $method.Name }}({{ $method.MutationCallArgs }}),
+		mutationFn: {{ if $method.MutationVarsArg }}({{ $method.MutationVarsArg }}){{ else }}(){{ end }} => virtuousClient.{{ $method.ServiceName }}.{{ $method.Name }}({{ $method.MutationCallArgs }}),
 		...mutationOptions,
 	})
 }
@@ -524,11 +568,8 @@ func fillReactQueryQueryArgs(method *reactQueryTSMethod) {
 		hookParams = append(hookParams, "query?: "+method.QueryParamsType)
 		rawCallArgs = append(rawCallArgs, "query")
 	}
-	optionsParams = append(optionsParams, "requestOptions?: RequestOptions")
-	optionsArgs = append(optionsArgs, "requestOptions")
-	hookParams = append(hookParams, "requestOptions?: RequestOptions")
 	hookParams = append(hookParams, "queryOptions?: Omit<UseQueryOptions<"+method.ResponseType+", Error>, 'queryKey' | 'queryFn'>")
-	rawCallArgs = append(rawCallArgs, "{ ...requestOptions, signal: signal ?? requestOptions?.signal }")
+	rawCallArgs = append(rawCallArgs, "{ signal }")
 
 	method.QueryKeyParams = strings.Join(keyParams, ", ")
 	method.QueryKeyArgs = reactQueryKeyArgs(method, keyArgs)
@@ -551,7 +592,7 @@ func fillReactQueryMutationArgs(method *reactQueryTSMethod) {
 		}
 	}
 
-	method.HookParams = "requestOptions?: RequestOptions, mutationOptions?: UseMutationOptions<" + method.ResponseType + ", Error, "
+	method.HookParams = "mutationOptions?: UseMutationOptions<" + method.ResponseType + ", Error, "
 	if method.MutationOptionsVarsType == "" {
 		method.HookParams += "void"
 	} else {
@@ -573,7 +614,6 @@ func fillReactQueryMutationArgs(method *reactQueryTSMethod) {
 	if method.HasQuery {
 		callArgs = append(callArgs, "variables.query")
 	}
-	callArgs = append(callArgs, "requestOptions")
 	method.MutationCallArgs = strings.Join(callArgs, ", ")
 }
 
