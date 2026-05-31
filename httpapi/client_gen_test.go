@@ -72,6 +72,20 @@ type Organization struct {
 	ID string `json:"id"`
 }
 
+type Client struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type APIClient struct {
+	ID string `json:"id"`
+}
+
+type ClientsGetManyResponse struct {
+	Data     []Client  `json:"data"`
+	Metadata APIClient `json:"metadata"`
+}
+
 type responseSpecClientError struct {
 	Error string `json:"error"`
 }
@@ -409,6 +423,55 @@ assert len(calls) == before
 `
 	if err := runCommand("python3", "-c", snippet); err != nil {
 		t.Fatalf("python ergonomic client call failed: %v", err)
+	}
+}
+
+func TestPythonClientTransportDoesNotShadowClientModels(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /api/v1/clients", nil, ClientsGetManyResponse{}, HandlerMeta{
+		Service: "API",
+		Method:  "ListClients",
+	})
+
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+	pyText := string(py)
+	assertContains(t, pyText, "class Client:")
+	assertContains(t, pyText, "class APIClient:")
+	assertContains(t, pyText, "class _VirtuousClient:")
+	assertContains(t, pyText, "def create_client(base_url: str = \"/\") -> _VirtuousClient:")
+	if strings.Count(pyText, "class Client:") != 1 {
+		t.Fatalf("transport client should not shadow Client DTO:\n%s", pyText)
+	}
+
+	dir := t.TempDir()
+	pyPath := filepath.Join(dir, "client.gen.py")
+	if err := os.WriteFile(pyPath, py, 0644); err != nil {
+		t.Fatalf("write python client: %v", err)
+	}
+
+	snippet := pythonImportSnippet(pyPath) + `
+class FakeResponse:
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        return False
+    def getcode(self):
+        return 200
+    def read(self):
+        return b'{"data":[{"id":"c1","name":"Acme"}],"metadata":{"id":"api-1"}}'
+
+mod.request.urlopen = lambda req: FakeResponse()
+
+client = mod.create_client(base_url="https://core.example")
+resp = client.api_v1_clients_get()
+assert isinstance(resp.data[0], mod.Client)
+assert resp.data[0].id == "c1"
+assert isinstance(resp.metadata, mod.APIClient)
+assert isinstance(client, mod._VirtuousClient)
+assert mod.is_dataclass(mod.Client)
+`
+	if err := runCommand("python3", "-c", snippet); err != nil {
+		t.Fatalf("python client/model shadow regression failed: %v", err)
 	}
 }
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.45
+
+- Prevent native `httpapi` Python transport classes from shadowing DTO models such as `Client`, reserve generated runtime symbols during DTO naming, and document Python codegen hardening rules for agent-driven changes.
+
 ## 0.0.44
 
 - Improve native `httpapi` Python client ergonomics with `base_url` constructors, constructor-level auth defaults, keyword query parameters, snake_case auth names, direct client operation methods, local auth-missing errors, and dataclass response decoding from generated methods.

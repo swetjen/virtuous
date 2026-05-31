@@ -56,3 +56,7 @@ That tutorial is the canonical transformation guide, including mapping rules, mi
 - Use `WithModules(...)` when agent output must limit docs surface (`api`, `observability`).
 - Use `WithPublicAdmin()` only when the admin subtree is protected by external middleware or intentionally public.
 - Missing logger attachments should produce docs zero-state messaging, not runtime panics.
+
+## Codegen hardening
+
+- For Python generator work, follow `docs/agents/python-codegen-rules.md`.

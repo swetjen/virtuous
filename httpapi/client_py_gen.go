@@ -191,7 +191,7 @@ class {{ $service.ClassName }}:
 {{- end }}
 {{- end }}
 
-class Client:
+class _VirtuousClient:
     def __init__(self, base_url: str = "/"{{- if .AuthParams }}, *{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}):
         self._base_url = base_url
 {{- range $service := .Services }}
@@ -205,8 +205,8 @@ class Client:
 {{- end }}
 
 
-def create_client(base_url: str = "/"{{- if .AuthParams }}, *{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}) -> Client:
-    return Client(base_url{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}={{ $auth.ParamName }}{{- end }})
+def create_client(base_url: str = "/"{{- if .AuthParams }}, *{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}) -> _VirtuousClient:
+    return _VirtuousClient(base_url{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}={{ $auth.ParamName }}{{- end }})
 
 
 def _status_text(code: int) -> str:
@@ -456,7 +456,7 @@ type pythonAuthGuard struct {
 }
 
 func buildPythonClientRenderSpec(spec clientSpec) pythonClientSpec {
-	typeNames := pythonObjectNameMap(spec.Objects)
+	typeNames := pythonObjectNameMap(spec.Objects, spec.Services)
 	out := pythonClientSpec{
 		Objects: pythonObjects(spec.Objects, typeNames),
 	}
@@ -495,11 +495,66 @@ func buildPythonClientRenderSpec(spec clientSpec) pythonClientSpec {
 	return out
 }
 
-func pythonObjectNameMap(objects []clientObject) map[string]string {
-	used := map[string]struct{}{}
+func pythonObjectNameMap(objects []clientObject, services []clientService) map[string]string {
+	used := pythonReservedModuleNames(services)
 	out := make(map[string]string, len(objects))
 	for _, object := range objects {
 		out[object.Name] = clientgen.UniquePythonIdentifier(object.Name, used)
+	}
+	return out
+}
+
+func pythonReservedModuleNames(services []clientService) map[string]struct{} {
+	names := []string{
+		"Any",
+		"Optional",
+		"Union",
+		"_VirtuousClient",
+		"_append_multipart_part",
+		"_append_query",
+		"_decode_dataclass",
+		"_decode_value",
+		"_encode_form",
+		"_encode_multipart",
+		"_encode_value",
+		"_multipart_file_value",
+		"_multipart_quote",
+		"_status_text",
+		"create_client",
+		"dataclass",
+		"datetime",
+		"dict",
+		"error",
+		"field",
+		"fields",
+		"get_args",
+		"get_origin",
+		"get_type_hints",
+		"http",
+		"id",
+		"int",
+		"is_dataclass",
+		"json",
+		"list",
+		"object",
+		"parse",
+		"request",
+		"set",
+		"str",
+		"types",
+		"type",
+		"uuid",
+	}
+	out := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		out[name] = struct{}{}
+	}
+	serviceNames := map[string]struct{}{}
+	for _, service := range services {
+		serviceNames[clientgen.PythonIdentifier("_"+service.Name+"Service")] = struct{}{}
+	}
+	for name := range serviceNames {
+		out[name] = struct{}{}
 	}
 	return out
 }
