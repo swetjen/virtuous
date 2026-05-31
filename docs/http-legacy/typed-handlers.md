@@ -142,6 +142,17 @@ client = create_client(base_url="https://core.example", token_auth=token)
 resp = client.api_v1_clients_get(limit=100_000, offset=0)
 ```
 
+Native `httpapi` TypeScript clients accept `baseUrl` and auth at construction time. Generated path and query objects are emitted as named aliases so call sites and agents do not have to repeat large inline shapes:
+
+```ts
+const client = createClient({
+	baseUrl: "https://core.example",
+	auth: async () => ({ auth: await getToken() }),
+})
+
+const resp = await client.API.getClients({ limit: 100_000, offset: 0 })
+```
+
 ## Docs-only registration
 
 Use `Describe` when the route is already mounted on another mux but should still appear in generated OpenAPI and clients:

@@ -22,9 +22,27 @@ type rpcKeywordPayload struct {
 	FromDuplicate string  `json:"from_"`
 }
 
+type Client struct {
+	ID string `json:"id"`
+}
+
+type rpcClientRequest struct {
+	ID string `json:"id"`
+}
+
+type rpcClientResponse struct {
+	Data []Client `json:"data"`
+}
+
 func rpcKeywordHandler(ctx context.Context, req rpcKeywordPayload) (rpcKeywordPayload, int) {
 	_ = ctx
 	return req, StatusOK
+}
+
+func rpcClientHandler(ctx context.Context, req rpcClientRequest) (rpcClientResponse, int) {
+	_ = ctx
+	_ = req
+	return rpcClientResponse{}, StatusOK
 }
 
 func TestRPCPythonClientSanitizesFieldsAndPreservesWireNames(t *testing.T) {
@@ -79,6 +97,50 @@ assert encoded["total_spend"] == 42.5
 `
 	if err := runRPCCommand("python3", "-c", snippet); err != nil {
 		t.Fatalf("python keyword round trip failed: %v", err)
+	}
+}
+
+func TestRPCPythonClientTransportDoesNotShadowClientModels(t *testing.T) {
+	router := NewRouter()
+	router.HandleRPC(rpcClientHandler)
+
+	var buf bytes.Buffer
+	if err := router.WriteClientPY(&buf); err != nil {
+		t.Fatalf("write python client: %v", err)
+	}
+	py := buf.Bytes()
+	pyText := string(py)
+	assertRPCContains(t, pyText, "class Client:")
+	assertRPCContains(t, pyText, "class _VirtuousClient:")
+	assertRPCContains(t, pyText, "def create_client(base_url: str = \"/\") -> _VirtuousClient:")
+	if strings.Count(pyText, "class Client:") != 1 {
+		t.Fatalf("transport client should not shadow Client DTO:\n%s", pyText)
+	}
+
+	dir := t.TempDir()
+	pyPath := filepath.Join(dir, "client.gen.py")
+	if err := os.WriteFile(pyPath, py, 0644); err != nil {
+		t.Fatalf("write python client: %v", err)
+	}
+	snippet := pythonRPCImportSnippet(pyPath) + `
+class FakeResponse:
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        return False
+    def getcode(self):
+        return 200
+    def read(self):
+        return b'{"data":[{"id":"c1"}]}'
+
+mod.request.urlopen = lambda req: FakeResponse()
+client = mod.create_client(base_url="https://core.example")
+resp = client.rpc.rpcClientHandler(mod.rpcClientRequest(id="c1"))
+assert isinstance(resp.data[0], mod.Client)
+assert isinstance(client, mod._VirtuousClient)
+`
+	if err := runRPCCommand("python3", "-c", snippet); err != nil {
+		t.Fatalf("python client/model shadow regression failed: %v", err)
 	}
 }
 

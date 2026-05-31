@@ -237,7 +237,8 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 		t.Fatalf("js client should not set multipart Content-Type header")
 	}
 	tsText := string(ts)
-	if !strings.Contains(tsText, "query?: {") || !strings.Contains(tsText, "q?: string") || !strings.Contains(tsText, "id: string[]") {
+	if !strings.Contains(tsText, "export type ApiV1LookupStatesCodeGetQuery = {q?: string;id: string[]; }") ||
+		!strings.Contains(tsText, "query?: ApiV1LookupStatesCodeGetQuery") {
 		t.Fatalf("ts client missing query type")
 	}
 	if !strings.Contains(tsText, "async getByCode(") {
@@ -246,13 +247,13 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if !strings.Contains(tsText, "id: number") {
 		t.Fatalf("ts client missing typed path param")
 	}
-	if !strings.Contains(tsText, `"Content-Type": "application/x-www-form-urlencoded"`) || !strings.Contains(tsText, "URLSearchParams") {
+	if !strings.Contains(tsText, `contentType: "application/x-www-form-urlencoded"`) || !strings.Contains(tsText, "URLSearchParams") {
 		t.Fatalf("ts client missing form body encoding")
 	}
-	if !strings.Contains(tsText, `appendForm("hub.mode"`) || !strings.Contains(tsText, `appendForm("hub.verify_token"`) {
+	if !strings.Contains(tsText, `["hub.mode", "mode", false]`) || !strings.Contains(tsText, `["hub.verify_token", "verifyToken", false]`) {
 		t.Fatalf("ts client missing form wire names")
 	}
-	if !strings.Contains(tsText, "FormData") || !strings.Contains(tsText, `appendMultipart("file"`) || !strings.Contains(tsText, `appendMultipart("client_id"`) {
+	if !strings.Contains(tsText, "FormData") || !strings.Contains(tsText, `["file", "file", true]`) || !strings.Contains(tsText, `["client_id", "clientID", false]`) {
 		t.Fatalf("ts client missing multipart body encoding")
 	}
 	if strings.Contains(tsText, `"Content-Type": "multipart/form-data"`) {
@@ -261,13 +262,13 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if !strings.Contains(tsText, "apiKeyAuth") || !strings.Contains(tsText, "tokenAuth") {
 		t.Fatalf("ts client missing named auth options")
 	}
-	if !strings.Contains(tsText, "appendQuery(\"q\"") || !strings.Contains(tsText, "appendQuery(\"id\"") {
+	if !strings.Contains(tsText, `["q", query?.q, true]`) || !strings.Contains(tsText, `["id", query?.id, false]`) {
 		t.Fatalf("ts client missing query serialization")
 	}
 	pyText := string(py)
 	if !strings.Contains(pyText, "def api_v1_lookup_states_code_get(self, code: str, *, id: list[str]") ||
-		!strings.Contains(pyText, `append_query_param("q", q, True)`) ||
-		!strings.Contains(pyText, `append_query_param("id", id, False)`) {
+		!strings.Contains(pyText, `_append_query_param(url, "q", q, True)`) ||
+		!strings.Contains(pyText, `_append_query_param(url, "id", id, False)`) {
 		t.Fatalf("py client missing keyword query arguments")
 	}
 	if strings.Contains(pyText, "query: Optional[dict[str, Any]]") {
@@ -279,7 +280,7 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if !strings.Contains(pyText, "_encode_form") {
 		t.Fatalf("py client missing form body encoding")
 	}
-	if !strings.Contains(pyText, `("hub.mode", "mode")`) || !strings.Contains(pyText, `("hub.verify_token", "verifyToken")`) {
+	if !strings.Contains(pyText, `("hub.mode", "mode", False)`) || !strings.Contains(pyText, `("hub.verify_token", "verifyToken", False)`) {
 		t.Fatalf("py client missing form wire names")
 	}
 	if !strings.Contains(pyText, "_encode_multipart") || !strings.Contains(pyText, `("file", "file", True)`) || !strings.Contains(pyText, `("client_id", "clientID", False)`) {
@@ -575,12 +576,12 @@ func TestGeneratedClientsSupportTextAndBytesResponses(t *testing.T) {
 	if !strings.Contains(tsText, "Promise<Uint8Array>") {
 		t.Fatalf("ts client missing Uint8Array return type")
 	}
-	if !strings.Contains(tsText, `"Accept": "application/octet-stream"`) {
+	if !strings.Contains(tsText, `accept: "application/octet-stream"`) {
 		t.Fatalf("ts client missing octet-stream accept header")
 	}
 
 	pyText := string(py)
-	if !strings.Contains(pyText, "def assets_blob_get") || !strings.Contains(pyText, "return payload") {
+	if !strings.Contains(pyText, "def assets_blob_get") || !strings.Contains(pyText, `return _request("GET", url, headers, data, "bytes", bytes)`) {
 		t.Fatalf("python client missing bytes response handling")
 	}
 	if !strings.Contains(pyText, `"Accept": "text/plain"`) {
@@ -604,7 +605,7 @@ func TestGeneratedClientsSupportOptionalRequestBody(t *testing.T) {
 	if !strings.Contains(tsText, "async optionalCreate(request?: ") {
 		t.Fatalf("ts client missing optional request argument")
 	}
-	if !strings.Contains(tsText, "request === undefined || request === null ? undefined : JSON.stringify(request)") {
+	if !strings.Contains(tsText, "body: request === undefined || request === null ? undefined : request") {
 		t.Fatalf("ts client missing optional request body handling")
 	}
 }
@@ -626,7 +627,7 @@ func TestGeneratedClientsUsePrimaryResponseSpec(t *testing.T) {
 	}
 
 	tsText := string(ts)
-	if !strings.Contains(tsText, `"Accept": "image/png"`) {
+	if !strings.Contains(tsText, `accept: "image/png"`) {
 		t.Fatalf("ts client missing custom media type accept header")
 	}
 	if !strings.Contains(tsText, "Promise<Uint8Array>") {
@@ -637,7 +638,7 @@ func TestGeneratedClientsUsePrimaryResponseSpec(t *testing.T) {
 	if !strings.Contains(pyText, `"Accept": "image/png"`) {
 		t.Fatalf("python client missing custom media type accept header")
 	}
-	if !strings.Contains(pyText, "return payload") {
+	if !strings.Contains(pyText, `return _request("GET", url, headers, data, "bytes", bytes)`) {
 		t.Fatalf("python client missing bytes return for response spec")
 	}
 }
@@ -656,7 +657,7 @@ func TestGeneratedClientsUseFirstListedMediaForSameStatus(t *testing.T) {
 	}
 
 	tsText := string(ts)
-	if !strings.Contains(tsText, `"Accept": "text/plain"`) {
+	if !strings.Contains(tsText, `accept: "text/plain"`) {
 		t.Fatalf("ts client should use first listed media type for same-status response specs")
 	}
 	if !strings.Contains(tsText, "Promise<string>") {
@@ -683,7 +684,7 @@ func TestGeneratedClientsSupportPointerResponseSpecTypes(t *testing.T) {
 	}
 
 	pyText := string(py)
-	if !strings.Contains(pyText, "class "+expectedType) || !strings.Contains(pyText, "_decode_value("+expectedType+", decoded)") {
+	if !strings.Contains(pyText, "class "+expectedType) || !strings.Contains(pyText, `_request("GET", url, headers, data, "json", `+expectedType+`)`) {
 		t.Fatalf("python client missing pointer response spec type %q", expectedType)
 	}
 }

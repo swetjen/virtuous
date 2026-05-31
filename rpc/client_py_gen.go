@@ -46,8 +46,8 @@ class RPCError(RuntimeError):
 
 {{- range $service := .Services }}
 class {{ $service.ClassName }}:
-    def __init__(self, basepath: str):
-        self._basepath = basepath
+    def __init__(self, base_url: str):
+        self._base_url = base_url
 
 {{- range $method := $service.Methods }}
     def {{ $method.Name }}(self{{- if $method.HasBody }}, body: {{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}{{- end }}{{- if $method.HasAuth }}, {{ $method.AuthParam }}: str | None = None{{- end }}) -> {{- if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}None{{- end }}:
@@ -55,7 +55,7 @@ class {{ $service.ClassName }}:
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        url = self._basepath + "{{ $method.Path }}"
+        url = self._base_url + "{{ $method.Path }}"
 {{- if $method.HasAuth }}
         if {{ $method.AuthParam }} is not None:
             auth_value = {{ $method.AuthParam }}
@@ -76,44 +76,46 @@ class {{ $service.ClassName }}:
 {{- if $method.HasBody }}
         data = json.dumps(_encode_value(body)).encode("utf-8")
 {{- end }}
-        req = request.Request(url, data=data, method="POST", headers=headers)
-        status = 0
-        text = ""
-        try:
-            with request.urlopen(req) as resp:
-                status = resp.getcode()
-                text = resp.read().decode("utf-8")
-        except error.HTTPError as err:
-            status = err.code
-            text = err.read().decode("utf-8")
-        body = None
-        if text:
-            try:
-                body = json.loads(text)
-            except json.JSONDecodeError as err:
-                raise RPCError(status, None, f"{status} {_status_text(status)}") from err
-        if status >= 400:
-            err_body = _decode_value({{ $method.ErrorType }}, body)
-            raise RPCError(status, err_body, f"{status} {_status_text(status)}")
-{{- if $method.ResponseType }}
-        return _decode_value({{ $method.ResponseType }}, body)
-{{- else }}
-        return None
-{{- end }}
+        return _rpc_request(url, headers, data, {{ if $method.ResponseDecodeType }}{{ $method.ResponseDecodeType }}{{ else }}None{{ end }}, {{ $method.ErrorDecodeType }})
 
 {{- end }}
 {{- end }}
 
-class Client:
-    def __init__(self, basepath: str = "/"):
-        self._basepath = basepath
+class _VirtuousClient:
+    def __init__(self, base_url: str = "/"):
+        self._base_url = base_url
 {{- range $service := .Services }}
-        self.{{ $service.AttrName }} = {{ $service.ClassName }}(basepath)
+        self.{{ $service.AttrName }} = {{ $service.ClassName }}(base_url)
 {{- end }}
 
 
-def create_client(basepath: str = "/") -> Client:
-    return Client(basepath)
+def create_client(base_url: str = "/") -> _VirtuousClient:
+    return _VirtuousClient(base_url)
+
+
+def _rpc_request(url: str, headers: dict[str, str], data: Any, response_type: Any, error_type: Any) -> Any:
+    req = request.Request(url, data=data, method="POST", headers=headers)
+    status = 0
+    text = ""
+    try:
+        with request.urlopen(req) as resp:
+            status = resp.getcode()
+            text = resp.read().decode("utf-8")
+    except error.HTTPError as err:
+        status = err.code
+        text = err.read().decode("utf-8")
+    body = None
+    if text:
+        try:
+            body = json.loads(text)
+        except json.JSONDecodeError as err:
+            raise RPCError(status, None, f"{status} {_status_text(status)}") from err
+    if status >= 400:
+        err_body = _decode_value(error_type, body)
+        raise RPCError(status, err_body, f"{status} {_status_text(status)}")
+    if response_type is None:
+        return None
+    return _decode_value(response_type, body)
 
 
 def _status_text(code: int) -> str:
@@ -194,15 +196,17 @@ type pythonClientService struct {
 }
 
 type pythonClientMethod struct {
-	Name         string
-	Path         string
-	HasBody      bool
-	HasAuth      bool
-	Auth         GuardSpec
-	AuthParam    string
-	RequestType  string
-	ResponseType string
-	ErrorType    string
+	Name               string
+	Path               string
+	HasBody            bool
+	HasAuth            bool
+	Auth               GuardSpec
+	AuthParam          string
+	RequestType        string
+	ResponseType       string
+	ResponseDecodeType string
+	ErrorType          string
+	ErrorDecodeType    string
 }
 
 type pythonClientObject struct {
@@ -218,11 +222,11 @@ type pythonClientField struct {
 }
 
 func buildPythonClientRenderSpec(spec clientSpec) pythonClientSpec {
-	typeNames := pythonObjectNameMap(spec.Objects)
+	typeNames := pythonObjectNameMap(spec.Objects, spec.Services)
 	out := pythonClientSpec{
 		Objects: pythonObjects(spec.Objects, typeNames),
 	}
-	serviceAttrs := map[string]struct{}{"_basepath": {}}
+	serviceAttrs := map[string]struct{}{"_base_url": {}}
 	serviceClasses := map[string]struct{}{}
 	for _, service := range spec.Services {
 		pyService := pythonClientService{
@@ -238,11 +242,60 @@ func buildPythonClientRenderSpec(spec clientSpec) pythonClientSpec {
 	return out
 }
 
-func pythonObjectNameMap(objects []clientObject) map[string]string {
-	used := map[string]struct{}{}
+func pythonObjectNameMap(objects []clientObject, services []clientService) map[string]string {
+	used := pythonReservedModuleNames(services)
 	out := make(map[string]string, len(objects))
 	for _, object := range objects {
 		out[object.Name] = clientgen.UniquePythonIdentifier(object.Name, used)
+	}
+	return out
+}
+
+func pythonReservedModuleNames(services []clientService) map[string]struct{} {
+	names := []string{
+		"Any",
+		"RPCError",
+		"Union",
+		"_VirtuousClient",
+		"_append_query",
+		"_decode_dataclass",
+		"_decode_value",
+		"_encode_value",
+		"_rpc_request",
+		"_status_text",
+		"create_client",
+		"dataclass",
+		"dict",
+		"error",
+		"field",
+		"fields",
+		"get_args",
+		"get_origin",
+		"get_type_hints",
+		"http",
+		"id",
+		"int",
+		"is_dataclass",
+		"json",
+		"list",
+		"object",
+		"parse",
+		"request",
+		"set",
+		"str",
+		"types",
+		"type",
+	}
+	out := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		out[name] = struct{}{}
+	}
+	serviceNames := map[string]struct{}{}
+	for _, service := range services {
+		serviceNames[clientgen.PythonIdentifier("_"+service.Name+"Service")] = struct{}{}
+	}
+	for name := range serviceNames {
+		out[name] = struct{}{}
 	}
 	return out
 }
@@ -304,6 +357,8 @@ func pythonMethod(method clientMethod, typeNames map[string]string, methodNames 
 		ResponseType: pythonTypeName(method.ResponseType, typeNames),
 		ErrorType:    pythonTypeName(method.ErrorType, typeNames),
 	}
+	pyMethod.ResponseDecodeType = pythonRuntimeTypeName(pyMethod.ResponseType)
+	pyMethod.ErrorDecodeType = pythonRuntimeTypeName(pyMethod.ErrorType)
 	return pyMethod
 }
 
@@ -316,6 +371,13 @@ func pythonTypeName(typeName string, names map[string]string) string {
 		out = strings.ReplaceAll(out, `"`+oldName+`"`, `"`+newName+`"`)
 	}
 	return out
+}
+
+func pythonRuntimeTypeName(typeName string) string {
+	if typeName == "" {
+		return ""
+	}
+	return strings.ReplaceAll(typeName, `"`, "")
 }
 
 // WriteClientPY writes a runtime-generated Python client to w.

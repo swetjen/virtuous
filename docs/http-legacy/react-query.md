@@ -9,13 +9,15 @@ router.WriteClientTSFile("client.gen.ts")
 router.WriteReactQueryTSFile("react-query.client.gen.ts")
 ```
 
-The React Query artifact does not import `client.gen.ts` or any local generated file. It embeds the raw client, transport/auth types, and request/response interfaces directly, then exports its own client instance:
+The React Query artifact does not import `client.gen.ts` or any local generated file. It embeds the raw client, shared transport/auth helpers, and request/response interfaces directly, then exports its own client instance:
 
 ```ts
 export const virtuousClient = createClient({ baseUrl: '' })
 ```
 
 Generated imports are limited to external packages such as `@tanstack/react-query`. The base client remains free of React dependencies, and the React Query client can be moved or emitted independently without local import path configuration.
+
+Generated path and query parameter objects are emitted as named aliases and reused by raw methods, query keys, options helpers, and hooks. This keeps the standalone file compact without hiding route fidelity.
 
 ## Client auth
 

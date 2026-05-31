@@ -66,40 +66,11 @@ class {{ $service.ClassName }}:
 {{- end }}
 {{- end }}
 {{- if $method.HasQuery }}
-        def append_query_param(key: str, value: Any, optional: bool) -> None:
-            nonlocal url
-            if value is None:
-                if optional:
-                    return
-                url = _append_query(url, key, "")
-                return
-            if isinstance(value, list):
-                if len(value) == 0:
-                    if not optional:
-                        url = _append_query(url, key, "")
-                    return
-                for item in value:
-                    if optional and item in ("", 0, False, None):
-                        continue
-                    url = _append_query(url, key, "" if item is None else str(item))
-                return
-            if optional and value in ("", 0, False):
-                return
-            url = _append_query(url, key, str(value))
 {{- range $param := $method.QueryParams }}
-        append_query_param("{{ $param.WireName }}", {{ $param.VarName }}, {{ if $param.Optional }}True{{ else }}False{{ end }})
+        url = _append_query_param(url, "{{ $param.WireName }}", {{ $param.VarName }}, {{ if $param.Optional }}True{{ else }}False{{ end }})
 {{- end }}
 {{- end }}
 {{- if $method.HasAuth }}
-        def apply_auth(location: str, param: str, prefix: str, value: str) -> None:
-            nonlocal url
-            auth_value = prefix + " " + value if prefix else value
-            if location == "header":
-                headers[param] = auth_value
-            elif location == "query":
-                url = _append_query(url, param, auth_value)
-            elif location == "cookie":
-                headers["Cookie"] = param + "=" + parse.quote(auth_value)
         auth_applied = False
 {{- range $req := $method.AuthReqs }}
         if not auth_applied:
@@ -107,7 +78,7 @@ class {{ $service.ClassName }}:
 {{- range $guard := $req.Guards }}
             auth_value = {{ $guard.ParamName }} if {{ $guard.ParamName }} is not None else self.{{ $guard.DefaultAttr }}
             if auth_value is not None:
-                apply_auth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", auth_value)
+                url = _apply_auth(url, headers, "{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", auth_value)
                 auth_applied = True
 {{- end }}
 {{- else }}
@@ -116,7 +87,7 @@ class {{ $service.ClassName }}:
 {{- end }}
             if {{ range $i, $guard := $req.Guards }}{{ if gt $i 0 }} and {{ end }}{{ $guard.ValueName }} is not None{{ end }}:
 {{- range $guard := $req.Guards }}
-                apply_auth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", {{ $guard.ValueName }})
+                url = _apply_auth(url, headers, "{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", {{ $guard.ValueName }})
 {{- end }}
                 auth_applied = True
 {{- end }}
@@ -127,66 +98,15 @@ class {{ $service.ClassName }}:
         data = None
 {{- if $method.HasBody }}
         if body is not None:
-{{- if eq $method.BodyMode "form" }}
-            data = _encode_form(body, [
-{{- range $field := $method.BodyFields }}
-                ("{{ $field.WireName }}", "{{ $field.ValueName }}"),
-{{- end }}
-            ]).encode("utf-8")
-{{- else if eq $method.BodyMode "multipart" }}
-            data, content_type = _encode_multipart(body, [
+            data, content_type = _encode_body(body, "{{ $method.BodyMode }}", [
 {{- range $field := $method.BodyFields }}
                 ("{{ $field.WireName }}", "{{ $field.ValueName }}", {{ if $field.IsFile }}True{{ else }}False{{ end }}),
 {{- end }}
             ])
-            headers["Content-Type"] = content_type
-{{- else }}
-            data = json.dumps(_encode_value(body)).encode("utf-8")
+            if content_type:
+                headers["Content-Type"] = content_type
 {{- end }}
-{{- end }}
-        req = request.Request(url, data=data, method="{{ $method.HTTPMethod }}", headers=headers)
-        status = 0
-        payload = b""
-        try:
-            with request.urlopen(req) as resp:
-                status = resp.getcode()
-                payload = resp.read()
-        except error.HTTPError as err:
-            status = err.code
-            payload = err.read()
-{{- if eq $method.ResponseMode "json" }}
-        text = payload.decode("utf-8") if payload else ""
-        decoded = None
-        if text:
-            try:
-                decoded = json.loads(text)
-            except json.JSONDecodeError as err:
-                if status >= 400:
-                    raise RuntimeError(f"{status} {_status_text(status)}") from err
-                raise
-        if status >= 400:
-            if isinstance(decoded, dict) and "error" in decoded:
-                raise RuntimeError(str(decoded["error"]))
-            raise RuntimeError(f"{status} {_status_text(status)}")
-{{- if $method.ResponseType }}
-        return _decode_value({{ $method.ResponseDecodeType }}, decoded)
-{{- else }}
-        return None
-{{- end }}
-{{- else if eq $method.ResponseMode "text" }}
-        text = payload.decode("utf-8") if payload else ""
-        if status >= 400:
-            raise RuntimeError(text or f"{status} {_status_text(status)}")
-        return text
-{{- else if eq $method.ResponseMode "bytes" }}
-        if status >= 400:
-            raise RuntimeError(f"{status} {_status_text(status)}")
-        return payload
-{{- else }}
-        if status >= 400:
-            raise RuntimeError(f"{status} {_status_text(status)}")
-        return None
-{{- end }}
+        return _request("{{ $method.HTTPMethod }}", url, headers, data, "{{ $method.ResponseMode }}", {{ if $method.ResponseDecodeType }}{{ $method.ResponseDecodeType }}{{ else }}None{{ end }})
 
 {{- end }}
 {{- end }}
@@ -207,6 +127,87 @@ class _VirtuousClient:
 
 def create_client(base_url: str = "/"{{- if .AuthParams }}, *{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}) -> _VirtuousClient:
     return _VirtuousClient(base_url{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}={{ $auth.ParamName }}{{- end }})
+
+
+def _request(method: str, url: str, headers: dict[str, str], data: Any, response_mode: str, response_type: Any) -> Any:
+    req = request.Request(url, data=data, method=method, headers=headers)
+    status = 0
+    payload = b""
+    try:
+        with request.urlopen(req) as resp:
+            status = resp.getcode()
+            payload = resp.read()
+    except error.HTTPError as err:
+        status = err.code
+        payload = err.read()
+    if response_mode == "text":
+        text = payload.decode("utf-8") if payload else ""
+        if status >= 400:
+            raise RuntimeError(text or f"{status} {_status_text(status)}")
+        return text
+    if response_mode == "bytes":
+        if status >= 400:
+            raise RuntimeError(f"{status} {_status_text(status)}")
+        return payload
+    if response_mode == "none":
+        if status >= 400:
+            raise RuntimeError(f"{status} {_status_text(status)}")
+        return None
+    text = payload.decode("utf-8") if payload else ""
+    decoded = None
+    if text:
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError as err:
+            if status >= 400:
+                raise RuntimeError(f"{status} {_status_text(status)}") from err
+            raise
+    if status >= 400:
+        if isinstance(decoded, dict) and "error" in decoded:
+            raise RuntimeError(str(decoded["error"]))
+        raise RuntimeError(f"{status} {_status_text(status)}")
+    if response_type is None:
+        return None
+    return _decode_value(response_type, decoded)
+
+
+def _apply_auth(url: str, headers: dict[str, str], location: str, param: str, prefix: str, value: str) -> str:
+    auth_value = prefix + " " + value if prefix else value
+    if location == "header":
+        headers[param] = auth_value
+    elif location == "query":
+        url = _append_query(url, param, auth_value)
+    elif location == "cookie":
+        headers["Cookie"] = param + "=" + parse.quote(auth_value)
+    return url
+
+
+def _append_query_param(url: str, key: str, value: Any, optional: bool) -> str:
+    if value is None:
+        if optional:
+            return url
+        return _append_query(url, key, "")
+    if isinstance(value, list):
+        if len(value) == 0:
+            if not optional:
+                return _append_query(url, key, "")
+            return url
+        for item in value:
+            if optional and item in ("", 0, False, None):
+                continue
+            url = _append_query(url, key, "" if item is None else str(item))
+        return url
+    if optional and value in ("", 0, False):
+        return url
+    return _append_query(url, key, str(value))
+
+
+def _encode_body(body: Any, mode: str, fields: list[tuple[str, str, bool]]) -> tuple[Any, Optional[str]]:
+    if mode == "form":
+        return _encode_form(body, [(wire, name) for wire, name, _ in fields]).encode("utf-8"), None
+    if mode == "multipart":
+        return _encode_multipart(body, fields)
+    return json.dumps(_encode_value(body)).encode("utf-8"), None
 
 
 def _status_text(code: int) -> str:
@@ -512,13 +513,17 @@ func pythonReservedModuleNames(services []clientService) map[string]struct{} {
 		"_VirtuousClient",
 		"_append_multipart_part",
 		"_append_query",
+		"_append_query_param",
+		"_apply_auth",
 		"_decode_dataclass",
 		"_decode_value",
+		"_encode_body",
 		"_encode_form",
 		"_encode_multipart",
 		"_encode_value",
 		"_multipart_file_value",
 		"_multipart_quote",
+		"_request",
 		"_status_text",
 		"create_client",
 		"dataclass",

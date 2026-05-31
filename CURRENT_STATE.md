@@ -40,8 +40,8 @@
 - JSDoc typedefs are emitted from the type registry with optional/nullable markers.
 
 ## TS Client Generation
-- Similar client with typed `pathParams` and `AuthOptions`.
-- Request and response bodies are currently typed as `any`.
+- Similar client with typed service methods, named path/query parameter aliases, constructor-level `ClientOptions`, and shared private transport helpers.
+- Request and response bodies are emitted from the type registry when reflected.
 - Client outputs include a `Virtuous client hash` header comment, with helpers to serve hashes.
 
 ## OpenAPI Generation

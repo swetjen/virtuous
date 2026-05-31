@@ -9,8 +9,9 @@ import (
 )
 
 type clientSpec struct {
-	Services []clientService
-	Objects  []clientObject
+	Services   []clientService
+	Objects    []clientObject
+	AuthParams []clientAuthGuard
 }
 
 type clientService struct {
@@ -19,30 +20,32 @@ type clientService struct {
 }
 
 type clientMethod struct {
-	Name          string
-	FlatName      string
-	OperationID   string
-	Summary       string
-	HTTPMethod    string
-	Path          string
-	PathParams    []clientPathParam
-	HasBody       bool
-	BodyOptional  bool
-	BodyMode      string
-	BodyFields    []clientBodyField
-	RequestMedia  string
-	HasQuery      bool
-	QueryParams   []clientQueryParam
-	AcceptType    string
-	ResponseMode  string
-	HasAuth       bool
-	HasCookieAuth bool
-	Auth          GuardSpec
-	AuthParam     string
-	AuthReqs      []clientAuthRequirement
-	AuthParams    []clientAuthGuard
-	RequestType   string
-	ResponseType  string
+	Name            string
+	FlatName        string
+	OperationID     string
+	Summary         string
+	HTTPMethod      string
+	Path            string
+	PathParams      []clientPathParam
+	PathParamsType  string
+	HasBody         bool
+	BodyOptional    bool
+	BodyMode        string
+	BodyFields      []clientBodyField
+	RequestMedia    string
+	HasQuery        bool
+	QueryParams     []clientQueryParam
+	QueryParamsType string
+	AcceptType      string
+	ResponseMode    string
+	HasAuth         bool
+	HasCookieAuth   bool
+	Auth            GuardSpec
+	AuthParam       string
+	AuthReqs        []clientAuthRequirement
+	AuthParams      []clientAuthGuard
+	RequestType     string
+	ResponseType    string
 }
 
 type clientObject = schema.Object
@@ -238,24 +241,27 @@ func buildClientSpecWith(
 				}
 			}
 		}
+		operationID := operationIDForRoute(route)
 		method := clientMethod{
-			Name:         methodName,
-			OperationID:  operationIDForRoute(route),
-			Summary:      route.Meta.Summary,
-			HTTPMethod:   route.Method,
-			Path:         route.Path,
-			PathParams:   pathParams,
-			HasBody:      hasBody,
-			BodyOptional: reqInfo.Optional && hasBody,
-			BodyMode:     bodyMode,
-			BodyFields:   bodyFields,
-			RequestMedia: requestMedia,
-			HasQuery:     hasQuery,
-			QueryParams:  queryParams,
-			AcceptType:   acceptType,
-			ResponseMode: responseMode,
-			RequestType:  requestType,
-			ResponseType: responseType,
+			Name:            methodName,
+			OperationID:     operationID,
+			Summary:         route.Meta.Summary,
+			HTTPMethod:      route.Method,
+			Path:            route.Path,
+			PathParams:      pathParams,
+			PathParamsType:  tsOperationTypeName(operationID, "PathParams"),
+			HasBody:         hasBody,
+			BodyOptional:    reqInfo.Optional && hasBody,
+			BodyMode:        bodyMode,
+			BodyFields:      bodyFields,
+			RequestMedia:    requestMedia,
+			HasQuery:        hasQuery,
+			QueryParams:     queryParams,
+			QueryParamsType: tsOperationTypeName(operationID, "Query"),
+			AcceptType:      acceptType,
+			ResponseMode:    responseMode,
+			RequestType:     requestType,
+			ResponseType:    responseType,
 		}
 		if len(route.Meta.Security.Alternatives) > 0 {
 			method.HasAuth = true
@@ -282,9 +288,27 @@ func buildClientSpecWith(
 	})
 
 	return clientSpec{
-		Services: services,
-		Objects:  registry.ObjectsWith(typeFn),
+		Services:   services,
+		Objects:    registry.ObjectsWith(typeFn),
+		AuthParams: clientSpecAuthParams(services),
 	}, nil
+}
+
+func clientSpecAuthParams(services []clientService) []clientAuthGuard {
+	seen := map[string]struct{}{"auth": {}}
+	var out []clientAuthGuard
+	for _, service := range services {
+		for _, method := range service.Methods {
+			for _, auth := range method.AuthParams {
+				if _, ok := seen[auth.ParamName]; ok {
+					continue
+				}
+				seen[auth.ParamName] = struct{}{}
+				out = append(out, auth)
+			}
+		}
+	}
+	return out
 }
 
 func preferredClientSchemaName(naming clientSchemaNaming, route Route, t reflect.Type) string {
@@ -292,6 +316,14 @@ func preferredClientSchemaName(naming clientSchemaNaming, route Route, t reflect
 		return ""
 	}
 	return naming.PreferredName(route, t)
+}
+
+func tsOperationTypeName(operationID, suffix string) string {
+	name := pascalAPIName(operationID)
+	if name == "" {
+		name = "Operation"
+	}
+	return name + suffix
 }
 
 func routeContextCollisionSchemaNames(routes []Route) map[reflect.Type]string {

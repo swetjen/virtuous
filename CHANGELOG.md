@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.46
+
+- Compact generated `httpapi` TypeScript and standalone React Query clients by moving repeated transport logic into shared private helpers while preserving typed operation methods and standalone React Query output.
+- Add named generated TypeScript aliases for path and query parameter objects, and move framework-agnostic `httpapi` TypeScript auth to `createClient({ baseUrl, auth })` with optional per-call overrides.
+- Compact generated Python clients by sharing request/query/auth helpers, and harden RPC Python transport naming with a private `_VirtuousClient` plus `create_client(base_url=...)`.
+
 ## 0.0.45
 
 - Prevent native `httpapi` Python transport classes from shadowing DTO models such as `Client`, reserve generated runtime symbols during DTO naming, and document Python codegen hardening rules for agent-driven changes.
