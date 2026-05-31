@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.47
+
+- Improve native `httpapi` Python DTO naming for nested schema collisions by propagating route/domain context through reachable request and response models, avoiding package-qualified Go implementation names when contextual API names are available.
+
 ## 0.0.46
 
 - Compact generated `httpapi` TypeScript and standalone React Query clients by moving repeated transport logic into shared private helpers while preserving typed operation methods and standalone React Query output.

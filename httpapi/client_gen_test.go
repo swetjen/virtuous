@@ -14,6 +14,9 @@ import (
 
 	testa "github.com/swetjen/virtuous/internal/testtypes/a"
 	testb "github.com/swetjen/virtuous/internal/testtypes/b"
+	testclient "github.com/swetjen/virtuous/internal/testtypes/client"
+	testorg "github.com/swetjen/virtuous/internal/testtypes/organization"
+	testpersonas "github.com/swetjen/virtuous/internal/testtypes/personas"
 )
 
 type testState struct {
@@ -84,6 +87,27 @@ type APIClient struct {
 type ClientsGetManyResponse struct {
 	Data     []Client  `json:"data"`
 	Metadata APIClient `json:"metadata"`
+}
+
+type clientNestedDTOResponse struct {
+	Persona  testclient.Persona              `json:"persona"`
+	Insight  testclient.PersonaInsight       `json:"insight"`
+	Query    testclient.Query                `json:"query"`
+	Settings testclient.WorkbenchConfig      `json:"settings"`
+	Criteria testclient.MatchCriteriaRowInDb `json:"criteria"`
+}
+
+type personasNestedDTOResponse struct {
+	Persona  testpersonas.Persona                `json:"persona"`
+	Insight  testpersonas.PersonaInsight         `json:"insight"`
+	Query    testpersonas.Query                  `json:"query"`
+	Criteria testpersonas.MatchCriteriaRowInDb   `json:"criteria"`
+	Related  []testpersonas.MatchCriteriaRowInDb `json:"related"`
+}
+
+type organizationNestedDTOResponse struct {
+	Organization testorg.Organization    `json:"organization"`
+	Config       testorg.WorkbenchConfig `json:"config"`
 }
 
 type responseSpecClientError struct {
@@ -517,6 +541,55 @@ func TestPythonClientUsesRouteContextualModelNames(t *testing.T) {
 	assertContains(t, pyText, "class PublicUser")
 	if strings.Contains(pyText, "github_com_swetjen_virtuous_internal_testtypes") {
 		t.Fatalf("python client should prefer API-context model names over package-qualified names")
+	}
+
+	dir := t.TempDir()
+	pyPath := filepath.Join(dir, "client.gen.py")
+	if err := os.WriteFile(pyPath, py, 0644); err != nil {
+		t.Fatalf("write python client: %v", err)
+	}
+	if err := runCommand("python3", "-m", "py_compile", pyPath); err != nil {
+		t.Fatalf("python py_compile failed: %v", err)
+	}
+	if err := runCommand("python3", "-c", pythonImportSnippet(pyPath)); err != nil {
+		t.Fatalf("python import failed: %v", err)
+	}
+}
+
+func TestPythonClientUsesRouteContextForNestedModelNameCollisions(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /api/v1/client/personas", nil, clientNestedDTOResponse{}, HandlerMeta{
+		Service: "Client",
+		Method:  "ListPersonas",
+	})
+	router.Describe("GET /api/v1/personas", nil, personasNestedDTOResponse{}, HandlerMeta{
+		Service: "Personas",
+		Method:  "ListPersonas",
+	})
+	router.Describe("GET /api/v1/organizations", nil, organizationNestedDTOResponse{}, HandlerMeta{
+		Service: "Organization",
+		Method:  "GetOrganization",
+	})
+
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+	pyText := string(py)
+
+	assertContains(t, pyText, "class ClientPersona:")
+	assertContains(t, pyText, "class ClientPersonaInsight:")
+	assertContains(t, pyText, "class ClientQuery:")
+	assertContains(t, pyText, "class ClientWorkbenchConfig:")
+	assertContains(t, pyText, "class ClientMatchCriteriaRowInDb:")
+	assertContains(t, pyText, "class Organization:")
+	assertContains(t, pyText, "class OrganizationWorkbenchConfig:")
+	assertContains(t, pyText, "class PersonasPersona:")
+	assertContains(t, pyText, "class PersonasPersonaInsight:")
+	assertContains(t, pyText, "class PersonasQuery:")
+	assertContains(t, pyText, "class PersonasMatchCriteriaRowInDb:")
+	assertContains(t, pyText, `persona: "ClientPersona"`)
+	assertContains(t, pyText, `persona: "PersonasPersona"`)
+	assertContains(t, pyText, `organization: "Organization"`)
+	if strings.Contains(pyText, "github_com_swetjen_virtuous_internal_testtypes") {
+		t.Fatalf("python client should not expose package-qualified names for nested DTO collisions:\n%s", pyText)
 	}
 
 	dir := t.TempDir()

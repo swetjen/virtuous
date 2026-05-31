@@ -3,6 +3,7 @@ package httpapi
 import (
 	"reflect"
 	"sort"
+	"strconv"
 
 	"github.com/swetjen/virtuous/internal/reflectutil"
 	"github.com/swetjen/virtuous/schema"
@@ -367,15 +368,10 @@ func routeContextCollisionSchemaNames(routes []Route) map[reflect.Type]string {
 		sort.Slice(named, func(i, j int) bool {
 			return schema.QualifiedNameOf(named[i]) < schema.QualifiedNameOf(named[j])
 		})
-		counts := map[string]int{}
+		used := map[string]struct{}{}
 		for _, typ := range named {
 			if name := contextNames[typ]; name != "" {
-				counts[name]++
-			}
-		}
-		for _, typ := range named {
-			if name := contextNames[typ]; name != "" && counts[name] == 1 {
-				out[typ] = name
+				out[typ] = uniqueContextSchemaName(name, used)
 				continue
 			}
 			out[typ] = schema.QualifiedNameOf(typ)
@@ -386,36 +382,25 @@ func routeContextCollisionSchemaNames(routes []Route) map[reflect.Type]string {
 
 func routeContextSchemaNames(routes []Route) map[reflect.Type]string {
 	candidates := map[reflect.Type]map[string]struct{}{}
-	add := func(route Route, t reflect.Type) {
-		base := reflectutil.DerefType(t)
-		if base == nil || base.Name() == "" {
-			return
-		}
-		name := preferredPythonSchemaName(route, base)
-		if name == "" {
-			return
-		}
-		if candidates[base] == nil {
-			candidates[base] = map[string]struct{}{}
-		}
-		candidates[base][name] = struct{}{}
-	}
 	for _, route := range routes {
 		if route.Handler == nil {
 			continue
 		}
 		reqInfo := resolveRequestType(route.Handler.RequestType())
 		if reqInfo.Present {
-			add(route, reqInfo.Type)
+			addRouteContextSchemaNames(candidates, route, reqInfo.Type)
 		}
-		add(route, responseBodyType(route.Handler.ResponseType()))
+		addRouteContextSchemaNames(candidates, route, responseBodyType(route.Handler.ResponseType()))
 		if route.Meta.RequestBody != nil {
 			for _, content := range route.Meta.RequestBody.Content {
-				add(route, reflect.TypeOf(content.Body))
+				addRouteContextSchemaNames(candidates, route, reflect.TypeOf(content.Body))
 			}
 		}
 		for _, response := range route.Meta.Responses {
-			add(route, reflect.TypeOf(response.Body))
+			addRouteContextSchemaNames(candidates, route, reflect.TypeOf(response.Body))
+		}
+		for _, param := range route.Meta.Params {
+			addRouteContextSchemaNames(candidates, route, reflect.TypeOf(param.Type))
 		}
 	}
 
@@ -429,6 +414,59 @@ func routeContextSchemaNames(routes []Route) map[reflect.Type]string {
 		out[typ] = ordered[0]
 	}
 	return out
+}
+
+func addRouteContextSchemaNames(candidates map[reflect.Type]map[string]struct{}, route Route, typ reflect.Type) {
+	addRouteContextSchemaNamesWithSeen(candidates, route, typ, map[reflect.Type]struct{}{})
+}
+
+func addRouteContextSchemaNamesWithSeen(candidates map[reflect.Type]map[string]struct{}, route Route, typ reflect.Type, seen map[reflect.Type]struct{}) {
+	base := reflectutil.DerefType(typ)
+	if base == nil {
+		return
+	}
+	switch base.Kind() {
+	case reflect.Struct:
+		if _, ok := seen[base]; ok {
+			return
+		}
+		seen[base] = struct{}{}
+		if base.PkgPath() == "time" && base.Name() == "Time" {
+			return
+		}
+		if base.Name() != "" {
+			if name := preferredPythonSchemaName(route, base); name != "" {
+				if candidates[base] == nil {
+					candidates[base] = map[string]struct{}{}
+				}
+				candidates[base][name] = struct{}{}
+			}
+		}
+		for _, jsonField := range reflectutil.JSONFields(base) {
+			addRouteContextSchemaNamesWithSeen(candidates, route, jsonField.Field.Type, seen)
+		}
+	case reflect.Slice, reflect.Array:
+		addRouteContextSchemaNamesWithSeen(candidates, route, base.Elem(), seen)
+	case reflect.Map:
+		addRouteContextSchemaNamesWithSeen(candidates, route, base.Elem(), seen)
+	}
+}
+
+func uniqueContextSchemaName(base string, used map[string]struct{}) string {
+	if base == "" {
+		base = "Object"
+	}
+	if _, ok := used[base]; !ok {
+		used[base] = struct{}{}
+		return base
+	}
+	for i := 2; ; i++ {
+		candidate := base + strconv.Itoa(i)
+		if _, ok := used[candidate]; !ok {
+			used[candidate] = struct{}{}
+			return candidate
+		}
+	}
 }
 
 func authParamName(name string) string {
