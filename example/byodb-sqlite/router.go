@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 
+	virtuous "github.com/swetjen/virtuous"
 	"github.com/swetjen/virtuous/example/byodb-sqlite/config"
 	"github.com/swetjen/virtuous/example/byodb-sqlite/db"
 	"github.com/swetjen/virtuous/example/byodb-sqlite/deps"
 	"github.com/swetjen/virtuous/example/byodb-sqlite/handlers"
 	"github.com/swetjen/virtuous/example/byodb-sqlite/middleware"
-	"github.com/swetjen/virtuous/httpapi"
 	"github.com/swetjen/virtuous/rpc"
 )
 
@@ -21,8 +21,8 @@ func NewRouter(cfg config.Config, queries *db.Queries, pool *sql.DB) http.Handle
 	mux.Handle("/rpc/", rpcRouter)
 	mux.Handle("/", embedAndServeReact())
 
-	handler := httpapi.Cors(
-		httpapi.WithAllowedOrigins(cfg.AllowedOrigins...),
+	handler := virtuous.Cors(
+		virtuous.WithAllowedOrigins(cfg.AllowedOrigins...),
 	)(mux)
 	return rpcRouter.AttachLogger(handler)
 }

@@ -1,4 +1,4 @@
-package httpapi
+package virtuous
 
 import (
 	"net/http"
@@ -70,7 +70,7 @@ func WithMaxAgeSeconds(seconds int) CORSOption {
 	}
 }
 
-// Cors returns a middleware that applies CORS headers.
+// Cors returns middleware that applies CORS headers to any HTTP handler.
 func Cors(opts ...CORSOption) func(http.Handler) http.Handler {
 	config := CORSOptions{
 		AllowedOrigins: []string{"*"},

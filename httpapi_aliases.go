@@ -32,9 +32,6 @@ type DocsOptions = httpapi.DocsOptions
 type DocOpt = httpapi.DocOpt
 type Module = httpapi.Module
 
-type CORSOptions = httpapi.CORSOptions
-type CORSOption = httpapi.CORSOption
-
 type ServeAllDocsOptions = httpapi.ServeAllDocsOptions
 type ServeAllDocsOpt = httpapi.ServeAllDocsOpt
 
@@ -185,34 +182,6 @@ func WithAdminGuards(guards ...httpapi.Guard) DocOpt {
 
 func WithPublicAdmin() DocOpt {
 	return httpapi.WithPublicAdmin()
-}
-
-func WithAllowedOrigins(origins ...string) CORSOption {
-	return httpapi.WithAllowedOrigins(origins...)
-}
-
-func WithAllowedMethods(methods ...string) CORSOption {
-	return httpapi.WithAllowedMethods(methods...)
-}
-
-func WithAllowedHeaders(headers ...string) CORSOption {
-	return httpapi.WithAllowedHeaders(headers...)
-}
-
-func WithExposedHeaders(headers ...string) CORSOption {
-	return httpapi.WithExposedHeaders(headers...)
-}
-
-func WithAllowCredentials(enabled bool) CORSOption {
-	return httpapi.WithAllowCredentials(enabled)
-}
-
-func WithMaxAgeSeconds(seconds int) CORSOption {
-	return httpapi.WithMaxAgeSeconds(seconds)
-}
-
-func Cors(opts ...CORSOption) func(http.Handler) http.Handler {
-	return httpapi.Cors(opts...)
 }
 
 func WithDocsOptions(opts ...DocOpt) ServeAllDocsOpt {

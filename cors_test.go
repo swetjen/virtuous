@@ -1,4 +1,4 @@
-package httpapi
+package virtuous
 
 import (
 	"net/http"

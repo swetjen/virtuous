@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.43
+
+- Move CORS middleware from `httpapi` to the root `virtuous` package so RPC-only apps can use it without importing the legacy typed HTTP API package.
+
 ## 0.0.42
 
 - Change native `httpapi` Python model names to use API-contextual route/domain prefixes instead of bare Go type names or package-qualified fallbacks when route context is available.

@@ -6,12 +6,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	virtuous "github.com/swetjen/virtuous"
 	"github.com/swetjen/virtuous/example/byodb/config"
 	"github.com/swetjen/virtuous/example/byodb/db"
 	"github.com/swetjen/virtuous/example/byodb/deps"
 	"github.com/swetjen/virtuous/example/byodb/handlers"
 	"github.com/swetjen/virtuous/example/byodb/middleware"
-	"github.com/swetjen/virtuous/httpapi"
 	"github.com/swetjen/virtuous/rpc"
 )
 
@@ -22,8 +22,8 @@ func NewRouter(cfg config.Config, queries *db.Queries, pool *pgxpool.Pool) http.
 	mux.Handle("/rpc/", rpcRouter)
 	mux.Handle("/", embedAndServeReact())
 
-	handler := httpapi.Cors(
-		httpapi.WithAllowedOrigins(cfg.AllowedOrigins...),
+	handler := virtuous.Cors(
+		virtuous.WithAllowedOrigins(cfg.AllowedOrigins...),
 	)(mux)
 	return rpcRouter.AttachLogger(handler)
 }

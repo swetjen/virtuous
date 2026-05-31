@@ -8,6 +8,18 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `docs/tutorials/migrate-swaggo.md`
 - `docs/specs/overview.md`
 
+## Root package
+
+- `virtuous.Cors(opts ...virtuous.CORSOption)`
+- `virtuous.WithAllowedOrigins(origins ...string)`
+- `virtuous.WithAllowedMethods(methods ...string)`
+- `virtuous.WithAllowedHeaders(headers ...string)`
+- `virtuous.WithExposedHeaders(headers ...string)`
+- `virtuous.WithAllowCredentials(enabled bool)`
+- `virtuous.WithMaxAgeSeconds(seconds int)`
+
+`Cors` is framework-level HTTP middleware for any `http.Handler`, including RPC routers, `httpapi` routers, plain `http.ServeMux` instances, and mixed applications.
+
 ## RPC package
 
 - `rpc.NewRouter(opts ...rpc.RouterOption)`

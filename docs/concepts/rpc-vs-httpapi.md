@@ -7,6 +7,8 @@ Virtuous provides two routers:
 - RPC: the canonical, typed API surface for new development.
 - httpapi: a compatibility layer for legacy `net/http` handlers.
 
+Shared HTTP middleware such as `virtuous.Cors` lives in the root package because it can wrap RPC, httpapi, plain `http.ServeMux`, or mixed applications.
+
 ## Use RPC when
 
 - You are building new APIs.
