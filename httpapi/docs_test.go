@@ -92,6 +92,23 @@ func TestHTTPServeDocsWithModulesTogglesUI(t *testing.T) {
 	}
 }
 
+func TestHTTPServeDocsUsesOpenAPITitleInBrowserTitle(t *testing.T) {
+	router := NewRouter()
+	router.SetOpenAPIOptions(OpenAPIOptions{Title: "Acme Legacy API"})
+	router.Handle("GET /health", WrapFunc(func(http.ResponseWriter, *http.Request) {}, struct{}{}, struct{}{}, HandlerMeta{Service: "Health", Method: "Get"}))
+	router.ServeDocs(WithModules(ModuleAPI))
+
+	req := httptest.NewRequest(http.MethodGet, "/docs/", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected docs 200, got %d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "<title>Acme Legacy API</title>") {
+		t.Fatalf("expected custom docs title, body: %s", body)
+	}
+}
+
 func TestHTTPServeDocsAllowsMethodSpecificCatchAll(t *testing.T) {
 	router := NewRouter()
 	router.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {

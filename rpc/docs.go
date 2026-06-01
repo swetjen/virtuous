@@ -33,6 +33,15 @@ func DefaultDocsHTML(openAPIPath string) string {
 	})
 }
 
+func (r *Router) docsTitle(fallback string) string {
+	if r != nil && r.openAPIOptions != nil {
+		if title := strings.TrimSpace(r.openAPIOptions.Title); title != "" {
+			return title
+		}
+	}
+	return fallback
+}
+
 // WriteDocsHTMLFile writes the default docs HTML to the path provided.
 func WriteDocsHTMLFile(path, openAPIPath string) error {
 	return os.WriteFile(path, []byte(DefaultDocsHTML(openAPIPath)), 0644)
@@ -218,7 +227,7 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 	}
 	openAPIFile := docsAssetFile(config.OpenAPIFile, "openapi.json")
 	docsHTML := adminui.DocsShellHTML(adminui.DocsShellOptions{
-		Title:            "Virtuous RPC Docs",
+		Title:            r.docsTitle("Virtuous RPC Docs"),
 		OpenAPIURL:       docsAssetURL(openAPIFile),
 		Modules:          enabledModuleNames(modules),
 		EventsURL:        "./_admin/events",

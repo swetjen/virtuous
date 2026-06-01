@@ -92,6 +92,23 @@ func TestRPCServeDocsWithModulesTogglesUI(t *testing.T) {
 	}
 }
 
+func TestRPCServeDocsUsesOpenAPITitleInBrowserTitle(t *testing.T) {
+	router := NewRouter()
+	router.SetOpenAPIOptions(OpenAPIOptions{Title: "Acme Internal API"})
+	router.HandleRPC(testHandler)
+	router.ServeDocs(WithModules(ModuleAPI))
+
+	req := httptest.NewRequest(http.MethodGet, "/rpc/docs/", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected docs 200, got %d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "<title>Acme Internal API</title>") {
+		t.Fatalf("expected custom docs title, body: %s", body)
+	}
+}
+
 func TestRPCServeDocsWithDocsGuards(t *testing.T) {
 	router := NewRouter()
 	router.HandleRPC(testHandler)

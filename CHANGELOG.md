@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.50
+
+- Use `OpenAPIOptions.Title` as the Scalar docs browser tab title for RPC and `httpapi` routers when applications set a custom API title.
+
 ## 0.0.49
 
 - Replace the custom in-process docs UI with a Scalar API Reference shell for RPC and `httpapi` docs pages, while keeping generated OpenAPI, clients, and observability JSON/SSE endpoints intact.
