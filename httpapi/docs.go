@@ -12,7 +12,7 @@ import (
 	"github.com/swetjen/virtuous/internal/textutil"
 )
 
-// Module identifies one top-level docs console module.
+// Module identifies one docs surface area.
 type Module string
 
 const (

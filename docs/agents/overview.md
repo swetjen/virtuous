@@ -62,7 +62,7 @@ That tutorial is the canonical transformation guide, including mapping rules, mi
 - During migrations, treat runtime router registration as source of truth over stale annotations.
 - Use `WithModules(...)` when agent output must limit docs surface (`api`, `observability`).
 - Use `WithPublicAdmin()` only when the admin subtree is protected by external middleware or intentionally public.
-- Missing logger attachments should produce docs zero-state messaging, not runtime panics.
+- Missing logger attachments should leave observability JSON/SSE endpoints empty or low-signal, not cause runtime panics.
 
 ## Codegen hardening
 

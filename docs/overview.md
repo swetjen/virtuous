@@ -89,7 +89,7 @@ Default `ServeAllDocs()` endpoints:
 - Docs: `/rpc/docs/`
 - OpenAPI: `/rpc/openapi.json`
 - Clients: `/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`
-- Observability dashboard: `/rpc/_virtuous/observability`
+- Observability redirect: `/rpc/_virtuous/observability`
 - Metrics JSON: `/rpc/_virtuous/metrics`
 
 Docs module endpoints:
@@ -104,8 +104,13 @@ Use `WithModules(...)` to toggle docs modules (`api`, `observability`). By defau
 - Basic per-RPC request counts, status classes, and latency windows are tracked in memory by default.
 - Use `rpc.WithAdvancedObservability()` to enable grouped 5xx fingerprints, guard allow/deny metrics, and sampled trace capture.
 - Attach live request/event feed once at mux boundary with `router.AttachLogger(next)`.
-- The docs shell includes an `Observability` tab alongside the API reference.
-- If logger attachment is missing, the docs module shows a setup snippet (zero-state) instead of failing.
+- The default docs page is a Scalar API reference. Observability data remains available as JSON/SSE admin endpoints for custom dashboards.
+
+### Scalar auth and CORS
+
+Virtuous emits standard OpenAPI security schemes when guards map cleanly: bearer and basic `Authorization` guards become `http` schemes, while API keys and custom headers remain `apiKey` schemes.
+
+For localhost and same-origin deployments, serve docs and API from the same origin and use relative/default route paths. For cross-origin docs or API hosts, set `OpenAPIOptions.Servers` to the API origin and wrap the API with `virtuous.Cors(...)`, allowing the docs origin and auth/content headers.
 
 ## httpapi (legacy)
 

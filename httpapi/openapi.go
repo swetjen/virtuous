@@ -364,13 +364,32 @@ func addSecuritySchemes(out map[string]openAPISecurityScheme, spec SecuritySpec)
 			if guard.Name == "" {
 				continue
 			}
-			out[guard.Name] = openAPISecurityScheme{
-				Type:   "apiKey",
-				In:     guard.In,
-				Name:   guard.Param,
-				Prefix: guard.Prefix,
+			out[guard.Name] = openAPISecuritySchemeForGuard(guard)
+		}
+	}
+}
+
+func openAPISecuritySchemeForGuard(guard GuardSpec) openAPISecurityScheme {
+	if strings.EqualFold(guard.In, "header") &&
+		strings.EqualFold(guard.Param, "Authorization") {
+		switch strings.ToLower(strings.TrimSpace(guard.Prefix)) {
+		case "bearer":
+			return openAPISecurityScheme{
+				Type:   "http",
+				Scheme: "bearer",
+			}
+		case "basic":
+			return openAPISecurityScheme{
+				Type:   "http",
+				Scheme: "basic",
 			}
 		}
+	}
+	return openAPISecurityScheme{
+		Type:   "apiKey",
+		In:     guard.In,
+		Name:   guard.Param,
+		Prefix: guard.Prefix,
 	}
 }
 
@@ -583,6 +602,7 @@ type openAPISecurityScheme struct {
 	Type   string `json:"type"`
 	In     string `json:"in,omitempty"`
 	Name   string `json:"name,omitempty"`
+	Scheme string `json:"scheme,omitempty"`
 	Prefix string `json:"x-virtuousauth-prefix,omitempty"`
 }
 

@@ -325,13 +325,14 @@ func (responseSpecPointerHandler) Metadata() HandlerMeta {
 }
 
 type testGuard struct {
-	name  string
-	in    string
-	param string
+	name   string
+	in     string
+	param  string
+	prefix string
 }
 
 func (g testGuard) Spec() GuardSpec {
-	return GuardSpec{Name: g.name, In: g.in, Param: g.param}
+	return GuardSpec{Name: g.name, In: g.in, Param: g.param, Prefix: g.prefix}
 }
 
 func (g testGuard) Middleware() func(http.Handler) http.Handler {
@@ -745,10 +746,12 @@ func TestOpenAPIExplicitMultipartRequestBody(t *testing.T) {
 
 func TestOpenAPISecurityDistinguishesANDAndOR(t *testing.T) {
 	apiKey := testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"}
-	token := testGuard{name: "TokenAuth", in: "header", param: "Authorization"}
+	token := testGuard{name: "TokenAuth", in: "header", param: "Authorization", prefix: "Bearer"}
+	basic := testGuard{name: "BasicAuth", in: "header", param: "Authorization", prefix: "Basic"}
+	custom := testGuard{name: "CustomAuth", in: "header", param: "Authorization", prefix: "Token"}
 
 	andRouter := NewRouter()
-	andRouter.HandleTyped("GET /and", nullableHandler{}, apiKey, token)
+	andRouter.HandleTyped("GET /and", nullableHandler{}, apiKey, token, basic, custom)
 	andData, err := andRouter.OpenAPI()
 	if err != nil {
 		t.Fatalf("OpenAPI AND: %v", err)
@@ -767,6 +770,23 @@ func TestOpenAPISecurityDistinguishesANDAndOR(t *testing.T) {
 	}
 	if _, ok := andReq["TokenAuth"]; !ok {
 		t.Fatalf("AND security missing TokenAuth")
+	}
+	andSchemes := getMap(t, getMap(t, andDoc, "components"), "securitySchemes")
+	tokenScheme := getMap(t, andSchemes, "TokenAuth")
+	if tokenScheme["type"] != "http" || tokenScheme["scheme"] != "bearer" {
+		t.Fatalf("TokenAuth scheme = %#v, want http bearer", tokenScheme)
+	}
+	basicScheme := getMap(t, andSchemes, "BasicAuth")
+	if basicScheme["type"] != "http" || basicScheme["scheme"] != "basic" {
+		t.Fatalf("BasicAuth scheme = %#v, want http basic", basicScheme)
+	}
+	customScheme := getMap(t, andSchemes, "CustomAuth")
+	if customScheme["type"] != "apiKey" || customScheme["in"] != "header" || customScheme["name"] != "Authorization" || customScheme["x-virtuousauth-prefix"] != "Token" {
+		t.Fatalf("CustomAuth scheme = %#v, want apiKey fallback with prefix", customScheme)
+	}
+	apiKeyScheme := getMap(t, andSchemes, "ApiKeyAuth")
+	if apiKeyScheme["type"] != "apiKey" || apiKeyScheme["in"] != "header" || apiKeyScheme["name"] != "X-API-Key" {
+		t.Fatalf("ApiKeyAuth scheme = %#v, want apiKey header", apiKeyScheme)
 	}
 
 	orRouter := NewRouter()

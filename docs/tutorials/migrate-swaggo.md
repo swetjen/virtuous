@@ -268,7 +268,7 @@ router.Handle("GET /internal/debug/raw", http.HandlerFunc(ServeDebugDump))
 A migration is done when all of these are true:
 
 1. Every previously documented Swaggo route is registered in Virtuous (`HandleTyped` at minimum).
-2. Every migrated route appears in Virtuous OpenAPI output and Swagger UI.
+2. Every migrated route appears in Virtuous OpenAPI output and the Scalar docs UI.
 3. Every migrated route has explicit typed request/response metadata (`Wrap`/`WrapFunc` or RPC signature).
 4. Security annotations are represented as guards where required.
 5. Legacy Swaggo annotations are removed for migrated routes (no mixed source of truth).

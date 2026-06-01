@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.49
+
+- Replace the custom in-process docs UI with a Scalar API Reference shell for RPC and `httpapi` docs pages, while keeping generated OpenAPI, clients, and observability JSON/SSE endpoints intact.
+- Emit `Authorization: Bearer ...` and `Authorization: Basic ...` guards as standard OpenAPI `http` security schemes so Scalar and other OpenAPI tools can offer native auth controls.
+
 ## 0.0.48
 
 - Add agent-facing documentation for the Virtuous implementation contract, generated client ergonomics, common footguns, version landmarks, and Python codegen verification.

@@ -289,7 +289,7 @@ Default `ServeAllDocs()` paths:
 - `/rpc/docs`
 - `/rpc/openapi.json`
 - `/rpc/client.gen.*`
-- Observability dashboard: `/rpc/_virtuous/observability` or the `Observability` tab inside `/rpc/docs/`
+- Observability redirect: `/rpc/_virtuous/observability`
 - Metrics JSON: `/rpc/_virtuous/metrics`
 - Responses should include a canonical `error` field (string or struct) when errors occur.
 
@@ -314,8 +314,7 @@ router.ServeAllDocs()
 This enables:
 
 - `/rpc/_virtuous/metrics` for JSON metrics
-- `/rpc/_virtuous/observability` as a redirect into the docs dashboard
-- the `Observability` tab in `/rpc/docs/`
+- `/rpc/_virtuous/observability` as a redirect to the docs page
 
 Live route/event logging is opt-in at mux boundary:
 

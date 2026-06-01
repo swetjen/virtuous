@@ -168,7 +168,7 @@ func TestRPCServeDocsRegistersObservabilityEndpoints(t *testing.T) {
 	if redirectRec.Code != http.StatusFound {
 		t.Fatalf("expected observability redirect 302, got %d", redirectRec.Code)
 	}
-	if location := redirectRec.Header().Get("Location"); location != "/rpc/docs/#observability" {
+	if location := redirectRec.Header().Get("Location"); location != "/rpc/docs/" {
 		t.Fatalf("unexpected observability redirect location: %q", location)
 	}
 
@@ -179,10 +179,10 @@ func TestRPCServeDocsRegistersObservabilityEndpoints(t *testing.T) {
 		t.Fatalf("expected docs endpoint 200, got %d", docsRec.Code)
 	}
 	body := docsRec.Body.String()
-	if !strings.Contains(body, "data-panel=\"observability\"") {
-		t.Fatalf("expected observability nav in docs HTML")
+	if !strings.Contains(body, "Scalar.createApiReference") {
+		t.Fatalf("expected Scalar docs HTML")
 	}
-	if !strings.Contains(body, "./_admin/metrics") {
-		t.Fatalf("expected metrics url in docs HTML")
+	if strings.Contains(body, "data-panel=\"observability\"") || strings.Contains(body, "./_admin/metrics") {
+		t.Fatalf("expected observability UI to be removed from docs HTML")
 	}
 }

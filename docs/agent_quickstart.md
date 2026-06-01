@@ -40,7 +40,7 @@ _ = server.ListenAndServe()
 - `WithModules(...)` controls visible docs modules: `api`, `observability`.
 - `DocsHandler(...)` returns a mountable docs subtree handler for custom route placement and docs-only middleware.
 - `AdminHandler(...)` returns mountable admin endpoints for enabled observability modules; mount it explicitly under a guarded `_admin` subtree when those modules are exposed.
-- `/rpc/_virtuous/observability` redirects into the docs observability panel.
+- `/rpc/_virtuous/observability` redirects to the docs page.
 - `/rpc/_virtuous/metrics` serves live JSON aggregates.
 
 Mountable docs example:
@@ -66,7 +66,7 @@ mux.Handle("GET /admin/docs/_admin/", http.StripPrefix("/admin/docs/_admin", adm
 - Use `rpc.WithAdvancedObservability()` for grouped 5xx errors, guard outcomes, and sampled traces.
 - Use `rpc.WithObservabilitySampling(rate)` to tune trace capture in advanced mode.
 - Attach live route/event logging once at mux boundary with `router.AttachLogger(next)`.
-- If logger attachment is missing, docs show a zero-state snippet instead of failing.
+- If logger attachment is missing, observability JSON/SSE endpoints still exist but live event data will be empty.
 
 ## Guards
 

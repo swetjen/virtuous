@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strings"
 	"unicode"
 
 	"github.com/swetjen/virtuous/schema"
@@ -28,12 +29,7 @@ func (r *Router) OpenAPI() ([]byte, error) {
 		if len(route.Guards) > 0 {
 			var secReq []map[string][]string
 			for _, guard := range route.Guards {
-				securitySchemes[guard.Name] = openAPISecurityScheme{
-					Type:   "apiKey",
-					In:     guard.In,
-					Name:   guard.Param,
-					Prefix: guard.Prefix,
-				}
+				securitySchemes[guard.Name] = openAPISecuritySchemeForGuard(guard)
 				secReq = append(secReq, map[string][]string{guard.Name: {}})
 			}
 			op.Security = secReq
@@ -155,6 +151,7 @@ type openAPISecurityScheme struct {
 	Type   string `json:"type"`
 	In     string `json:"in,omitempty"`
 	Name   string `json:"name,omitempty"`
+	Scheme string `json:"scheme,omitempty"`
 	Prefix string `json:"x-virtuousauth-prefix,omitempty"`
 }
 
@@ -171,6 +168,30 @@ type openAPIOperation struct {
 type openAPIRequestBody struct {
 	Required bool                    `json:"required"`
 	Content  map[string]openAPIMedia `json:"content"`
+}
+
+func openAPISecuritySchemeForGuard(guard GuardSpec) openAPISecurityScheme {
+	if strings.EqualFold(guard.In, "header") &&
+		strings.EqualFold(guard.Param, "Authorization") {
+		switch strings.ToLower(strings.TrimSpace(guard.Prefix)) {
+		case "bearer":
+			return openAPISecurityScheme{
+				Type:   "http",
+				Scheme: "bearer",
+			}
+		case "basic":
+			return openAPISecurityScheme{
+				Type:   "http",
+				Scheme: "basic",
+			}
+		}
+	}
+	return openAPISecurityScheme{
+		Type:   "apiKey",
+		In:     guard.In,
+		Name:   guard.Param,
+		Prefix: guard.Prefix,
+	}
 }
 
 type openAPIResponse struct {

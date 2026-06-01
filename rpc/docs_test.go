@@ -25,7 +25,7 @@ func (docsHeaderGuard) Middleware() func(http.Handler) http.Handler {
 	}
 }
 
-func TestDefaultDocsHTMLUsesLocalOpenAPIReference(t *testing.T) {
+func TestDefaultDocsHTMLUsesScalarReference(t *testing.T) {
 	html := DefaultDocsHTML("/rpc/openapi.json")
 	if strings.Contains(html, "https://unpkg.com") {
 		t.Fatalf("docs HTML must not load scripts or styles from unpkg")
@@ -33,23 +33,29 @@ func TestDefaultDocsHTMLUsesLocalOpenAPIReference(t *testing.T) {
 	if strings.Contains(html, "SwaggerUIBundle") {
 		t.Fatalf("docs HTML must not depend on Swagger UI globals")
 	}
+	if strings.Contains(strings.ToLower(html), "redoc") {
+		t.Fatalf("docs HTML must not depend on Redoc")
+	}
+	if !strings.Contains(html, "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.57.5") {
+		t.Fatalf("expected pinned Scalar API Reference script")
+	}
+	if !strings.Contains(html, "Scalar.createApiReference") {
+		t.Fatalf("expected Scalar API Reference bootstrap")
+	}
+	if !strings.Contains(html, "withDefaultFonts: false") {
+		t.Fatalf("expected Scalar default fonts disabled")
+	}
+	if !strings.Contains(html, "persistAuth: false") {
+		t.Fatalf("expected Scalar auth persistence disabled")
+	}
 	if !strings.Contains(html, "const OPENAPI_URL = \"/rpc/openapi.json\"") {
 		t.Fatalf("expected openapi path in docs HTML")
 	}
 	if !strings.Contains(html, "const MODULE_API = true") {
 		t.Fatalf("expected api module enabled by default in docs HTML")
 	}
-	if !strings.Contains(html, "const MODULE_OBSERVABILITY = true") {
-		t.Fatalf("expected observability module enabled by default in docs HTML")
-	}
-	if !strings.Contains(html, "const EVENTS_URL = \"./_admin/events\"") {
-		t.Fatalf("expected live events endpoint in docs HTML")
-	}
-	if !strings.Contains(html, "const LOGGING_STATUS_URL = \"./_admin/logging\"") {
-		t.Fatalf("expected logging status endpoint in docs HTML")
-	}
-	if strings.Contains(html, "@scalar/api-reference") {
-		t.Fatalf("unexpected Scalar script in docs HTML")
+	if !strings.Contains(html, "agent:") || !strings.Contains(html, "disabled: true") {
+		t.Fatalf("expected Scalar agent to be disabled")
 	}
 }
 
@@ -64,8 +70,8 @@ func TestRPCServeDocsWithModulesTogglesUI(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected docs 200, got %d", rec.Code)
 	}
-	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") {
-		t.Fatalf("expected docs CSP to restrict scripts to self, got %q", csp)
+	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "https://cdn.jsdelivr.net") {
+		t.Fatalf("expected docs CSP to allow Scalar CDN, got %q", csp)
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, "const MODULE_API = true") {
@@ -74,8 +80,8 @@ func TestRPCServeDocsWithModulesTogglesUI(t *testing.T) {
 	if strings.Contains(body, "MODULE_DATABASE") {
 		t.Fatalf("expected database module to be removed from docs HTML")
 	}
-	if !strings.Contains(body, "const MODULE_OBSERVABILITY = false") {
-		t.Fatalf("expected observability module disabled")
+	if strings.Contains(body, "MODULE_OBSERVABILITY") {
+		t.Fatalf("expected legacy observability UI module to be removed from docs HTML")
 	}
 
 	reqAdmin := httptest.NewRequest(http.MethodGet, "/rpc/docs/_admin/events", nil)

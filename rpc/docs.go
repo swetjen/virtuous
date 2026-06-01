@@ -10,7 +10,7 @@ import (
 	"github.com/swetjen/virtuous/internal/adminui"
 )
 
-// Module identifies one top-level docs console module.
+// Module identifies one docs surface area.
 type Module string
 
 const (
@@ -323,7 +323,7 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 			r.mux.Handle("GET "+alias, metricsHandler)
 		}
 		redirectObservability := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			http.Redirect(w, req, docsIndex+"#observability", http.StatusFound)
+			http.Redirect(w, req, docsIndex, http.StatusFound)
 		})
 		guardedRedirectObservability := wrapWithGuards(redirectObservability, config.DocsGuards)
 		r.mux.Handle("GET "+observabilityPath, guardedRedirectObservability)
