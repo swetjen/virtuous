@@ -60,4 +60,4 @@ Docs:
 - Point `DATABASE_URL` at a different SQLite file to model multiple environments.
 - Add another RPC domain (e.g., `todos`) and regenerate SDKs with `make clients`.
 - Try swapping the guard for an API-key scheme to see how docs and generated clients change.
-- Embed a tiny frontend (or Postman collection) that consumes `client.gen.js` to validate the round trip.
+- Extend the embedded static page to consume `client.gen.js` and validate the round trip.

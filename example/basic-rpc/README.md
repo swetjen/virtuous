@@ -17,8 +17,10 @@ curl -X POST http://localhost:8000/rpc/states/state-create \
   -H 'Content-Type: application/json' \
   -d '{"code":"ca","name":"California"}'
 
-curl http://localhost:8000/rpc/users/users-get-many \
-  -H 'Authorization: Bearer demo-token'
+curl -X POST http://localhost:8000/rpc/users/users-get-many \
+  -H 'Authorization: Bearer demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{}'
 ```
 
 ## Extend it

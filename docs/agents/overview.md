@@ -4,6 +4,12 @@
 
 Virtuous is designed to be deterministic for agents. Keep project layout and handler patterns consistent so generated docs and clients remain stable.
 
+Start with:
+
+- `docs/agents/contract.md` for required agent behavior and common footguns.
+- `docs/agents/client-codegen.md` for generated client surfaces, auth models, and naming principles.
+- `docs/agents/python-codegen-rules.md` for Python generator hardening.
+
 ## Canonical flow
 
 1) Define request and response types.
@@ -49,6 +55,7 @@ That tutorial is the canonical transformation guide, including mapping rules, mi
 
 ## Documentation hints
 
+- Follow `docs/agents/contract.md` before choosing RPC, `httpapi`, docs/admin mounting, or client generation strategy.
 - Use `doc:"..."` tags on struct fields to populate OpenAPI and client docs.
 - For httpapi compatibility routes, use `path:"..."`, `query:"..."`, `form:"..."`, `httpapi.FormBody(...)`, `httpapi.MultipartBody(...)`, and `httpapi.AuthAny(...)` where the source OpenAPI contract requires them.
 - Keep section names consistent across documents for reliable agent parsing.
@@ -60,3 +67,4 @@ That tutorial is the canonical transformation guide, including mapping rules, mi
 ## Codegen hardening
 
 - For Python generator work, follow `docs/agents/python-codegen-rules.md`.
+- For generated client ergonomics, follow `docs/agents/client-codegen.md`.

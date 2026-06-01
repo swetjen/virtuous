@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.48
+
+- Add agent-facing documentation for the Virtuous implementation contract, generated client ergonomics, common footguns, version landmarks, and Python codegen verification.
+- Clean up example project docs and scaffolding so RPC examples use POST, BYODB frontend guidance matches the generated RPC client, and mixed RPC/httpapi metadata remains client-friendly.
+
 ## 0.0.47
 
 - Improve native `httpapi` Python DTO naming for nested schema collisions by propagating route/domain context through reachable request and response models, avoiding package-qualified Go implementation names when contextual API names are available.

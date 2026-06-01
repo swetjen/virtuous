@@ -25,3 +25,18 @@ Python codegen tests should include hostile API names:
 - Runtime-like names: `Client`, `APIClient`, `VirtuousClient`, `_VirtuousClient`, `create_client`, `_decode_value`, `_encode_value`, `_append_query`.
 - Duplicate-safe names: `from`, `from_`, `from-`, `class`, `class_`.
 - Param collisions: query/path/auth names such as `self`, `body`, `token_auth`, and `from`.
+
+## Verification Checklist
+
+Before finishing Python generator changes:
+
+- Generate a real `client.gen.py`.
+- Run `python3 -m py_compile client.gen.py`.
+- Import the generated module with `importlib.util.spec_from_file_location(...)`.
+- Instantiate `create_client(...)`.
+- Mock `urllib.request.urlopen` and call at least one generated method.
+- Assert decoded responses are dataclass DTOs, including nested DTOs.
+- Assert reserved field names round-trip through `_encode_value(...)` and `_decode_value(...)`.
+- Assert DTO names do not shadow runtime helpers or imports.
+- Assert nested same-name DTOs from different packages use route/domain context, not package-qualified names.
+- Run `make test`.

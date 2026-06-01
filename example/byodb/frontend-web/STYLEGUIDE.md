@@ -3,16 +3,16 @@
 This guide covers how to update the React frontend for byodb.
 
 ## Client Usage
-- Prefer the generated JS client: `frontend-web/api/client.gen.js`.
-- Import from the local file (built by `make gen-sdk`):
+- Prefer the shared API helper in `src/lib/api.ts`.
+- It wraps the generated JS client from `frontend-web/api/client.gen.js`:
 
 ```js
-import { createClient } from "./api/client.gen.js";
+import { api } from "./lib/api";
 ```
 
 - After API changes, run `make gen-sdk` to refresh the local client.
 
-- Instantiate with `window.location.origin` unless you have a proxy.
+- `src/lib/api.ts` should instantiate the generated client with `createClient(window.location.origin)` unless you have a proxy.
 - Do not hand-roll fetch helpers unless the client is missing a route.
 
 ## UI Patterns

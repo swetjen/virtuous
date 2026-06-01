@@ -14,8 +14,10 @@ go run .
 ## Try it
 
 ```bash
-curl http://localhost:8000/rpc/users/users-get-many \
-  -H 'Authorization: Bearer demo-token'
+curl -X POST http://localhost:8000/rpc/users/users-get-many \
+  -H 'Authorization: Bearer demo-token' \
+  -H 'Content-Type: application/json' \
+  -d '{}'
 
 curl http://localhost:8000/api/v1/lookup/states/mn
 ```

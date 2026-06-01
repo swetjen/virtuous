@@ -1,21 +1,45 @@
-# bun-react-template
+# Virtuous BYODB Frontend
 
-To install dependencies:
+React frontend for the BYODB example. The app talks to Virtuous RPC routes through the generated JS client in `api/client.gen.js`.
+
+## Run
+
+Install dependencies once:
 
 ```bash
 bun install
 ```
 
-To start a development server:
+Start the frontend dev server:
 
 ```bash
-bun dev
+bun run dev
 ```
 
-To run for production:
+Build production assets:
 
 ```bash
-bun start
+bun run build
 ```
 
-This project was created using `bun init` in bun v1.3.6. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+From the parent example, use:
+
+```bash
+make gen-sdk
+make gen-web
+```
+
+`make gen-sdk` refreshes `api/client.gen.js`. `make gen-web` builds the embedded assets served by the Go API.
+
+## API Client
+
+Use the shared API helper instead of hand-written fetch wrappers:
+
+```js
+import { api } from "./lib/api";
+
+const states = await api.states.StatesGetMany();
+```
+
+`src/lib/api.ts` owns the generated-client import and constructs the client with `window.location.origin`.
+RPC endpoints are POST-only and served under `/rpc`.

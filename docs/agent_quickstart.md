@@ -2,6 +2,12 @@
 
 Virtuous is router-first and RPC-first. Use the RPC router for new APIs and `httpapi` only for legacy handlers.
 
+Agent-facing rules live in:
+
+- `docs/agents/contract.md`
+- `docs/agents/client-codegen.md`
+- `docs/agents/python-codegen-rules.md`
+
 ## Minimal RPC wiring
 
 ```go

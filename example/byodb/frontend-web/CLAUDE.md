@@ -24,14 +24,12 @@ Guidelines:
 - Don’t hand-roll fetch helpers unless a route is missing from the client.
 - RPC endpoints are **POST-only** and live under `/rpc/{package}/{kebab(function)}`.
 
-Example (JS client, local):
+Example:
 
 ```js
-import { createClient } from "./api/client.gen.js";
+import { api } from "./lib/api";
 
-const api = createClient({ baseUrl: window.location.origin });
-
-const res = await api.States.getMany();
+const res = await api.states.StatesGetMany();
 // res.data or res.error depending on the response type
 ```
 

@@ -8,7 +8,6 @@ import (
 	"github.com/swetjen/virtuous/example/combined/auth"
 	"github.com/swetjen/virtuous/example/combined/httpstates"
 	"github.com/swetjen/virtuous/example/combined/rpcusers"
-	"github.com/swetjen/virtuous/httpapi"
 	"github.com/swetjen/virtuous/rpc"
 )
 
@@ -39,6 +38,3 @@ func RunServer() error {
 	fmt.Println("Listening on :8000")
 	return server.ListenAndServe()
 }
-
-// keep httpapi referenced to avoid unused import when editing examples
-var _ = httpapi.NewRouter

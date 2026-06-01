@@ -28,6 +28,10 @@ type CreateStateRequest struct {
 	Name string `json:"name"`
 }
 
+type StateLookupRequest struct {
+	Code string `path:"code" doc:"Two-letter state code."`
+}
+
 func BuildRouter(guards ...httpapi.Guard) *httpapi.Router {
 	router := httpapi.NewRouter()
 	router.SetOpenAPIOptions(httpapi.OpenAPIOptions{
@@ -42,17 +46,17 @@ func BuildRouter(guards ...httpapi.Guard) *httpapi.Router {
 			Service: "States",
 			Method:  "GetMany",
 			Summary: "List all states",
-			Tags:    []string{"states"},
+			Tags:    []string{"States"},
 		}),
 		guards...,
 	)
 	router.HandleTyped(
 		"GET /api/v1/lookup/states/{code}",
-		httpapi.WrapFunc(StateByCode, nil, StateResponse{}, httpapi.HandlerMeta{
+		httpapi.WrapFunc(StateByCode, StateLookupRequest{}, StateResponse{}, httpapi.HandlerMeta{
 			Service: "States",
 			Method:  "GetByCode",
 			Summary: "Get state by code",
-			Tags:    []string{"states"},
+			Tags:    []string{"States"},
 		}),
 		guards...,
 	)
@@ -62,7 +66,7 @@ func BuildRouter(guards ...httpapi.Guard) *httpapi.Router {
 			Service: "States",
 			Method:  "Create",
 			Summary: "Create a new state",
-			Tags:    []string{"states"},
+			Tags:    []string{"States"},
 		}),
 		guards...,
 	)

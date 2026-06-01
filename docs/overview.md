@@ -31,7 +31,7 @@ RPC is the default and recommended approach for new APIs.
 - Requests and responses are typed and reflected into OpenAPI and client SDKs.
 - Routes are inferred from the handler package and function name.
 - Docs and SDKs are served at runtime.
- - Canonical flow: schema/queries → `make gen` → RPC handlers → `make gen-sdk` → frontend → `make gen-web`.
+- Canonical flow: schema/queries -> `make gen` -> RPC handlers -> `make gen-sdk` -> frontend -> `make gen-web`.
 
 ### Handler signature
 
@@ -45,7 +45,7 @@ func(context.Context) (Resp, int)
 - Return `(Resp, status)` from handlers.
 - Status must be 200, 422, or 500.
 - Guarded routes may also surface 401 when middleware rejects a request.
- - Responses should include a canonical `error` field (string or struct) when errors occur.
+- Responses should include a canonical `error` field (string or struct) when errors occur.
 
 ### Router wiring
 
@@ -175,9 +175,17 @@ deps/
 - `router.go` wires routes and guards.
 - `handlers/` defines RPC handlers per domain.
 - `deps/` owns external wiring (db, cache, services).
- - After adding/adjusting queries: `make gen`.
- - After adding/adjusting RPC routes: `make gen-sdk`.
- - After updating frontend: `make gen-web` (or `make gen-all`).
+- After adding or adjusting queries: `make gen`.
+- After adding or adjusting RPC routes: `make gen-sdk`.
+- After updating frontend: `make gen-web` or `make gen-all`.
+
+### Agent source of truth
+
+Use the agent docs when asking a coding agent to build, migrate, or modify Virtuous code:
+
+- `docs/agents/contract.md`: required defaults, footguns, and verification rules.
+- `docs/agents/client-codegen.md`: generated client surfaces, auth models, and naming principles.
+- `docs/agents/python-codegen-rules.md`: Python codegen namespace and regression checklist.
 
 ### Agent prompt template (RPC)
 
