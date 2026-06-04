@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.53
+
+- Install `uv` in the `basebuild` workflow so generated Python client contract tests run in CI, and update checkout to the Node 24-compatible action.
+
 ## 0.0.52
 
 - Improve debug console request logs with status badges, terminal-only ANSI coloring, and a more scannable status-first layout while keeping captured writers plain text.

@@ -16,7 +16,7 @@ jobs:
         run: echo "flags=--snapshot" >> $GITHUB_ENV
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -24,6 +24,9 @@ jobs:
         with:
           go-version: '>=1.26.0'
           cache: true
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
 
       - name: Run tests
         run: go test ./...
