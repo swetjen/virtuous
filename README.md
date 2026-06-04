@@ -324,6 +324,15 @@ handler := router.AttachLogger(mux) // attach once at top-level
 
 If logger attachment is missing, the docs `Observability` view shows a zero-data setup snippet.
 
+For local request tracing, enable the debug console on the router. It prints one compact request line with method, path, status, duration, client IP, route pattern, and response bytes:
+
+```go
+router := rpc.NewRouter(
+	rpc.WithPrefix("/rpc"),
+	rpc.WithDebugConsole(),
+)
+```
+
 ## HTTP API (httpapi)
 
 `httpapi` wraps classic `net/http` handlers and preserves existing request/response shapes. It also emits OpenAPI 3.0 specs for typed handlers.
@@ -354,6 +363,12 @@ router.HandleTyped(
 	}),
 )
 router.ServeAllDocs()
+```
+
+The legacy HTTP router supports the same opt-in debug console:
+
+```go
+router := httpapi.NewRouter(httpapi.WithDebugConsole())
 ```
 
 For larger routes, move the contract onto the handler implementation so router files remain easy to scan:

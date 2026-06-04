@@ -14,10 +14,12 @@ var clientPyTemplate = template.Must(template.New("virtuous-rpc-py").Parse(`# Co
 """Runtime-generated Python client for Virtuous RPC routes."""
 
 from dataclasses import dataclass, field, fields, is_dataclass
+from datetime import date as _date, datetime as _datetime
+from decimal import Decimal as _Decimal
 import http
 import json
 import types
-from typing import Any, Union, get_args, get_origin, get_type_hints
+from typing import Any, Optional, Union, get_args, get_origin, get_type_hints
 from urllib import error, parse, request
 
 # Type definitions
@@ -130,6 +132,12 @@ def _decode_value(tp: Any, value: Any) -> Any:
         return None
     origin = get_origin(tp)
     if origin is None:
+        if tp is _datetime:
+            return _decode_datetime(value)
+        if tp is _date:
+            return _decode_date(value)
+        if tp is _Decimal:
+            return _decode_decimal(value)
         if is_dataclass(tp):
             return _decode_dataclass(tp, value)
         return value
@@ -147,6 +155,28 @@ def _decode_value(tp: Any, value: Any) -> Any:
             return _decode_value(args[0], value)
         return value
     return value
+
+
+def _decode_datetime(value: Any) -> Any:
+    if isinstance(value, _datetime):
+        return value
+    if isinstance(value, str):
+        return _datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return value
+
+
+def _decode_date(value: Any) -> Any:
+    if isinstance(value, _date) and not isinstance(value, _datetime):
+        return value
+    if isinstance(value, str):
+        return _date.fromisoformat(value)
+    return value
+
+
+def _decode_decimal(value: Any) -> Any:
+    if isinstance(value, _Decimal):
+        return value
+    return _Decimal(str(value))
 
 
 def _decode_dataclass(cls: type[Any], data: Any) -> Any:
@@ -167,6 +197,12 @@ def _decode_dataclass(cls: type[Any], data: Any) -> Any:
 def _encode_value(value: Any) -> Any:
     if value is None:
         return None
+    if isinstance(value, _datetime):
+        return value.isoformat()
+    if isinstance(value, _date):
+        return value.isoformat()
+    if isinstance(value, _Decimal):
+        return format(value, "f")
     if is_dataclass(value):
         return {field.metadata.get("wire", field.name): _encode_value(getattr(value, field.name)) for field in fields(value)}
     if isinstance(value, list):
@@ -254,13 +290,20 @@ func pythonObjectNameMap(objects []clientObject, services []clientService) map[s
 func pythonReservedModuleNames(services []clientService) map[string]struct{} {
 	names := []string{
 		"Any",
+		"Optional",
 		"RPCError",
 		"Union",
 		"_VirtuousClient",
 		"_append_query",
+		"_date",
 		"_decode_dataclass",
+		"_decode_date",
+		"_decode_datetime",
+		"_decode_decimal",
 		"_decode_value",
 		"_encode_value",
+		"_datetime",
+		"_Decimal",
 		"_rpc_request",
 		"_status_text",
 		"create_client",
@@ -326,7 +369,7 @@ func pythonFieldDeclaration(name, wireName, fieldType string, optional bool) str
 	}
 	typeExpr := fieldType
 	if optional {
-		typeExpr = fieldType + " | None"
+		typeExpr = "Optional[" + fieldType + "]"
 	}
 	if name == wireName {
 		if optional {
@@ -370,7 +413,7 @@ func pythonTypeName(typeName string, names map[string]string) string {
 		}
 		out = strings.ReplaceAll(out, `"`+oldName+`"`, `"`+newName+`"`)
 	}
-	return out
+	return pythonRuntimeAnnotationName(out)
 }
 
 func pythonRuntimeTypeName(typeName string) string {
@@ -378,6 +421,36 @@ func pythonRuntimeTypeName(typeName string) string {
 		return ""
 	}
 	return strings.ReplaceAll(typeName, `"`, "")
+}
+
+func pythonRuntimeAnnotationName(typeName string) string {
+	out := replacePythonTypeToken(typeName, "datetime", "_datetime")
+	out = replacePythonTypeToken(out, "date", "_date")
+	out = replacePythonTypeToken(out, "Decimal", "_Decimal")
+	return out
+}
+
+func replacePythonTypeToken(value, oldToken, newToken string) string {
+	if value == "" {
+		return value
+	}
+	var out strings.Builder
+	for i := 0; i < len(value); {
+		if strings.HasPrefix(value[i:], oldToken) &&
+			(i == 0 || !isPythonTypeIdentChar(value[i-1])) &&
+			(i+len(oldToken) == len(value) || !isPythonTypeIdentChar(value[i+len(oldToken)])) {
+			out.WriteString(newToken)
+			i += len(oldToken)
+			continue
+		}
+		out.WriteByte(value[i])
+		i++
+	}
+	return out.String()
+}
+
+func isPythonTypeIdentChar(ch byte) bool {
+	return ch == '_' || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')
 }
 
 // WriteClientPY writes a runtime-generated Python client to w.

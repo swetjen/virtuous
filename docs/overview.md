@@ -104,6 +104,7 @@ Use `WithModules(...)` to toggle docs modules (`api`, `observability`). By defau
 - Basic per-RPC request counts, status classes, and latency windows are tracked in memory by default.
 - Use `rpc.WithAdvancedObservability()` to enable grouped 5xx fingerprints, guard allow/deny metrics, and sampled trace capture.
 - Attach live request/event feed once at mux boundary with `router.AttachLogger(next)`.
+- Enable `rpc.WithDebugConsole()` for local console request lines with method, path, status, duration, client IP, route pattern, and response bytes.
 - The default docs page is a Scalar API reference. Observability data remains available as JSON/SSE admin endpoints for custom dashboards.
 
 ### Scalar auth and CORS
@@ -143,6 +144,8 @@ router.HandleTyped(
 )
 router.ServeAllDocs()
 ```
+
+For local request tracing, pass `httpapi.WithDebugConsole()` to `httpapi.NewRouter(...)`.
 
 ## Combined (demo only)
 

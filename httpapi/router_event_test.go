@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -75,5 +77,70 @@ func TestRouterEventFeedCapturesRequest(t *testing.T) {
 	}
 	if !router.loggingActive() {
 		t.Fatalf("expected logger to be marked active")
+	}
+}
+
+func TestRouterDebugConsoleDisabledByDefault(t *testing.T) {
+	router := NewRouter()
+	if router.debugConsole != nil {
+		t.Fatalf("expected debug console to be disabled")
+	}
+	if router.debugHandler != nil {
+		t.Fatalf("expected debug handler to be disabled")
+	}
+}
+
+func TestRouterDebugConsolePrintsRequestLine(t *testing.T) {
+	var logs bytes.Buffer
+	router := NewRouter(WithDebugConsoleWriter(&logs))
+	router.HandleTyped("GET /events/{id}", eventFeedHandler{})
+
+	req := httptest.NewRequest(http.MethodGet, "/events/42?trace=1", nil)
+	req.RemoteAddr = "10.0.0.9:4321"
+	req.Header.Set("X-Real-IP", "198.51.100.7")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	line := logs.String()
+	for _, want := range []string{
+		"[virtuous] GET /events/42?trace=1 200 ",
+		" ip=198.51.100.7 ",
+		"route=GET /events/{id}",
+		"bytes=",
+	} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("expected log line to contain %q, got %q", want, line)
+		}
+	}
+}
+
+func TestRouterDebugConsoleCapturesExplicitStatusAndBytes(t *testing.T) {
+	var logs bytes.Buffer
+	router := NewRouter(WithDebugConsoleWriter(&logs))
+	router.HandleFunc("GET /debug/status", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "debug status", http.StatusTeapot)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/debug/status", nil)
+	req.RemoteAddr = "203.0.113.77:4321"
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTeapot {
+		t.Fatalf("expected status 418, got %d", rec.Code)
+	}
+	line := logs.String()
+	for _, want := range []string{
+		"[virtuous] GET /debug/status 418 ",
+		" ip=203.0.113.77 ",
+		"route=GET /debug/status",
+		"bytes=13",
+	} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("expected log line to contain %q, got %q", want, line)
+		}
 	}
 }

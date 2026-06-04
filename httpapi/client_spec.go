@@ -178,6 +178,7 @@ func buildClientSpecWith(
 			if hasBody {
 				registry.AddTypeOf(reqReflect)
 				requestType = typeFn(reqReflect)
+				bodyFields = clientJSONBodyFieldsFor(reqReflect)
 			}
 		}
 		requestMedia := MediaTypeJSON
@@ -209,6 +210,9 @@ func buildClientSpecWith(
 				requestType = "Any"
 			} else {
 				requestType = "any"
+			}
+			if bodyMode == "json" {
+				bodyFields = clientJSONBodyFieldsFor(bodyType)
 			}
 		}
 		pathParams, queryParams = applyExplicitClientParams(route, pathParams, queryParams, typeFn)
@@ -615,6 +619,29 @@ func clientFormFieldsFor(t reflect.Type) ([]clientBodyField, error) {
 		})
 	}
 	return fields, nil
+}
+
+func clientJSONBodyFieldsFor(t reflect.Type) []clientBodyField {
+	base := reflectutil.DerefType(t)
+	if base == nil || base.Kind() != reflect.Struct {
+		return nil
+	}
+	fields := reflectutil.JSONFields(base)
+	out := make([]clientBodyField, 0, len(fields))
+	for _, jsonField := range fields {
+		field := jsonField.Field
+		if field.Tag.Get("path") != "" || field.Tag.Get("query") != "" {
+			continue
+		}
+		out = append(out, clientBodyField{
+			Name:     jsonField.Name,
+			WireName: jsonField.Name,
+			Optional: jsonField.OmitEmpty || field.Type.Kind() == reflect.Ptr || jsonField.ParentOptional,
+			IsArray:  isArrayType(field.Type),
+			IsFile:   isFileType(field.Type),
+		})
+	}
+	return out
 }
 
 func bodyModeForMediaType(mediaType string) string {

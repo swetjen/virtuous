@@ -103,7 +103,7 @@ func (g *Generator) schemaFor(t reflect.Type) *OpenAPISchema {
 
 	if g.isOverrideScalar(t) {
 		schema := g.overrideSchema(t)
-		if nullable && schema != nil {
+		if schema != nil && (nullable || g.isNullableType(t)) {
 			schema.Nullable = true
 		}
 		return schema
@@ -140,13 +140,16 @@ func (g *Generator) isOverrideScalar(t reflect.Type) bool {
 	if !ok {
 		return false
 	}
-	return override.OpenAPIType != "" || override.OpenAPIFormat != ""
+	return override.OpenAPIType != "" || override.OpenAPIFormat != "" || override.ArbitraryJSON
 }
 
 func (g *Generator) overrideSchema(t reflect.Type) *OpenAPISchema {
 	override, ok := typeOverrideFor(g.overrides, t)
 	if !ok {
 		return nil
+	}
+	if override.ArbitraryJSON {
+		return &OpenAPISchema{}
 	}
 	schema := &OpenAPISchema{}
 	if override.OpenAPIType != "" {
@@ -199,6 +202,8 @@ func (g *Generator) inlineSchema(t reflect.Type) *OpenAPISchema {
 		return g.overrideSchema(t)
 	}
 	switch t.Kind() {
+	case reflect.Interface:
+		return &OpenAPISchema{}
 	case reflect.String:
 		return &OpenAPISchema{Type: "string"}
 	case reflect.Bool:
@@ -234,6 +239,15 @@ func (g *Generator) inlineSchema(t reflect.Type) *OpenAPISchema {
 	default:
 		return &OpenAPISchema{Type: "string"}
 	}
+}
+
+func (g *Generator) isNullableType(t reflect.Type) bool {
+	base := reflectutil.DerefType(t)
+	if base == nil {
+		return false
+	}
+	override, ok := typeOverrideFor(g.overrides, base)
+	return ok && override.Nullable
 }
 
 // ApplyFieldMetadata copies OpenAPI-oriented struct tags onto a schema.

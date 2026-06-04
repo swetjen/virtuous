@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -182,6 +183,71 @@ func TestRPCEventFeedRequiresAttachLogger(t *testing.T) {
 	}
 	if !router.loggingActive() {
 		t.Fatalf("expected logger to be marked active")
+	}
+}
+
+func TestRPCDebugConsoleDisabledByDefault(t *testing.T) {
+	router := NewRouter()
+	if router.debugConsole != nil {
+		t.Fatalf("expected debug console to be disabled")
+	}
+	if router.debugHandler != nil {
+		t.Fatalf("expected debug handler to be disabled")
+	}
+}
+
+func TestRPCDebugConsolePrintsRequestLine(t *testing.T) {
+	var logs bytes.Buffer
+	router := NewRouter(WithDebugConsoleWriter(&logs))
+	router.HandleRPC(testHandler)
+	path := router.Routes()[0].Path
+
+	req := httptest.NewRequest(http.MethodPost, path+"?trace=1", strings.NewReader(`{"name":"Virtuous"}`))
+	req.RemoteAddr = "10.0.0.9:4321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.10, 10.0.0.9")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	line := logs.String()
+	for _, want := range []string{
+		"[virtuous] POST " + path + "?trace=1 200 ",
+		" ip=203.0.113.10 ",
+		"route=" + path,
+		"bytes=",
+	} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("expected log line to contain %q, got %q", want, line)
+		}
+	}
+}
+
+func TestRPCDebugConsoleCapturesErrorStatus(t *testing.T) {
+	var logs bytes.Buffer
+	router := NewRouter(WithDebugConsoleWriter(&logs))
+	router.HandleRPC(testHandler)
+	path := router.Routes()[0].Path
+
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":""}`))
+	req.RemoteAddr = "192.0.2.55:4321"
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != StatusInvalid {
+		t.Fatalf("expected status 422, got %d", rec.Code)
+	}
+	line := logs.String()
+	for _, want := range []string{
+		"[virtuous] POST " + path + " 422 ",
+		" ip=192.0.2.55 ",
+		"route=" + path,
+		"bytes=",
+	} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("expected log line to contain %q, got %q", want, line)
+		}
 	}
 }
 

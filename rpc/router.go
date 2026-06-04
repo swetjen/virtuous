@@ -1,10 +1,12 @@
 package rpc
 
 import (
+	"io"
 	"log/slog"
 	"net/http"
 
 	"github.com/swetjen/virtuous/internal/adminui"
+	"github.com/swetjen/virtuous/internal/debugconsole"
 	"github.com/swetjen/virtuous/internal/jsonlimit"
 )
 
@@ -23,6 +25,8 @@ type Router struct {
 	openAPIOptions *OpenAPIOptions
 	maxBodyBytes   int64
 	strictJSON     bool
+	debugConsole   *debugconsole.Logger
+	debugHandler   http.Handler
 }
 
 // RouterOptions configures a Router.
@@ -32,6 +36,8 @@ type RouterOptions struct {
 	AdvancedObservability *AdvancedObservabilityOptions
 	MaxRequestBodyBytes   int64
 	StrictJSONDecoding    bool
+	DebugConsoleWriter    io.Writer
+	DebugConsole          bool
 }
 
 // RouterOption mutates RouterOptions.
@@ -68,6 +74,21 @@ func WithStrictJSONDecoding() RouterOption {
 	}
 }
 
+// WithDebugConsole prints compact request lines to stderr for local debugging.
+func WithDebugConsole() RouterOption {
+	return func(o *RouterOptions) {
+		o.DebugConsole = true
+	}
+}
+
+// WithDebugConsoleWriter prints compact request lines to the provided writer.
+func WithDebugConsoleWriter(w io.Writer) RouterOption {
+	return func(o *RouterOptions) {
+		o.DebugConsole = true
+		o.DebugConsoleWriter = w
+	}
+}
+
 // NewRouter returns a new Router.
 func NewRouter(opts ...RouterOption) *Router {
 	config := RouterOptions{
@@ -77,7 +98,7 @@ func NewRouter(opts ...RouterOption) *Router {
 	for _, opt := range opts {
 		opt(&config)
 	}
-	return &Router{
+	router := &Router{
 		mux:    http.NewServeMux(),
 		prefix: normalizePrefix(config.Prefix),
 		guards: append([]Guard(nil), config.Guards...),
@@ -90,6 +111,11 @@ func NewRouter(opts ...RouterOption) *Router {
 		maxBodyBytes: config.MaxRequestBodyBytes,
 		strictJSON:   config.StrictJSONDecoding,
 	}
+	if config.DebugConsole {
+		router.debugConsole = debugconsole.New(config.DebugConsoleWriter)
+		router.debugHandler = router.debugConsole.Capture(router.mux)
+	}
+	return router
 }
 
 // SetLogger overrides the logger used for warnings.
@@ -168,6 +194,10 @@ func (r *Router) HandleRPC(fn any, guards ...Guard) {
 
 // ServeHTTP implements http.Handler.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if r.debugHandler != nil {
+		r.debugHandler.ServeHTTP(w, req)
+		return
+	}
 	r.mux.ServeHTTP(w, req)
 }
 

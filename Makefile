@@ -16,7 +16,7 @@ test-js:
 	go test ./... -run TestGeneratedClientsAreValid -count=1
 
 test-python:
-	@command -v python3 >/dev/null 2>&1 && echo "python3 present" || { echo "python3 not found; skipping"; exit 0; }
+	@command -v uv >/dev/null 2>&1 && echo "uv present" || { echo "uv not found; skipping"; exit 0; }
 	go test ./... -run TestGeneratedClientsAreValid -count=1
 
 test-ts:

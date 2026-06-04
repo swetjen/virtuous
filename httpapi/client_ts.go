@@ -251,6 +251,16 @@ function _encodeBody(value: unknown, mode?: string, fields?: BodyField[]): BodyI
 		_appendFields(form, value, fields)
 		return form
 	}
+	if (fields && fields.length > 0 && value && typeof value === "object" && !Array.isArray(value)) {
+		const data = value as Record<string, unknown>
+		const body: Record<string, unknown> = {}
+		for (const field of fields) {
+			if (field[1] in data) {
+				body[field[0]] = data[field[1]]
+			}
+		}
+		return JSON.stringify(body)
+	}
 	return JSON.stringify(value)
 }
 

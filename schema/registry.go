@@ -15,6 +15,8 @@ type TypeOverride struct {
 	PyType        string
 	OpenAPIType   string
 	OpenAPIFormat string
+	Nullable      bool
+	ArbitraryJSON bool
 }
 
 // Field describes a schema field for client generation.
@@ -149,7 +151,7 @@ func mergeTypeOverrides(user map[string]TypeOverride) map[string]TypeOverride {
 }
 
 func defaultTypeOverrides() map[string]TypeOverride {
-	return map[string]TypeOverride{
+	overrides := map[string]TypeOverride{
 		"time.Time": {
 			JSType:        "string",
 			PyType:        "datetime",
@@ -157,9 +159,9 @@ func defaultTypeOverrides() map[string]TypeOverride {
 			OpenAPIFormat: "date-time",
 		},
 		"encoding/json.RawMessage": {
-			JSType:      "object|any[]",
-			PyType:      "Any",
-			OpenAPIType: "object",
+			JSType:        "object|any[]",
+			PyType:        "Any",
+			ArbitraryJSON: true,
 		},
 		"github.com/swetjen/virtuous/httpapi.File": {
 			JSType:        "File|Blob",
@@ -168,6 +170,43 @@ func defaultTypeOverrides() map[string]TypeOverride {
 			OpenAPIFormat: "binary",
 		},
 	}
+	addPgtypeOverrides(overrides, "github.com/jackc/pgx/v5/pgtype")
+	addPgtypeOverrides(overrides, "github.com/jackc/pgtype")
+	addPgtypeZeronullOverrides(overrides, "github.com/jackc/pgx/v5/pgtype/zeronull")
+	addPgtypeZeronullOverrides(overrides, "github.com/jackc/pgtype/zeronull")
+	return overrides
+}
+
+func addPgtypeOverrides(overrides map[string]TypeOverride, pkg string) {
+	add := func(name string, override TypeOverride) {
+		overrides[pkg+"."+name] = override
+	}
+	add("Text", TypeOverride{JSType: "string", PyType: "str", OpenAPIType: "string", Nullable: true})
+	add("Bool", TypeOverride{JSType: "boolean", PyType: "bool", OpenAPIType: "boolean", Nullable: true})
+	add("Int2", TypeOverride{JSType: "number", PyType: "int", OpenAPIType: "integer", OpenAPIFormat: "int32", Nullable: true})
+	add("Int4", TypeOverride{JSType: "number", PyType: "int", OpenAPIType: "integer", OpenAPIFormat: "int32", Nullable: true})
+	add("Int8", TypeOverride{JSType: "number", PyType: "int", OpenAPIType: "integer", OpenAPIFormat: "int64", Nullable: true})
+	add("Uint32", TypeOverride{JSType: "number", PyType: "int", OpenAPIType: "integer", Nullable: true})
+	add("Float4", TypeOverride{JSType: "number", PyType: "float", OpenAPIType: "number", OpenAPIFormat: "float", Nullable: true})
+	add("Float8", TypeOverride{JSType: "number", PyType: "float", OpenAPIType: "number", OpenAPIFormat: "double", Nullable: true})
+	add("Numeric", TypeOverride{JSType: "number", PyType: "float", OpenAPIType: "number", Nullable: true})
+	add("UUID", TypeOverride{JSType: "string", PyType: "str", OpenAPIType: "string", OpenAPIFormat: "uuid", Nullable: true})
+	add("Date", TypeOverride{JSType: "string", PyType: "date", OpenAPIType: "string", OpenAPIFormat: "date", Nullable: true})
+	add("Timestamp", TypeOverride{JSType: "string", PyType: "datetime", OpenAPIType: "string", OpenAPIFormat: "date-time", Nullable: true})
+	add("Timestamptz", TypeOverride{JSType: "string", PyType: "datetime", OpenAPIType: "string", OpenAPIFormat: "date-time", Nullable: true})
+	add("JSON", TypeOverride{JSType: "object|any[]", PyType: "Any", ArbitraryJSON: true, Nullable: true})
+	add("JSONB", TypeOverride{JSType: "object|any[]", PyType: "Any", ArbitraryJSON: true, Nullable: true})
+}
+
+func addPgtypeZeronullOverrides(overrides map[string]TypeOverride, pkg string) {
+	add := func(name string, override TypeOverride) {
+		overrides[pkg+"."+name] = override
+	}
+	add("Text", TypeOverride{JSType: "string", PyType: "str", OpenAPIType: "string"})
+	add("Int2", TypeOverride{JSType: "number", PyType: "int", OpenAPIType: "integer", OpenAPIFormat: "int32"})
+	add("Int4", TypeOverride{JSType: "number", PyType: "int", OpenAPIType: "integer", OpenAPIFormat: "int32"})
+	add("Int8", TypeOverride{JSType: "number", PyType: "int", OpenAPIType: "integer", OpenAPIFormat: "int64"})
+	add("Float8", TypeOverride{JSType: "number", PyType: "float", OpenAPIType: "number", OpenAPIFormat: "double"})
 }
 
 func (r *Registry) addType(t reflect.Type) {
@@ -195,7 +234,7 @@ func (r *Registry) addType(t reflect.Type) {
 				Name:     jsonField.Name,
 				Type:     field.Type,
 				Optional: jsonField.OmitEmpty || jsonField.ParentOptional,
-				Nullable: isOptionalType(field.Type),
+				Nullable: r.isNullableType(field.Type),
 				Doc:      reflectutil.FieldDoc(field),
 			})
 			r.addType(field.Type)
@@ -351,7 +390,19 @@ func (r *Registry) isOverrideScalar(t reflect.Type) bool {
 	if !ok {
 		return false
 	}
-	return override.OpenAPIType != "" || override.OpenAPIFormat != "" || override.JSType != "" || override.PyType != ""
+	return override.OpenAPIType != "" || override.OpenAPIFormat != "" || override.JSType != "" || override.PyType != "" || override.ArbitraryJSON
+}
+
+func (r *Registry) isNullableType(t reflect.Type) bool {
+	if isOptionalType(t) {
+		return true
+	}
+	base := reflectutil.DerefType(t)
+	if base == nil {
+		return false
+	}
+	override, ok := typeOverrideFor(r.overrides, base)
+	return ok && override.Nullable
 }
 
 func typeOverrideFor(overrides map[string]TypeOverride, t reflect.Type) (TypeOverride, bool) {

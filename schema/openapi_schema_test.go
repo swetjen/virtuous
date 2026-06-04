@@ -1,9 +1,11 @@
 package schema
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	testa "github.com/swetjen/virtuous/internal/testtypes/a"
 	testb "github.com/swetjen/virtuous/internal/testtypes/b"
 )
@@ -50,6 +52,28 @@ type embeddedTaggedResponse struct {
 type embeddedPointerResponse struct {
 	*EmbeddedOrganization
 	Error string `json:"error"`
+}
+
+type openAPIPgNullableMatrix struct {
+	Plain       string          `json:"plain"`
+	PlainPtr    *string         `json:"plain_ptr,omitempty"`
+	Text        pgtype.Text     `json:"text"`
+	TextPtr     *pgtype.Text    `json:"text_ptr,omitempty"`
+	Raw         json.RawMessage `json:"raw"`
+	OptionalRaw json.RawMessage `json:"optional_raw,omitempty"`
+}
+
+type openAPIPgOverridePayload struct {
+	Text pgtype.Text `json:"text"`
+}
+
+type openAPIRawMessageShapes struct {
+	Object json.RawMessage `json:"object"`
+	Array  json.RawMessage `json:"array"`
+	String json.RawMessage `json:"string"`
+	Number json.RawMessage `json:"number"`
+	Bool   json.RawMessage `json:"bool"`
+	Null   json.RawMessage `json:"null"`
 }
 
 func TestOpenAPISchemaFieldMetadataTags(t *testing.T) {
@@ -205,6 +229,56 @@ func TestOpenAPISchemaMakesPromotedPointerFieldsOptional(t *testing.T) {
 	}
 }
 
+func TestOpenAPIUserOverrideBeatsBuiltInPgtypeOverride(t *testing.T) {
+	gen := NewGenerator(map[string]TypeOverride{
+		"github.com/jackc/pgx/v5/pgtype.Text": {
+			JSType:        "CustomText",
+			PyType:        "CustomTextPy",
+			OpenAPIType:   "integer",
+			OpenAPIFormat: "int32",
+		},
+	})
+	_ = gen.SchemaFor(openAPIPgOverridePayload{})
+
+	component := gen.Components()["openAPIPgOverridePayload"]
+	text := component.Properties["text"]
+	if text.Type != "integer" || text.Format != "int32" || text.Nullable {
+		t.Fatalf("text schema = %#v, want custom non-null integer override", text)
+	}
+	if _, ok := gen.Components()["Text"]; ok {
+		t.Fatalf("pgtype.Text should stay scalar and not emit implementation schema")
+	}
+}
+
+func TestOpenAPINullableSemanticsMatrix(t *testing.T) {
+	gen := NewGenerator(nil)
+	_ = gen.SchemaFor(openAPIPgNullableMatrix{})
+
+	component := gen.Components()["openAPIPgNullableMatrix"]
+	assertOpenAPIField(t, component, "plain", "string", "", false, true)
+	assertOpenAPIField(t, component, "plain_ptr", "string", "", true, false)
+	assertOpenAPIField(t, component, "text", "string", "", true, true)
+	assertOpenAPIField(t, component, "text_ptr", "string", "", true, false)
+	assertOpenAPIField(t, component, "raw", "", "", false, true)
+	assertOpenAPIField(t, component, "optional_raw", "", "", false, false)
+}
+
+func TestOpenAPIRawMessageIsArbitraryJSONForScalarShapes(t *testing.T) {
+	gen := NewGenerator(nil)
+	_ = gen.SchemaFor(openAPIRawMessageShapes{})
+
+	component := gen.Components()["openAPIRawMessageShapes"]
+	for _, name := range []string{"object", "array", "string", "number", "bool", "null"} {
+		prop := component.Properties[name]
+		if prop == nil {
+			t.Fatalf("missing raw property %q", name)
+		}
+		if prop.Type != "" || prop.Format != "" || prop.Items != nil || prop.AdditionalProperties != nil || prop.Ref != "" {
+			t.Fatalf("raw property %q should be arbitrary JSON schema: %#v", name, prop)
+		}
+	}
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
@@ -212,4 +286,18 @@ func containsString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func assertOpenAPIField(t *testing.T, component OpenAPISchema, name, typ, format string, nullable, required bool) {
+	t.Helper()
+	prop := component.Properties[name]
+	if prop == nil {
+		t.Fatalf("missing property %q in %#v", name, component.Properties)
+	}
+	if prop.Type != typ || prop.Format != format || prop.Nullable != nullable {
+		t.Fatalf("property %q = %#v, want type=%q format=%q nullable=%v", name, prop, typ, format, nullable)
+	}
+	if containsString(component.Required, name) != required {
+		t.Fatalf("property %q required=%v, want %v in %#v", name, containsString(component.Required, name), required, component.Required)
+	}
 }

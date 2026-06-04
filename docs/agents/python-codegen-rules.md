@@ -13,6 +13,7 @@ Generated Python has one module namespace. DTO classes, transport classes, servi
 - Prefer API route/domain context over Go package paths for DTO names, including nested DTOs reached through request and response fields. Package-qualified names should be a last resort only when no route context is available.
 - Do not rely on quoted forward references to hide collisions. `get_type_hints(...)` resolves annotations at runtime, so module bindings must point at the intended DTO classes.
 - Runtime-test generated Python, not only `py_compile`. Tests should import the generated module, call generated methods with mocked `urlopen`, and assert decoded dataclass types.
+- Run generated Python verification through `uv run --python 3.12 python ...` so contract tests use a consistent interpreter and fail clearly when `uv` is unavailable.
 - Keep optional generated call surfaces keyword-only. Query params, auth overrides, and request bodies should not become ambiguous positional arguments.
 - Fail locally before dispatch when generated clients know declared auth is missing.
 
@@ -31,7 +32,7 @@ Python codegen tests should include hostile API names:
 Before finishing Python generator changes:
 
 - Generate a real `client.gen.py`.
-- Run `python3 -m py_compile client.gen.py`.
+- Run `uv run --python 3.12 python -m py_compile client.gen.py`.
 - Import the generated module with `importlib.util.spec_from_file_location(...)`.
 - Instantiate `create_client(...)`.
 - Mock `urllib.request.urlopen` and call at least one generated method.

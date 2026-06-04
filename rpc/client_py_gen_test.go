@@ -67,7 +67,7 @@ func TestRPCPythonClientSanitizesFieldsAndPreservesWireNames(t *testing.T) {
 	if err := os.WriteFile(pyPath, py, 0644); err != nil {
 		t.Fatalf("write python client: %v", err)
 	}
-	if err := runRPCCommand("python3", "-m", "py_compile", pyPath); err != nil {
+	if err := runRPCPython("-m", "py_compile", pyPath); err != nil {
 		t.Fatalf("python py_compile failed: %v", err)
 	}
 	snippet := pythonRPCImportSnippet(pyPath) + `
@@ -95,7 +95,7 @@ assert encoded["else"] == "fallback"
 assert encoded["from_"] == "literal"
 assert encoded["total_spend"] == 42.5
 `
-	if err := runRPCCommand("python3", "-c", snippet); err != nil {
+	if err := runRPCPython("-c", snippet); err != nil {
 		t.Fatalf("python keyword round trip failed: %v", err)
 	}
 }
@@ -139,17 +139,18 @@ resp = client.rpc.rpcClientHandler(mod.rpcClientRequest(id="c1"))
 assert isinstance(resp.data[0], mod.Client)
 assert isinstance(client, mod._VirtuousClient)
 `
-	if err := runRPCCommand("python3", "-c", snippet); err != nil {
+	if err := runRPCPython("-c", snippet); err != nil {
 		t.Fatalf("python client/model shadow regression failed: %v", err)
 	}
 }
 
-func runRPCCommand(name string, args ...string) error {
-	path, err := exec.LookPath(name)
+func runRPCPython(args ...string) error {
+	path, err := exec.LookPath("uv")
 	if err != nil {
-		return nil
+		return fmt.Errorf("uv is required for generated Python contract tests: %w", err)
 	}
-	cmd := exec.Command(path, args...)
+	uvArgs := append([]string{"run", "--python", "3.12", "python"}, args...)
+	cmd := exec.Command(path, uvArgs...)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		return nil

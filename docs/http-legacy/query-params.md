@@ -44,6 +44,7 @@ Notes:
 - JSON-tagged fields become request body fields.
 - Path-tagged fields become path params and are excluded from inferred JSON request bodies.
 - Query/path values preserve scalar Go types in generated OpenAPI and clients.
+- Generated clients serialize only JSON body fields into the request body; path and query fields are sent through the URL even when they share the same Go request struct.
 - Alias overlap across query/body is valid when using different fields (for example `QueryLimit string \`query:"limit"\`` and `BodyLimit int \`json:"limit"\``).
 
 ## Path params

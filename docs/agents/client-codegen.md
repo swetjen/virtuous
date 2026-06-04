@@ -23,6 +23,7 @@ Generated Python should:
 - keep runtime transport classes private, for example `_VirtuousClient`
 - use legal Python identifiers for all fields, params, methods, locals, and classes
 - preserve JSON/form/query wire names separately from Python identifiers
+- serialize only JSON body fields for mixed `httpapi` path/query/body request structs
 - use API/domain context for DTO names, including nested DTOs
 - fail locally before dispatch when declared auth is missing
 - decode responses into dataclass DTOs, not raw dicts
@@ -97,4 +98,3 @@ Use route/domain prefixes when names would otherwise be ambiguous. Use package-q
 | `0.0.45` | Python transport no longer shadows DTOs such as `Client` |
 | `0.0.46` | Compact TS, React Query, and Python transport helpers |
 | `0.0.47` | Nested Python DTOs use route/domain context |
-

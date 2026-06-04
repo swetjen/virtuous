@@ -218,6 +218,130 @@ func TestReactQueryTSMutationVariableShapes(t *testing.T) {
 	}
 }
 
+func TestReactQueryTSMixedRequestAndPgtypeShapes(t *testing.T) {
+	router := NewRouter()
+	router.Describe("PUT /contracts/{account_id}/mixed", clientRuntimeMixedRequest{}, clientRuntimeResponse{}, HandlerMeta{
+		Service: "Contracts",
+		Method:  "Mixed",
+	})
+	router.Describe("PATCH /contracts/optional", Optional[optionalClientRequest](), clientRuntimeResponse{}, HandlerMeta{
+		Service: "Contracts",
+		Method:  "Optional",
+	})
+	router.Describe("DELETE /contracts/{account_id}/cache", HTTPPythonNoBodyRequest{}, NoResponse204{}, HandlerMeta{
+		Service: "Contracts",
+		Method:  "ClearCache",
+	})
+	router.Describe("POST /db/pgtype", httpPgtypeRequest{}, httpPgtypeResponse{}, HandlerMeta{
+		Service: "DB",
+		Method:  "RoundTrip",
+	})
+
+	tsText := compileReactQueryTS(t, router)
+	assertContains(t, tsText, "text: string | null;")
+	assertContains(t, tsText, "flag: boolean | null;")
+	assertContains(t, tsText, "amount: number | null;")
+	assertContains(t, tsText, "when: string | null;")
+	assertContains(t, tsText, "legacy_json: object|any[] | null;")
+	assertContains(t, tsText, "raw: object|any[];")
+	assertNotContains(t, tsText, "export interface Text")
+	assertNotContains(t, tsText, "export interface Numeric")
+
+	assertContains(t, tsText, "export type ContractsAccountIdMixedPutPathParams = {account_id: string; }")
+	assertContains(t, tsText, "export type ContractsAccountIdMixedPutQuery = {id: string[];limit?: number; }")
+	assertContains(t, tsText, "UseMutationOptions<ContractsclientRuntimeResponse, Error, { pathParams: ContractsAccountIdMixedPutPathParams; request: ContractsclientRuntimeMixedRequest; query?: ContractsAccountIdMixedPutQuery }>")
+	assertContains(t, tsText, "virtuousClient.Contracts.mixed(variables.pathParams, variables.request, variables.query)")
+	assertContains(t, tsText, `["name", "name", false]`)
+	assertContains(t, tsText, `["count", "count", false]`)
+	assertNotContains(t, tsText, `["account_id", "accountID", false]`)
+	assertNotContains(t, tsText, `["id", "iDs", false]`)
+	assertContains(t, tsText, "UseMutationOptions<ContractsclientRuntimeResponse, Error, { request?: ContractsoptionalClientRequest } | void>")
+	assertContains(t, tsText, "UseMutationOptions<void, Error, { pathParams: ContractsAccountIdCacheDeletePathParams }>")
+}
+
+func TestReactQueryTSRawClientRuntimeRequestEncoding(t *testing.T) {
+	requireCommand(t, "node")
+	requireCommand(t, "tsc")
+
+	router := newRuntimeClientContractRouter()
+	reactQueryTS := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteReactQueryTS(buf) })
+
+	dir := t.TempDir()
+	reactQueryPath := filepath.Join(dir, "react-query.client.gen.ts")
+	if err := os.WriteFile(reactQueryPath, reactQueryTS, 0644); err != nil {
+		t.Fatalf("write react query ts: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0644); err != nil {
+		t.Fatalf("write package json: %v", err)
+	}
+	writeReactQueryRuntimeStub(t, dir)
+	if err := runCommand("tsc", "--target", "ES2022", "--module", "Node16", "--moduleResolution", "node16", "--lib", "ES2022,DOM", "--outDir", dir, reactQueryPath); err != nil {
+		t.Fatalf("compile react query client: %v", err)
+	}
+
+	harness := `
+import { createClient } from "./react-query.client.gen.js";
+
+const calls = [];
+
+class FakeResponse {
+  constructor(status, body) {
+    this.status = status;
+    this.statusText = status === 204 ? "No Content" : "OK";
+    this.ok = status >= 200 && status < 300;
+    this._body = body;
+  }
+  async text() { return this._body; }
+  async arrayBuffer() { return new TextEncoder().encode(this._body).buffer; }
+}
+
+globalThis.fetch = async (url, init = {}) => {
+  calls.push({ url: String(url), init });
+  if (String(url).includes("/mixed")) {
+    const parsed = new URL(String(url));
+    if (parsed.pathname !== "/contracts/acct%201/mixed") throw new Error("bad mixed path " + parsed.pathname);
+    if (parsed.searchParams.getAll("id").join(",") !== "a,b") throw new Error("bad id query " + parsed.search);
+    if (parsed.searchParams.get("limit") !== "25") throw new Error("bad limit query " + parsed.search);
+    const body = JSON.parse(init.body);
+    if (JSON.stringify(body) !== JSON.stringify({ name: "mixed", count: 3 })) throw new Error("bad mixed body " + JSON.stringify(body));
+    return new FakeResponse(200, '{"accepted":true}');
+  }
+  if (String(url).endsWith("/optional")) {
+    if ("body" in init) throw new Error("optional absent body should not dispatch a body");
+    return new FakeResponse(200, '{"accepted":false}');
+  }
+  if (String(url).endsWith("/cache")) {
+    if ("body" in init) throw new Error("no-body route should not dispatch a body");
+    return new FakeResponse(204, "");
+  }
+  throw new Error("unexpected fetch " + url);
+};
+
+const client = createClient({ baseUrl: "https://core.example" });
+const mixed = await client.Contracts.mixed(
+  { account_id: "acct 1" },
+  { accountID: "body-leak", iDs: ["body-leak"], limit: 99, name: "mixed", count: 3 },
+  { id: ["a", "b"], limit: 25 },
+);
+if (!mixed.accepted) throw new Error("mixed response failed");
+
+const optional = await client.Contracts.optional();
+if (optional.accepted !== false) throw new Error("optional response failed");
+
+const cleared = await client.Contracts.clearCache({ account_id: "acct-2" });
+if (cleared !== undefined) throw new Error("clear cache should return undefined");
+
+if (calls.length !== 3) throw new Error("unexpected call count " + calls.length);
+`
+	harnessPath := filepath.Join(dir, "harness.mjs")
+	if err := os.WriteFile(harnessPath, []byte(harness), 0644); err != nil {
+		t.Fatalf("write react query runtime harness: %v", err)
+	}
+	if err := runCommand("node", harnessPath); err != nil {
+		t.Fatalf("react query raw client runtime failed: %v", err)
+	}
+}
+
 func TestReactQueryTSNoResponseRoutes(t *testing.T) {
 	router := NewRouter()
 	router.Describe("GET /health", nil, NoResponse204{}, HandlerMeta{Service: "API", Method: "Health"})
@@ -404,6 +528,21 @@ export declare function useMutation<TData = unknown, TError = Error, TVariables 
 `
 	if err := os.WriteFile(filepath.Join(stubDir, "index.d.ts"), []byte(stub), 0644); err != nil {
 		t.Fatalf("write react-query stub: %v", err)
+	}
+}
+
+func writeReactQueryRuntimeStub(t *testing.T, dir string) {
+	t.Helper()
+	writeReactQueryStub(t, dir)
+	stubDir := filepath.Join(dir, "node_modules", "@tanstack", "react-query")
+	if err := os.WriteFile(filepath.Join(stubDir, "package.json"), []byte(`{"type":"module","main":"./index.js","types":"./index.d.ts"}`), 0644); err != nil {
+		t.Fatalf("write react-query runtime package json: %v", err)
+	}
+	stub := `export function useQuery(options) { return { options } }
+export function useMutation(options) { return { options } }
+`
+	if err := os.WriteFile(filepath.Join(stubDir, "index.js"), []byte(stub), 0644); err != nil {
+		t.Fatalf("write react-query runtime stub: %v", err)
 	}
 }
 

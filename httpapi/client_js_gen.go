@@ -209,20 +209,33 @@ export function createClient(basepath = "/") {
 					return form
 				}
 {{- end }}
-				const response = await fetch(url, {
+{{- if and $method.HasBody (eq $method.BodyMode "json") $method.BodyFields }}
+				const encodeJSON = (value) => {
+					const data = value || {}
+					return JSON.stringify({
+{{- range $field := $method.BodyFields }}
+						"{{ $field.WireName }}": data.{{ $field.Name }},
+{{- end }}
+					})
+				}
+{{- end }}
+				const requestInit = {
 					method: "{{ $method.HTTPMethod }}",
 					headers,
 {{- if $method.HasCookieAuth }}
 					credentials: "same-origin",
 {{- end }}
+				}
 {{- if $method.HasBody }}
 {{- if $method.BodyOptional }}
-					body: request === undefined || request === null ? undefined : {{ if eq $method.BodyMode "form" }}encodeForm(request){{ else if eq $method.BodyMode "multipart" }}encodeMultipart(request){{ else }}JSON.stringify(request){{ end }},
+				if (request !== undefined && request !== null) {
+					requestInit.body = {{ if eq $method.BodyMode "form" }}encodeForm(request){{ else if eq $method.BodyMode "multipart" }}encodeMultipart(request){{ else if $method.BodyFields }}encodeJSON(request){{ else }}JSON.stringify(request){{ end }}
+				}
 {{- else }}
-					body: {{ if eq $method.BodyMode "form" }}encodeForm(request || {}){{ else if eq $method.BodyMode "multipart" }}encodeMultipart(request || {}){{ else }}JSON.stringify(request || {}){{ end }},
+				requestInit.body = {{ if eq $method.BodyMode "form" }}encodeForm(request || {}){{ else if eq $method.BodyMode "multipart" }}encodeMultipart(request || {}){{ else if $method.BodyFields }}encodeJSON(request || {}){{ else }}JSON.stringify(request || {}){{ end }}
 {{- end }}
 {{- end }}
-				})
+				const response = await fetch(url, requestInit)
 {{- if eq $method.ResponseMode "json" }}
 				const text = await response.text()
 				let json = null

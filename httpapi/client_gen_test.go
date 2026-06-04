@@ -40,6 +40,18 @@ type optionalClientRequest struct {
 	Name string `json:"name"`
 }
 
+type clientRuntimeMixedRequest struct {
+	AccountID string   `path:"account_id"`
+	IDs       []string `query:"id"`
+	Limit     int      `query:"limit,omitempty"`
+	Name      string   `json:"name"`
+	Count     int      `json:"count"`
+}
+
+type clientRuntimeResponse struct {
+	Accepted bool `json:"accepted"`
+}
+
 type keywordPythonPayload struct {
 	DateFrom      *string `json:"date_from,omitempty"`
 	TotalSpend    float64 `json:"total_spend"`
@@ -240,10 +252,10 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if err := runCommand("tsc", "--noEmit", "--target", "ES2017", "--lib", "ES2017,DOM", tsPath); err != nil {
 		t.Fatalf("tsc check failed: %v", err)
 	}
-	if err := runCommand("python3", "-c", pythonImportSnippet(pyPath)); err != nil {
+	if err := runPythonCommand("-c", pythonImportSnippet(pyPath)); err != nil {
 		t.Fatalf("python import failed: %v", err)
 	}
-	if err := runCommand("python3", "-m", "py_compile", pyPath); err != nil {
+	if err := runPythonCommand("-m", "py_compile", pyPath); err != nil {
 		t.Fatalf("python py_compile failed: %v", err)
 	}
 
@@ -318,6 +330,319 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	}
 }
 
+func TestTypeScriptClientRuntimeRequestEncoding(t *testing.T) {
+	requireCommand(t, "node")
+	requireCommand(t, "tsc")
+
+	router := newRuntimeClientContractRouter()
+	ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
+
+	dir := t.TempDir()
+	tsPath := filepath.Join(dir, "client.gen.ts")
+	if err := os.WriteFile(tsPath, ts, 0644); err != nil {
+		t.Fatalf("write ts client: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0644); err != nil {
+		t.Fatalf("write package json: %v", err)
+	}
+	if err := runCommand("tsc", "--target", "ES2022", "--module", "Node16", "--moduleResolution", "node16", "--lib", "ES2022,DOM", "--outDir", dir, tsPath); err != nil {
+		t.Fatalf("compile generated ts client: %v", err)
+	}
+	harness := `
+import { createClient } from "./client.gen.js";
+
+const calls = [];
+
+class FakeResponse {
+  constructor(status, body) {
+    this.status = status;
+    this.statusText = status === 204 ? "No Content" : "OK";
+    this.ok = status >= 200 && status < 300;
+    this._body = body;
+  }
+  async text() { return this._body; }
+  async arrayBuffer() { return new TextEncoder().encode(this._body).buffer; }
+}
+
+class CaptureFormData {
+  constructor() { this.parts = []; }
+  append(key, value) { this.parts.push([key, value]); }
+}
+
+globalThis.FormData = CaptureFormData;
+globalThis.fetch = async (url, init = {}) => {
+  calls.push({ url: String(url), init });
+  if (String(url).includes("/mixed")) {
+    const parsed = new URL(String(url));
+    if (parsed.pathname !== "/contracts/acct%201/mixed") throw new Error("bad mixed path " + parsed.pathname);
+    if (parsed.searchParams.getAll("id").join(",") !== "a,b") throw new Error("bad id query " + parsed.search);
+    if (parsed.searchParams.get("limit") !== "25") throw new Error("bad limit query " + parsed.search);
+    const body = JSON.parse(init.body);
+    if (JSON.stringify(body) !== JSON.stringify({ name: "mixed", count: 3 })) throw new Error("bad mixed body " + JSON.stringify(body));
+    if (body.account_id || body.accountID || body.id || body.limit) throw new Error("mixed body leaked URL fields");
+    return new FakeResponse(200, '{"accepted":true}');
+  }
+  if (String(url).endsWith("/optional")) {
+    if ("body" in init) throw new Error("optional absent body should not dispatch a body");
+    return new FakeResponse(200, '{"accepted":false}');
+  }
+  if (String(url).endsWith("/cache")) {
+    if ("body" in init) throw new Error("no-body route should not dispatch a body");
+    return new FakeResponse(204, "");
+  }
+  if (String(url).endsWith("/callbacks/form")) {
+    const headers = init.headers || {};
+    if (headers["Content-Type"] !== "application/x-www-form-urlencoded") throw new Error("bad form content type");
+    const params = new URLSearchParams(init.body);
+    if (params.get("hub.mode") !== "subscribe" || params.get("hub.verify_token") !== "secret") {
+      throw new Error("bad form body " + init.body);
+    }
+    return new FakeResponse(204, "");
+  }
+  if (String(url).endsWith("/assets/upload")) {
+    const headers = init.headers || {};
+    if ("Content-Type" in headers) throw new Error("multipart content type should be omitted");
+    if (!(init.body instanceof CaptureFormData)) throw new Error("multipart body should be FormData");
+    const parts = init.body.parts.map(([key, value]) => [key, String(value)]);
+    if (JSON.stringify(parts) !== JSON.stringify([["file", "payload"], ["client_id", "client-1"]])) {
+      throw new Error("bad multipart parts " + JSON.stringify(parts));
+    }
+    return new FakeResponse(204, "");
+  }
+  throw new Error("unexpected fetch " + url);
+};
+
+const client = createClient({ baseUrl: "https://core.example" });
+const mixed = await client.Contracts.mixed(
+  { account_id: "acct 1" },
+  { accountID: "body-leak", iDs: ["body-leak"], limit: 99, name: "mixed", count: 3 },
+  { id: ["a", "b"], limit: 25 },
+);
+if (!mixed.accepted) throw new Error("mixed response did not decode");
+
+const optional = await client.Contracts.optional();
+if (optional.accepted !== false) throw new Error("optional response did not decode");
+
+const cleared = await client.Contracts.clearCache({ account_id: "acct-2" });
+if (cleared !== undefined) throw new Error("clearCache should return undefined");
+
+await client.Callbacks.encodeForm({ mode: "subscribe", verifyToken: "secret" });
+await client.Assets.encodeMultipart({ file: "payload", clientID: "client-1" });
+
+if (calls.length !== 5) throw new Error("unexpected call count " + calls.length);
+`
+	harnessPath := filepath.Join(dir, "harness.mjs")
+	if err := os.WriteFile(harnessPath, []byte(harness), 0644); err != nil {
+		t.Fatalf("write ts runtime harness: %v", err)
+	}
+	if err := runCommand("node", harnessPath); err != nil {
+		t.Fatalf("typescript runtime harness failed: %v", err)
+	}
+}
+
+func TestJavaScriptClientRuntimeRequestEncoding(t *testing.T) {
+	requireCommand(t, "node")
+
+	router := newRuntimeClientContractRouter()
+	js := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientJS(buf) })
+
+	dir := t.TempDir()
+	jsPath := filepath.Join(dir, "client.gen.js")
+	if err := os.WriteFile(jsPath, js, 0644); err != nil {
+		t.Fatalf("write js client: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0644); err != nil {
+		t.Fatalf("write package json: %v", err)
+	}
+	harness := `
+import { createClient } from "./client.gen.js";
+
+const calls = [];
+
+class FakeResponse {
+  constructor(status, body) {
+    this.status = status;
+    this.statusText = status === 204 ? "No Content" : "OK";
+    this.ok = status >= 200 && status < 300;
+    this._body = body;
+  }
+  async text() { return this._body; }
+  async arrayBuffer() { return new TextEncoder().encode(this._body).buffer; }
+}
+
+class CaptureFormData {
+  constructor() { this.parts = []; }
+  append(key, value) { this.parts.push([key, value]); }
+}
+
+globalThis.FormData = CaptureFormData;
+globalThis.fetch = async (url, init = {}) => {
+  calls.push({ url: String(url), init });
+  if (String(url).includes("/mixed")) {
+    const parsed = new URL(String(url));
+    if (parsed.pathname !== "/contracts/acct%201/mixed") throw new Error("bad mixed path " + parsed.pathname);
+    if (parsed.searchParams.getAll("id").join(",") !== "a,b") throw new Error("bad id query " + parsed.search);
+    if (parsed.searchParams.get("limit") !== "25") throw new Error("bad limit query " + parsed.search);
+    const body = JSON.parse(init.body);
+    if (JSON.stringify(body) !== JSON.stringify({ name: "mixed", count: 3 })) throw new Error("bad mixed body " + JSON.stringify(body));
+    return new FakeResponse(200, '{"accepted":true}');
+  }
+  if (String(url).endsWith("/optional")) {
+    if ("body" in init) throw new Error("optional absent body should not dispatch a body");
+    return new FakeResponse(200, '{"accepted":false}');
+  }
+  if (String(url).endsWith("/cache")) {
+    if ("body" in init) throw new Error("no-body route should not dispatch a body");
+    return new FakeResponse(204, "");
+  }
+  if (String(url).endsWith("/callbacks/form")) {
+    const headers = init.headers || {};
+    if (headers["Content-Type"] !== "application/x-www-form-urlencoded") throw new Error("bad form content type");
+    const params = new URLSearchParams(init.body);
+    if (params.get("hub.mode") !== "subscribe" || params.get("hub.verify_token") !== "secret") {
+      throw new Error("bad form body " + init.body);
+    }
+    return new FakeResponse(204, "");
+  }
+  if (String(url).endsWith("/assets/upload")) {
+    const headers = init.headers || {};
+    if ("Content-Type" in headers) throw new Error("multipart content type should be omitted");
+    if (!(init.body instanceof CaptureFormData)) throw new Error("multipart body should be FormData");
+    const parts = init.body.parts.map(([key, value]) => [key, String(value)]);
+    if (JSON.stringify(parts) !== JSON.stringify([["file", "payload"], ["client_id", "client-1"]])) {
+      throw new Error("bad multipart parts " + JSON.stringify(parts));
+    }
+    return new FakeResponse(204, "");
+  }
+  throw new Error("unexpected fetch " + url);
+};
+
+const client = createClient("https://core.example");
+const mixed = await client.Contracts.mixed(
+  { account_id: "acct 1" },
+  { accountID: "body-leak", iDs: ["body-leak"], limit: 99, name: "mixed", count: 3 },
+  { id: ["a", "b"], limit: 25 },
+);
+if (!mixed.accepted) throw new Error("mixed response did not decode");
+
+const optional = await client.Contracts.optional();
+if (optional.accepted !== false) throw new Error("optional response did not decode");
+
+const cleared = await client.Contracts.clearCache({ account_id: "acct-2" });
+if (cleared !== undefined) throw new Error("clearCache should return undefined");
+
+await client.Callbacks.encodeForm({ mode: "subscribe", verifyToken: "secret" });
+await client.Assets.encodeMultipart({ file: "payload", clientID: "client-1" });
+
+if (calls.length !== 5) throw new Error("unexpected call count " + calls.length);
+`
+	harnessPath := filepath.Join(dir, "harness.mjs")
+	if err := os.WriteFile(harnessPath, []byte(harness), 0644); err != nil {
+		t.Fatalf("write js runtime harness: %v", err)
+	}
+	if err := runCommand("node", harnessPath); err != nil {
+		t.Fatalf("javascript runtime harness failed: %v", err)
+	}
+}
+
+func TestHTTPAPIGeneratedClientErrorBehavior(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /errors/json", nil, clientRuntimeResponse{}, HandlerMeta{
+		Service:     "Errors",
+		Method:      "JsonError",
+		OperationID: "json_error",
+	})
+	router.Describe("GET /errors/text", nil, "", HandlerMeta{
+		Service:     "Errors",
+		Method:      "TextError",
+		OperationID: "text_error",
+	})
+
+	t.Run("typescript", func(t *testing.T) {
+		requireCommand(t, "node")
+		requireCommand(t, "tsc")
+		ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
+		dir := t.TempDir()
+		tsPath := filepath.Join(dir, "client.gen.ts")
+		if err := os.WriteFile(tsPath, ts, 0644); err != nil {
+			t.Fatalf("write ts client: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0644); err != nil {
+			t.Fatalf("write package json: %v", err)
+		}
+		if err := runCommand("tsc", "--target", "ES2022", "--module", "Node16", "--moduleResolution", "node16", "--lib", "ES2022,DOM", "--outDir", dir, tsPath); err != nil {
+			t.Fatalf("compile ts client: %v", err)
+		}
+		writeHTTPAPIErrorNodeHarness(t, filepath.Join(dir, "harness.mjs"), true)
+		if err := runCommand("node", filepath.Join(dir, "harness.mjs")); err != nil {
+			t.Fatalf("typescript error harness failed: %v", err)
+		}
+	})
+
+	t.Run("javascript", func(t *testing.T) {
+		requireCommand(t, "node")
+		js := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientJS(buf) })
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "client.gen.js"), js, 0644); err != nil {
+			t.Fatalf("write js client: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"type":"module"}`), 0644); err != nil {
+			t.Fatalf("write package json: %v", err)
+		}
+		writeHTTPAPIErrorNodeHarness(t, filepath.Join(dir, "harness.mjs"), false)
+		if err := runCommand("node", filepath.Join(dir, "harness.mjs")); err != nil {
+			t.Fatalf("javascript error harness failed: %v", err)
+		}
+	})
+
+	t.Run("python", func(t *testing.T) {
+		py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+		dir := t.TempDir()
+		pyPath := filepath.Join(dir, "client.gen.py")
+		if err := os.WriteFile(pyPath, py, 0644); err != nil {
+			t.Fatalf("write py client: %v", err)
+		}
+		snippet := pythonImportSnippet(pyPath) + `
+class FakeResponse:
+    def __init__(self, status, body):
+        self._status = status
+        self._body = body
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        return False
+    def getcode(self):
+        return self._status
+    def read(self):
+        return self._body
+
+def fake_urlopen(req):
+    if req.full_url.endswith("/errors/json"):
+        return FakeResponse(422, b'{"error":"bad json"}')
+    if req.full_url.endswith("/errors/text"):
+        return FakeResponse(500, b"plain failure")
+    raise AssertionError(req.full_url)
+
+mod.request.urlopen = fake_urlopen
+client = mod.create_client(base_url="https://core.example")
+try:
+    client.json_error()
+    raise AssertionError("expected json error")
+except RuntimeError as err:
+    assert str(err) == "bad json", str(err)
+
+try:
+    client.text_error()
+    raise AssertionError("expected text error")
+except RuntimeError as err:
+    assert str(err) == "plain failure", str(err)
+`
+		if err := runPythonCommand("-c", snippet); err != nil {
+			t.Fatalf("python error harness failed: %v", err)
+		}
+	})
+}
+
 func TestPythonClientSanitizesIdentifiersAndPreservesWireNames(t *testing.T) {
 	router := NewRouter()
 	router.Describe("POST /keyword", keywordPythonPayload{}, keywordPythonPayload{}, HandlerMeta{
@@ -351,7 +676,7 @@ func TestPythonClientSanitizesIdentifiersAndPreservesWireNames(t *testing.T) {
 	if err := os.WriteFile(pyPath, py, 0644); err != nil {
 		t.Fatalf("write python client: %v", err)
 	}
-	if err := runCommand("python3", "-m", "py_compile", pyPath); err != nil {
+	if err := runPythonCommand("-m", "py_compile", pyPath); err != nil {
 		t.Fatalf("python py_compile failed: %v", err)
 	}
 	snippet := pythonImportSnippet(pyPath) + `
@@ -379,7 +704,7 @@ assert encoded["else"] == "fallback"
 assert encoded["from_"] == "literal"
 assert encoded["total_spend"] == 42.5
 `
-	if err := runCommand("python3", "-c", snippet); err != nil {
+	if err := runPythonCommand("-c", snippet); err != nil {
 		t.Fatalf("python keyword round trip failed: %v", err)
 	}
 }
@@ -446,7 +771,7 @@ except RuntimeError as err:
     assert "auth not configured" in str(err)
 assert len(calls) == before
 `
-	if err := runCommand("python3", "-c", snippet); err != nil {
+	if err := runPythonCommand("-c", snippet); err != nil {
 		t.Fatalf("python ergonomic client call failed: %v", err)
 	}
 }
@@ -495,8 +820,108 @@ assert isinstance(resp.metadata, mod.APIClient)
 assert isinstance(client, mod._VirtuousClient)
 assert mod.is_dataclass(mod.Client)
 `
-	if err := runCommand("python3", "-c", snippet); err != nil {
+	if err := runPythonCommand("-c", snippet); err != nil {
 		t.Fatalf("python client/model shadow regression failed: %v", err)
+	}
+}
+
+func TestPythonClientEncodesFormAndMultipartBodies(t *testing.T) {
+	router := NewRouter()
+	router.Describe("POST /callbacks/form", nil, NoResponse200{}, HandlerMeta{
+		Service:     "Callbacks",
+		Method:      "EncodeForm",
+		OperationID: "encode_form",
+		RequestBody: FormBody(formRequest{}),
+	})
+	router.Describe("POST /assets/upload", nil, NoResponse200{}, HandlerMeta{
+		Service:     "Assets",
+		Method:      "EncodeMultipart",
+		OperationID: "encode_multipart",
+		RequestBody: MultipartBody(multipartUploadRequest{}),
+	})
+
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+	dir := t.TempDir()
+	pyPath := filepath.Join(dir, "client.gen.py")
+	if err := os.WriteFile(pyPath, py, 0644); err != nil {
+		t.Fatalf("write python client: %v", err)
+	}
+	if err := runPythonCommand("-m", "py_compile", pyPath); err != nil {
+		t.Fatalf("python py_compile failed: %v", err)
+	}
+
+	snippet := pythonImportSnippet(pyPath) + `
+from urllib import parse as urlparse
+
+def dataclass_with_wires(expected):
+    for name in dir(mod):
+        obj = getattr(mod, name)
+        if isinstance(obj, type) and mod.is_dataclass(obj):
+            wires = {field.metadata.get("wire", field.name) for field in mod.fields(obj)}
+            if wires == expected:
+                return obj
+    raise AssertionError("missing dataclass with wires " + repr(expected))
+
+FormType = dataclass_with_wires({"mode", "verifyToken"})
+MultipartType = dataclass_with_wires({"file", "clientID"})
+
+def build_dataclass(cls, values):
+    kwargs = {}
+    for field in mod.fields(cls):
+        wire = field.metadata.get("wire", field.name)
+        kwargs[field.name] = values[wire]
+    return cls(**kwargs)
+
+calls = []
+
+class FakeResponse:
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        return False
+    def getcode(self):
+        return 200
+    def read(self):
+        return b""
+
+def fake_urlopen(req):
+    calls.append(req)
+    headers = {key.lower(): value for key, value in req.header_items()}
+    if req.full_url.endswith("/callbacks/form"):
+        assert req.get_method() == "POST"
+        assert headers["content-type"] == "application/x-www-form-urlencoded"
+        assert urlparse.parse_qs(req.data.decode("utf-8")) == {
+            "hub.mode": ["subscribe"],
+            "hub.verify_token": ["secret"],
+        }
+        return FakeResponse()
+    if req.full_url.endswith("/assets/upload"):
+        assert req.get_method() == "POST"
+        assert headers["content-type"].startswith("multipart/form-data; boundary=----virtuous-")
+        data = req.data.decode("utf-8")
+        assert 'Content-Disposition: form-data; name="file"; filename="asset.txt"' in data
+        assert "Content-Type: text/plain" in data
+        assert "\r\nhello world\r\n" in data
+        assert 'Content-Disposition: form-data; name="client_id"' in data
+        assert "\r\nclient-1\r\n" in data
+        return FakeResponse()
+    raise AssertionError("unexpected request " + req.full_url)
+
+mod.request.urlopen = fake_urlopen
+client = mod.create_client(base_url="https://core.example")
+
+form_body = build_dataclass(FormType, {"mode": "subscribe", "verifyToken": "secret"})
+assert client.encode_form(body=form_body) is None
+
+multipart_body = build_dataclass(MultipartType, {
+    "file": ("asset.txt", b"hello world", "text/plain"),
+    "clientID": "client-1",
+})
+assert client.encode_multipart(body=multipart_body) is None
+assert len(calls) == 2
+`
+	if err := runPythonCommand("-c", snippet); err != nil {
+		t.Fatalf("python form/multipart encoding failed: %v", err)
 	}
 }
 
@@ -548,10 +973,10 @@ func TestPythonClientUsesRouteContextualModelNames(t *testing.T) {
 	if err := os.WriteFile(pyPath, py, 0644); err != nil {
 		t.Fatalf("write python client: %v", err)
 	}
-	if err := runCommand("python3", "-m", "py_compile", pyPath); err != nil {
+	if err := runPythonCommand("-m", "py_compile", pyPath); err != nil {
 		t.Fatalf("python py_compile failed: %v", err)
 	}
-	if err := runCommand("python3", "-c", pythonImportSnippet(pyPath)); err != nil {
+	if err := runPythonCommand("-c", pythonImportSnippet(pyPath)); err != nil {
 		t.Fatalf("python import failed: %v", err)
 	}
 }
@@ -597,10 +1022,10 @@ func TestPythonClientUsesRouteContextForNestedModelNameCollisions(t *testing.T) 
 	if err := os.WriteFile(pyPath, py, 0644); err != nil {
 		t.Fatalf("write python client: %v", err)
 	}
-	if err := runCommand("python3", "-m", "py_compile", pyPath); err != nil {
+	if err := runPythonCommand("-m", "py_compile", pyPath); err != nil {
 		t.Fatalf("python py_compile failed: %v", err)
 	}
-	if err := runCommand("python3", "-c", pythonImportSnippet(pyPath)); err != nil {
+	if err := runPythonCommand("-c", pythonImportSnippet(pyPath)); err != nil {
 		t.Fatalf("python import failed: %v", err)
 	}
 }
@@ -670,8 +1095,12 @@ func TestGeneratedClientsSupportOptionalRequestBody(t *testing.T) {
 	ts := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientTS(buf) })
 
 	jsText := string(js)
-	if !strings.Contains(jsText, "request === undefined || request === null ? undefined : JSON.stringify(request)") {
+	if !strings.Contains(jsText, "if (request !== undefined && request !== null)") ||
+		!strings.Contains(jsText, "requestInit.body = encodeJSON(request)") {
 		t.Fatalf("js client missing optional request body handling")
+	}
+	if !strings.Contains(jsText, `"name": data.name`) {
+		t.Fatalf("js client missing JSON body field filtering")
 	}
 
 	tsText := string(ts)
@@ -771,12 +1200,111 @@ func renderClient(t *testing.T, fn func(*bytes.Buffer) error) []byte {
 	return buf.Bytes()
 }
 
+func newRuntimeClientContractRouter() *Router {
+	router := NewRouter()
+	router.Describe("PUT /contracts/{account_id}/mixed", clientRuntimeMixedRequest{}, clientRuntimeResponse{}, HandlerMeta{
+		Service: "Contracts",
+		Method:  "Mixed",
+	})
+	router.Describe("PATCH /contracts/optional", Optional[optionalClientRequest](), clientRuntimeResponse{}, HandlerMeta{
+		Service: "Contracts",
+		Method:  "Optional",
+	})
+	router.Describe("DELETE /contracts/{account_id}/cache", HTTPPythonNoBodyRequest{}, NoResponse204{}, HandlerMeta{
+		Service: "Contracts",
+		Method:  "ClearCache",
+	})
+	router.Describe("POST /callbacks/form", nil, NoResponse204{}, HandlerMeta{
+		Service:     "Callbacks",
+		Method:      "EncodeForm",
+		RequestBody: FormBody(formRequest{}),
+	})
+	router.Describe("POST /assets/upload", nil, NoResponse204{}, HandlerMeta{
+		Service:     "Assets",
+		Method:      "EncodeMultipart",
+		RequestBody: MultipartBody(multipartUploadRequest{}),
+	})
+	return router
+}
+
+func requireCommand(t *testing.T, name string) {
+	t.Helper()
+	if _, err := exec.LookPath(name); err != nil {
+		t.Skipf("%s is not installed", name)
+	}
+}
+
+func writeHTTPAPIErrorNodeHarness(t *testing.T, path string, tsClient bool) {
+	t.Helper()
+	createClient := `const client = createClient({ baseUrl: "https://core.example" });`
+	if !tsClient {
+		createClient = `const client = createClient("https://core.example");`
+	}
+	harness := `
+import { createClient } from "./client.gen.js";
+
+class FakeResponse {
+  constructor(status, body) {
+    this.status = status;
+    this.statusText = status === 422 ? "Unprocessable Entity" : "Internal Server Error";
+    this.ok = status >= 200 && status < 300;
+    this._body = body;
+  }
+  async text() { return this._body; }
+  async arrayBuffer() { return new TextEncoder().encode(this._body).buffer; }
+}
+
+globalThis.fetch = async (url) => {
+  if (String(url).endsWith("/errors/json")) return new FakeResponse(422, '{"error":"bad json"}');
+  if (String(url).endsWith("/errors/text")) return new FakeResponse(500, "plain failure");
+  throw new Error("unexpected fetch " + url);
+};
+
+` + createClient + `
+
+try {
+  await client.Errors.jsonError();
+  throw new Error("expected json error");
+} catch (err) {
+  if (err.message !== "bad json") throw new Error("bad json error message " + err.message);
+}
+
+try {
+  await client.Errors.textError();
+  throw new Error("expected text error");
+} catch (err) {
+  if (err.message !== "plain failure") throw new Error("bad text error message " + err.message);
+}
+`
+	if err := os.WriteFile(path, []byte(harness), 0644); err != nil {
+		t.Fatalf("write HTTPAPI error node harness: %v", err)
+	}
+}
+
 func runCommand(name string, args ...string) error {
 	path, err := exec.LookPath(name)
 	if err != nil {
 		return nil
 	}
 	cmd := exec.Command(path, args...)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, trimmed)
+}
+
+func runPythonCommand(args ...string) error {
+	path, err := exec.LookPath("uv")
+	if err != nil {
+		return fmt.Errorf("uv is required for generated Python contract tests: %w", err)
+	}
+	uvArgs := append([]string{"run", "--python", "3.12", "python"}, args...)
+	cmd := exec.Command(path, uvArgs...)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		return nil

@@ -1,11 +1,13 @@
 package httpapi
 
 import (
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/swetjen/virtuous/internal/adminui"
+	"github.com/swetjen/virtuous/internal/debugconsole"
 )
 
 // HandlerMeta provides optional documentation metadata for a handler.
@@ -97,15 +99,50 @@ type Router struct {
 	loggerActive   uint32
 	typeOverrides  map[string]TypeOverride
 	openAPIOptions *OpenAPIOptions
+	debugConsole   *debugconsole.Logger
+	debugHandler   http.Handler
+}
+
+// RouterOptions configures a Router.
+type RouterOptions struct {
+	DebugConsole       bool
+	DebugConsoleWriter io.Writer
+}
+
+// RouterOption mutates RouterOptions.
+type RouterOption func(*RouterOptions)
+
+// WithDebugConsole prints compact request lines to stderr for local debugging.
+func WithDebugConsole() RouterOption {
+	return func(o *RouterOptions) {
+		o.DebugConsole = true
+	}
+}
+
+// WithDebugConsoleWriter prints compact request lines to the provided writer.
+func WithDebugConsoleWriter(w io.Writer) RouterOption {
+	return func(o *RouterOptions) {
+		o.DebugConsole = true
+		o.DebugConsoleWriter = w
+	}
 }
 
 // NewRouter returns a new Router.
-func NewRouter() *Router {
-	return &Router{
+func NewRouter(opts ...RouterOption) *Router {
+	var config RouterOptions
+	for _, opt := range opts {
+		opt(&config)
+	}
+	router := &Router{
 		mux:    http.NewServeMux(),
 		logger: slog.Default(),
 		events: adminui.NewEventFeed(600),
 	}
+	if config.DebugConsole {
+		router.debugConsole = debugconsole.New(config.DebugConsoleWriter)
+		router.debugHandler = router.debugConsole.Capture(router.mux)
+	}
+	return router
 }
 
 // SetTypeOverrides replaces the current type overrides used for client and OpenAPI generation.
@@ -179,6 +216,10 @@ func (r *Router) Describe(pattern string, req any, resp any, meta HandlerMeta, g
 
 // ServeHTTP implements http.Handler.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if r.debugHandler != nil {
+		r.debugHandler.ServeHTTP(w, req)
+		return
+	}
 	r.mux.ServeHTTP(w, req)
 }
 
