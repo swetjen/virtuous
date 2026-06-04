@@ -14,16 +14,19 @@ import (
 
 // Logger prints compact request lines for explicitly enabled debug consoles.
 type Logger struct {
-	writer io.Writer
-	mu     sync.Mutex
+	writer   io.Writer
+	useColor bool
+	mu       sync.Mutex
 }
 
 // New returns a debug console logger that writes to stderr when writer is nil.
 func New(writer io.Writer) *Logger {
+	useColor := false
 	if writer == nil {
 		writer = os.Stderr
+		useColor = shouldColor(os.Stderr)
 	}
-	return &Logger{writer: writer}
+	return &Logger{writer: writer, useColor: useColor}
 }
 
 // Capture wraps a request handler and prints one request line after it returns.
@@ -88,12 +91,22 @@ func (l *Logger) Print(line RequestLine) {
 	if ip == "" {
 		ip = "-"
 	}
+	tone := statusTone(line.Status)
+	badge := tone.label
+	status := fmt.Sprintf("%3d", line.Status)
+	method := fmt.Sprintf("%-7s", line.Method)
+	if l.useColor {
+		badge = colorize(tone.color, badge)
+		status = colorize(tone.color, status)
+		method = colorize(ansiCyan, method)
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	fmt.Fprintf(l.writer, "[virtuous] %s %s %d %s ip=%s route=%s bytes=%d\n",
-		line.Method,
+	fmt.Fprintf(l.writer, "[virtuous] %s %s %s %s %s ip=%s route=%s bytes=%d\n",
+		badge,
+		status,
+		method,
 		path,
-		line.Status,
 		formatDuration(line.Duration),
 		ip,
 		route,
@@ -151,6 +164,57 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fus", float64(d)/float64(time.Microsecond))
 	}
 	return fmt.Sprintf("%.1fms", float64(d)/float64(time.Millisecond))
+}
+
+const (
+	ansiReset  = "\x1b[0m"
+	ansiGreen  = "\x1b[32m"
+	ansiYellow = "\x1b[33m"
+	ansiRed    = "\x1b[31m"
+	ansiBlue   = "\x1b[34m"
+	ansiCyan   = "\x1b[36m"
+)
+
+type statusStyle struct {
+	label string
+	color string
+}
+
+func statusTone(status int) statusStyle {
+	switch {
+	case status >= 200 && status < 400:
+		return statusStyle{label: "ok  ", color: ansiGreen}
+	case status >= 400 && status < 500:
+		return statusStyle{label: "warn", color: ansiYellow}
+	case status >= 500:
+		return statusStyle{label: "err ", color: ansiRed}
+	default:
+		return statusStyle{label: "info", color: ansiBlue}
+	}
+}
+
+func colorize(color string, text string) string {
+	if color == "" {
+		return text
+	}
+	return color + text + ansiReset
+}
+
+func shouldColor(file *os.File) bool {
+	if file == nil {
+		return false
+	}
+	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
+		return false
+	}
+	if os.Getenv("FORCE_COLOR") != "" {
+		return true
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 type responseRecorder struct {

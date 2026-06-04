@@ -112,14 +112,14 @@ type RouterOptions struct {
 // RouterOption mutates RouterOptions.
 type RouterOption func(*RouterOptions)
 
-// WithDebugConsole prints compact request lines to stderr for local debugging.
+// WithDebugConsole prints compact, colorized request lines to stderr for local debugging.
 func WithDebugConsole() RouterOption {
 	return func(o *RouterOptions) {
 		o.DebugConsole = true
 	}
 }
 
-// WithDebugConsoleWriter prints compact request lines to the provided writer.
+// WithDebugConsoleWriter prints compact plain-text request lines to the provided writer.
 func WithDebugConsoleWriter(w io.Writer) RouterOption {
 	return func(o *RouterOptions) {
 		o.DebugConsole = true

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.52
+
+- Improve debug console request logs with status badges, terminal-only ANSI coloring, and a more scannable status-first layout while keeping captured writers plain text.
+
 ## 0.0.51
 
 - Decode generated Python client `datetime`, `date`, and `Decimal` annotations into native Python values, encode them back to JSON-safe wire values, and add large RPC/`httpapi` Python contract coverage through `uv`.

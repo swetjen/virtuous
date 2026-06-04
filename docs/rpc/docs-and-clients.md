@@ -156,7 +156,11 @@ handler := router.AttachLogger(mux) // attach once at top-level
 
 If logging is not attached, JSON metrics still return an empty or low-signal snapshot. Attach logging at the mux boundary when custom dashboards need live events.
 
-For local request tracing, enable `rpc.WithDebugConsole()` on the router. It prints one compact request line with method, path, status, duration, client IP, route pattern, and response bytes.
+For local request tracing, enable `rpc.WithDebugConsole()` on the router. It prints one compact request line with an `ok`/`warn`/`err` status badge, method, path, duration, client IP, route pattern, and response bytes. Terminal stderr output is colorized; captured writers stay plain text.
+
+```text
+[virtuous] ok   200 POST    /rpc/users/user-me 900.0us ip=127.0.0.1 route=/rpc/users/user-me bytes=64
+```
 
 ## Hash endpoints
 

@@ -324,13 +324,17 @@ handler := router.AttachLogger(mux) // attach once at top-level
 
 If logger attachment is missing, the docs `Observability` view shows a zero-data setup snippet.
 
-For local request tracing, enable the debug console on the router. It prints one compact request line with method, path, status, duration, client IP, route pattern, and response bytes:
+For local request tracing, enable the debug console on the router. It prints one compact request line with an `ok`/`warn`/`err` status badge, method, path, duration, client IP, route pattern, and response bytes. The default stderr logger colors the badge, status, and method when the destination is a terminal; captured writers stay plain text.
 
 ```go
 router := rpc.NewRouter(
 	rpc.WithPrefix("/rpc"),
 	rpc.WithDebugConsole(),
 )
+```
+
+```text
+[virtuous] warn 422 POST    /rpc/users/user-login 1.6ms ip=203.0.113.8 route=/rpc/users/user-login bytes=44
 ```
 
 ## HTTP API (httpapi)

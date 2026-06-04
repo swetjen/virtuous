@@ -106,7 +106,8 @@ func TestRouterDebugConsolePrintsRequestLine(t *testing.T) {
 	}
 	line := logs.String()
 	for _, want := range []string{
-		"[virtuous] GET /events/42?trace=1 200 ",
+		"[virtuous] ok   200 GET",
+		"/events/42?trace=1",
 		" ip=198.51.100.7 ",
 		"route=GET /events/{id}",
 		"bytes=",
@@ -134,7 +135,8 @@ func TestRouterDebugConsoleCapturesExplicitStatusAndBytes(t *testing.T) {
 	}
 	line := logs.String()
 	for _, want := range []string{
-		"[virtuous] GET /debug/status 418 ",
+		"[virtuous] warn 418 GET",
+		"/debug/status",
 		" ip=203.0.113.77 ",
 		"route=GET /debug/status",
 		"bytes=13",

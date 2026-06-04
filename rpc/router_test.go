@@ -213,7 +213,8 @@ func TestRPCDebugConsolePrintsRequestLine(t *testing.T) {
 	}
 	line := logs.String()
 	for _, want := range []string{
-		"[virtuous] POST " + path + "?trace=1 200 ",
+		"[virtuous] ok   200 POST",
+		path + "?trace=1",
 		" ip=203.0.113.10 ",
 		"route=" + path,
 		"bytes=",
@@ -240,7 +241,8 @@ func TestRPCDebugConsoleCapturesErrorStatus(t *testing.T) {
 	}
 	line := logs.String()
 	for _, want := range []string{
-		"[virtuous] POST " + path + " 422 ",
+		"[virtuous] warn 422 POST",
+		path,
 		" ip=192.0.2.55 ",
 		"route=" + path,
 		"bytes=",
