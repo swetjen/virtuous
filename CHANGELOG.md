@@ -1,8 +1,7 @@
 # Changelog
 
-## 0.0.50
+## 0.0.51
 
-- Use `OpenAPIOptions.Title` as the Scalar docs browser tab title for RPC and `httpapi` routers when applications set a custom API title.
 - Decode generated Python client `datetime`, `date`, and `Decimal` annotations into native Python values, encode them back to JSON-safe wire values, and add large RPC/`httpapi` Python contract coverage through `uv`.
 - Render common pgx/pgtype scalar wrappers and legacy `pgtype.JSON`/`JSONB` as OpenAPI/client scalars instead of leaking pgtype implementation structs, including nullable client fields for pgtype value wrappers.
 - Expand `httpapi` Python client contract coverage to mirror RPC model roundtrips, HTTP request construction, optional/no-body routes, and pgtype body DTO parity.
@@ -10,6 +9,10 @@
 - Add `httpapi` TS, JS, and React Query contract coverage for mixed JSON bodies, optional/no-body requests, form/multipart encoding, and pgtype scalar DTO parity; omit undefined optional request bodies from generated JS fetch calls.
 - Align `pgtype.Numeric` with pgx's JSON number wire shape, add live Python/TS/JS client E2E coverage against a Go `httpapi` server, cover React Query raw-client runtime behavior, HTTPAPI generated-client error behavior, unsupported pgtype negative cases, and large-contract output stability.
 - Add opt-in debug console request logging for RPC and `httpapi` routers via `WithDebugConsole()` and `WithDebugConsoleWriter(...)`.
+
+## 0.0.50
+
+- Use `OpenAPIOptions.Title` as the Scalar docs browser tab title for RPC and `httpapi` routers when applications set a custom API title.
 
 ## 0.0.49
 
