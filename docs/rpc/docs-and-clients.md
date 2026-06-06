@@ -164,4 +164,4 @@ For local request tracing, enable `rpc.WithDebugConsole()` on the router. It pri
 
 ## Hash endpoints
 
-Client hash endpoints are available but must be registered explicitly. Use `ServeClientJSHash`, `ServeClientTSHash`, and `ServeClientPYHash` to expose them at your chosen paths.
+Client hash endpoints are available but must be registered explicitly. Use `ServeClientJSHash`, `ServeClientTSHash`, and `ServeClientPYHash` to expose them at your chosen paths. Hashes cover the stable generated client body and exclude the mutable generated-at metadata header.

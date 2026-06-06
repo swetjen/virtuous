@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.54
+
+- Include the Virtuous version and a human-readable UTC generation timestamp in generated JS, TS, Python, and React Query client assets.
+
 ## 0.0.53
 
 - Install `uv` in the `basebuild` workflow so generated Python client contract tests run in CI, and update checkout to the Node 24-compatible action.
