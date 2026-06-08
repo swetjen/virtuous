@@ -76,6 +76,11 @@ type openAPIRawMessageShapes struct {
 	Null   json.RawMessage `json:"null"`
 }
 
+type openAPIUntaggedWireContract struct {
+	IsValid bool `json:"is_valid"`
+	Error   string
+}
+
 func TestOpenAPISchemaFieldMetadataTags(t *testing.T) {
 	gen := NewGenerator(nil)
 	schema := gen.SchemaFor(taggedSchema{})
@@ -124,6 +129,26 @@ func TestOpenAPISchemaFieldMetadataTags(t *testing.T) {
 	dryRun := props["dryRun"]
 	if len(dryRun.Enum) != 2 || dryRun.Enum[0] != true || dryRun.Enum[1] != false {
 		t.Fatalf("dryRun enum = %#v, want true/false", dryRun.Enum)
+	}
+}
+
+func TestOpenAPISchemaUsesEncodingJSONDefaultFieldNames(t *testing.T) {
+	gen := NewGenerator(nil)
+	if schema := gen.SchemaFor(openAPIUntaggedWireContract{}); schema == nil {
+		t.Fatalf("schema is nil")
+	}
+	component := gen.Components()["openAPIUntaggedWireContract"]
+	if _, ok := component.Properties["Error"]; !ok {
+		t.Fatalf("missing untagged Error property in %#v", component.Properties)
+	}
+	if _, ok := component.Properties["error"]; ok {
+		t.Fatalf("untagged Error should not be documented as lowercase error")
+	}
+	if !containsString(component.Required, "Error") {
+		t.Fatalf("required = %#v, want Error", component.Required)
+	}
+	if !containsString(component.Required, "is_valid") {
+		t.Fatalf("required = %#v, want is_valid", component.Required)
 	}
 }
 

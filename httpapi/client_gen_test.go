@@ -63,6 +63,16 @@ type keywordPythonPayload struct {
 	FromDuplicate string  `json:"from_"`
 }
 
+type WireContractPythonResponse struct {
+	IsValid bool `json:"is_valid"`
+	Error   string
+}
+
+type TaggedWireContractPythonResponse struct {
+	IsValid bool   `json:"is_valid"`
+	Error   string `json:"error"`
+}
+
 type keywordPythonPathRequest struct {
 	From string `path:"from"`
 }
@@ -706,6 +716,60 @@ assert encoded["total_spend"] == 42.5
 `
 	if err := runPythonCommand("-c", snippet); err != nil {
 		t.Fatalf("python keyword round trip failed: %v", err)
+	}
+}
+
+func TestPythonClientPreservesEncodingJSONDefaultWireNames(t *testing.T) {
+	router := NewRouter()
+	router.Describe("GET /wire/default", nil, WireContractPythonResponse{}, HandlerMeta{
+		Service: "Wire",
+		Method:  "Default",
+	})
+	router.Describe("GET /wire/tagged", nil, TaggedWireContractPythonResponse{}, HandlerMeta{
+		Service: "Wire",
+		Method:  "Tagged",
+	})
+
+	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
+	pyText := string(py)
+	assertContains(t, pyText, "class WireContractPythonResponse:")
+	assertContains(t, pyText, "    is_valid: bool")
+	assertContains(t, pyText, "    Error: str")
+	assertContains(t, pyText, "TaggedWireContractPythonResponse")
+	assertContains(t, pyText, "    error: str")
+
+	dir := t.TempDir()
+	pyPath := filepath.Join(dir, "client.gen.py")
+	if err := os.WriteFile(pyPath, py, 0644); err != nil {
+		t.Fatalf("write python client: %v", err)
+	}
+	if err := runPythonCommand("-m", "py_compile", pyPath); err != nil {
+		t.Fatalf("python py_compile failed: %v", err)
+	}
+	snippet := pythonImportSnippet(pyPath) + `
+default_cls = next(cls for name, cls in mod.__dict__.items() if name.endswith("WireContractPythonResponse") and not name.endswith("TaggedWireContractPythonResponse"))
+tagged_cls = next(cls for name, cls in mod.__dict__.items() if name.endswith("TaggedWireContractPythonResponse"))
+
+default_payload = mod._decode_value(default_cls, {
+    "is_valid": False,
+    "Error": "invalid or expired token",
+})
+assert default_payload.is_valid is False
+assert default_payload.Error == "invalid or expired token"
+default_encoded = mod._encode_value(default_payload)
+assert default_encoded == {"is_valid": False, "Error": "invalid or expired token"}
+
+tagged_payload = mod._decode_value(tagged_cls, {
+    "is_valid": True,
+    "error": "",
+})
+assert tagged_payload.is_valid is True
+assert tagged_payload.error == ""
+tagged_encoded = mod._encode_value(tagged_payload)
+assert tagged_encoded == {"is_valid": True, "error": ""}
+`
+	if err := runPythonCommand("-c", snippet); err != nil {
+		t.Fatalf("python wire-name round trip failed: %v", err)
 	}
 }
 

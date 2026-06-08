@@ -4,8 +4,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-
-	"github.com/swetjen/virtuous/internal/textutil"
 )
 
 // DerefType resolves pointer chains to their element type.
@@ -26,11 +24,11 @@ func JSONFieldName(field reflect.StructField) (string, bool) {
 		parts := strings.Split(tag, ",")
 		name := parts[0]
 		if name == "" {
-			name = textutil.LowerFirst(field.Name)
+			name = field.Name
 		}
 		return name, hasOmitEmpty(parts)
 	}
-	return textutil.LowerFirst(field.Name), false
+	return field.Name, false
 }
 
 // JSONField describes a struct field as it appears in JSON.
@@ -113,7 +111,7 @@ func collectJSONFields(t reflect.Type, prefix []int, parentOptional bool, visite
 
 		name := tagName
 		if name == "" {
-			name = textutil.LowerFirst(field.Name)
+			name = field.Name
 		}
 		if name == "" {
 			continue

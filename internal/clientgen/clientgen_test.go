@@ -33,3 +33,16 @@ func TestFallbackVirtuousVersionMatchesVersionFile(t *testing.T) {
 		t.Fatalf("fallback version = %q, want %q", fallbackVirtuousVersion, want)
 	}
 }
+
+func TestBuildVersionRejectsLocalReplaceSentinel(t *testing.T) {
+	for _, version := range []string{"", "(devel)", "0.0.0", "v0.0.0"} {
+		if isBuildVersion(version) {
+			t.Fatalf("isBuildVersion(%q) = true, want false", version)
+		}
+	}
+	for _, version := range []string{"0.0.55", "v0.0.55"} {
+		if !isBuildVersion(version) {
+			t.Fatalf("isBuildVersion(%q) = false, want true", version)
+		}
+	}
+}

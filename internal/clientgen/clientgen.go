@@ -14,7 +14,7 @@ import (
 
 const (
 	virtuousModulePath       = "github.com/swetjen/virtuous"
-	fallbackVirtuousVersion  = "0.0.54"
+	fallbackVirtuousVersion  = "0.0.55"
 	generatedTimestampFormat = "2006-01-02 15:04:05 UTC"
 )
 
@@ -85,5 +85,5 @@ func VirtuousVersionLabel() string {
 }
 
 func isBuildVersion(version string) bool {
-	return version != "" && version != "(devel)"
+	return version != "" && version != "(devel)" && version != "0.0.0" && version != "v0.0.0"
 }

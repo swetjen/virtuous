@@ -29,9 +29,9 @@ from datetime import datetime
 client = mod.create_client(base_url="` + server.URL + `")
 
 mixed = mod.ContractsclientRuntimeMixedRequest(
-    accountID="body-leak",
-    iDs=["body-leak"],
-    limit=99,
+    AccountID="body-leak",
+    IDs=["body-leak"],
+    Limit=99,
     name="mixed",
     count=3,
 )

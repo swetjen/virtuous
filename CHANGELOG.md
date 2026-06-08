@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.55
+
+- Match Go `encoding/json` default field names for untagged exported struct fields in OpenAPI and generated clients, so `Error string` is documented as wire key `Error` unless applications explicitly tag it as `json:"error"`.
+
 ## 0.0.54
 
 - Include the Virtuous version and a human-readable UTC generation timestamp in generated JS, TS, Python, and React Query client assets.

@@ -483,11 +483,11 @@ assert client.python_clear_cache("acct-2") is None
 mixed_kwargs = {}
 for field in mod.fields(mod.ContractsHTTPPythonMixedRequest):
     wire = field.metadata.get("wire", field.name)
-    if wire in ("accountID", "account_id"):
+    if wire in ("AccountID", "accountID", "account_id"):
         mixed_kwargs[field.name] = "body-should-not-send"
-    elif wire in ("iDs", "ids", "id"):
+    elif wire in ("IDs", "iDs", "ids", "id"):
         mixed_kwargs[field.name] = ["body-should-not-send"]
-    elif wire == "limit":
+    elif wire in ("Limit", "limit"):
         mixed_kwargs[field.name] = 99
     elif wire == "name":
         mixed_kwargs[field.name] = "mixed"
