@@ -1,3 +1,13 @@
+---
+title: OpenAPI Generation
+description: "How Virtuous reflects registered handlers into runtime OpenAPI 3.0.3 documents."
+section: Internals
+audience: both
+status: stable
+related:
+  - internals/type-registry.md
+---
+
 # OpenAPI generation
 
 ## Overview

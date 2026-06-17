@@ -1,3 +1,13 @@
+---
+title: Typed Handlers
+description: "Attaching request and response types to net/http handlers so httpapi can emit OpenAPI and clients."
+section: HTTP (httpapi)
+audience: both
+status: stable
+related:
+  - http-legacy/patterns.md
+---
+
 # Typed handlers
 
 ## Overview

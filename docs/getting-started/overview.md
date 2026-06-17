@@ -1,3 +1,14 @@
+---
+title: Getting Started
+description: "Orientation for building your first Virtuous service with the RPC router."
+section: Getting Started
+audience: both
+status: stable
+related:
+  - getting-started/quickstart.md
+  - getting-started/project-layout.md
+---
+
 # Getting started
 
 ## Overview

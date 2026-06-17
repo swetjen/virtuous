@@ -1,3 +1,15 @@
+---
+title: RPC Overview
+description: "The canonical RPC API style: inferred paths, POST transport, and typed handlers."
+section: RPC
+audience: both
+status: stable
+related:
+  - rpc/handlers.md
+  - rpc/router.md
+  - rpc/guards.md
+---
+
 # RPC overview
 
 ## Overview

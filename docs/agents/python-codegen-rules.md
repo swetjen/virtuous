@@ -1,3 +1,13 @@
+---
+title: Python Codegen Rules
+description: "Namespace and collision rules the Python client generator must obey, with a regression checklist."
+section: Agents
+audience: agent
+status: stable
+related:
+  - agents/client-codegen.md
+---
+
 # Python Codegen Rules
 
 ## Overview

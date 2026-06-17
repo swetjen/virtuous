@@ -1,3 +1,14 @@
+---
+title: httpapi Overview
+description: "The httpapi compatibility router for legacy net/http handlers and existing REST shapes."
+section: HTTP (httpapi)
+audience: both
+status: stable
+related:
+  - http-legacy/typed-handlers.md
+  - http-legacy/patterns.md
+---
+
 # httpapi overview
 
 ## Overview

@@ -1,3 +1,14 @@
+---
+title: RPC Docs and Clients
+description: "How an RPC router serves runtime docs, OpenAPI, and generated clients."
+section: RPC
+audience: both
+status: stable
+related:
+  - rpc/router.md
+  - rpc/patterns.md
+---
+
 # RPC docs and clients
 
 ## Overview

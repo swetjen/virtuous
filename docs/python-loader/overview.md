@@ -1,3 +1,11 @@
+---
+title: Python Loader
+description: "The zero-dependency Python loader that fetches and loads a runtime-generated client.gen.py."
+section: Python Loader
+audience: both
+status: stable
+---
+
 # Python loader
 
 ## Overview

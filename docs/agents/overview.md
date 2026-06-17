@@ -1,3 +1,15 @@
+---
+title: Agents
+description: "Why Virtuous is deterministic for agents and where the agent source-of-truth docs live."
+section: Agents
+audience: both
+status: stable
+related:
+  - agents/contract.md
+  - agents/client-codegen.md
+  - agents/python-codegen-rules.md
+---
+
 # Agents
 
 ## Overview

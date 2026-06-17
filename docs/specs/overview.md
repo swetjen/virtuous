@@ -1,3 +1,11 @@
+---
+title: Specs
+description: "Index of historical design specs kept under _design/."
+section: Specs
+audience: both
+status: stable
+---
+
 # Specs
 
 ## Overview

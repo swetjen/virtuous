@@ -1,3 +1,11 @@
+---
+title: Public API
+description: "Quick index of the primary Virtuous entry points used in apps."
+section: Reference
+audience: both
+status: stable
+---
+
 # Public API
 
 ## Overview

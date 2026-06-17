@@ -1,3 +1,11 @@
+---
+title: Swaggo Migration Feedback Audit
+description: "Internal working tracker of Swaggo migration gaps and follow-up items."
+section: Internals
+audience: agent
+status: internal
+---
+
 # Swaggo Migration Feedback Audit
 
 Date: 2026-02-27

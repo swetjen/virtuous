@@ -1,3 +1,14 @@
+---
+title: RPC vs httpapi
+description: "When to use the RPC router versus the httpapi compatibility router."
+section: Concepts
+audience: both
+status: stable
+related:
+  - rpc/overview.md
+  - http-legacy/overview.md
+---
+
 # RPC vs httpapi
 
 ## Overview

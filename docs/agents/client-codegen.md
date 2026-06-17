@@ -1,3 +1,14 @@
+---
+title: Client Codegen
+description: "How Virtuous generates typed JS/TS/Python clients and the principles they follow."
+section: Agents
+audience: agent
+status: stable
+related:
+  - agents/overview.md
+  - agents/python-codegen-rules.md
+---
+
 # Client Codegen
 
 ## Principle

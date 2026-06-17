@@ -1,3 +1,13 @@
+---
+title: Query Params (httpapi)
+description: "Using query and path struct tags to preserve scalar parameter types in docs and clients."
+section: HTTP (httpapi)
+audience: both
+status: stable
+related:
+  - http-legacy/patterns.md
+---
+
 # Query params (legacy)
 
 ## Overview
