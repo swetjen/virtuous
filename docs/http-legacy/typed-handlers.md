@@ -28,6 +28,19 @@ Use one of these patterns:
 - `TypedHandlerFunc`: compact inline typed handler when the contract is still small.
 - Struct-based `TypedHandler`: preferred when documentation metadata grows beyond basic request/response types.
 
+### Which pattern?
+
+| Your situation | Use |
+| --- | --- |
+| Wrapping an existing `http.HandlerFunc` during migration | `WrapFunc` |
+| New handler, small contract, want it inline next to the route | `TypedHandlerFunc` |
+| Rich metadata (multiple statuses, custom media), or the handler has dependencies | struct-based `TypedHandler` |
+| Route already mounted elsewhere; only need docs/clients | `Describe` (see [below](#docs-only-registration)) |
+
+Rule of thumb: start with `WrapFunc` for migration and `TypedHandlerFunc` for new
+small routes; promote a route to a struct `TypedHandler` the moment its metadata
+outgrows a basic request/response pair.
+
 Avoid route-specific helper DSLs such as `GET[TReq, TResp](...)`. They tend to hide the method-prefixed route string and spread route contracts across variadic options.
 
 ## WrapFunc

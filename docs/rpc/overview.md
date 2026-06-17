@@ -28,4 +28,6 @@ RPC is the canonical API style in Virtuous. Paths are derived from package and f
 - `handlers.md` for signature rules.
 - `router.md` for registration and path inference.
 - `guards.md` for auth metadata.
-- `docs-and-clients.md` for runtime outputs.
+- `serving-docs.md` for serving docs, OpenAPI, and clients.
+- `scalar-auth-cors.md` for auth schemes and cross-origin docs.
+- `patterns.md` for the advanced cookbook.
