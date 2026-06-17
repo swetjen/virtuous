@@ -1,3 +1,14 @@
+---
+title: RPC Router
+description: "Registering typed handlers and exposing OpenAPI and runtime client SDKs."
+section: RPC
+audience: both
+status: stable
+related:
+  - rpc/handlers.md
+  - rpc/patterns.md
+---
+
 # RPC router
 
 ## Overview

@@ -1,3 +1,13 @@
+---
+title: RPC Guards
+description: "Guards that secure handlers and emit OpenAPI security schemes and client auth injection."
+section: RPC
+audience: both
+status: stable
+related:
+  - rpc/patterns.md
+---
+
 # RPC guards
 
 ## Overview

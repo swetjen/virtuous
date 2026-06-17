@@ -1,3 +1,14 @@
+---
+title: Migrate from Swaggo to Virtuous
+description: "The canonical guide for moving from Swaggo annotations to typed Virtuous docs."
+section: Tutorials
+audience: both
+status: stable
+related:
+  - tutorials/coming-from-routers.md
+  - concepts/rpc-vs-httpapi.md
+---
+
 # Migrate from Swaggo to Virtuous
 
 ## Overview

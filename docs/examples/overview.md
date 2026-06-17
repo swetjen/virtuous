@@ -1,3 +1,11 @@
+---
+title: Examples
+description: "Pointer to the reference application under example/ and what it demonstrates."
+section: Examples
+audience: both
+status: stable
+---
+
 # Examples
 
 ## Overview

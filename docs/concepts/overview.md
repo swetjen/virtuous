@@ -1,3 +1,13 @@
+---
+title: Concepts
+description: "Index of core Virtuous design decisions and the canonical RPC vs httpapi split."
+section: Concepts
+audience: both
+status: stable
+related:
+  - concepts/rpc-vs-httpapi.md
+---
+
 # Concepts
 
 ## Overview

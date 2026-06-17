@@ -1,3 +1,13 @@
+---
+title: Agent Quickstart
+description: "The fastest correct path for an agent building a new Virtuous RPC API."
+section: Agents
+audience: agent
+status: stable
+related:
+  - agents/contract.md
+---
+
 # Agent Quickstart
 
 Virtuous is router-first and RPC-first. Use the RPC router for new APIs and `httpapi` only for legacy handlers.

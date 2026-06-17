@@ -1,3 +1,14 @@
+---
+title: RPC vs httpapi
+description: "When to use the RPC router versus the httpapi compatibility router."
+section: Concepts
+audience: both
+status: stable
+related:
+  - rpc/overview.md
+  - http-legacy/overview.md
+---
+
 # RPC vs httpapi
 
 ## Overview
@@ -8,6 +19,22 @@ Virtuous provides two routers:
 - httpapi: a compatibility layer for legacy `net/http` handlers.
 
 Shared HTTP middleware such as `virtuous.Cors` lives in the root package because it can wrap RPC, httpapi, plain `http.ServeMux`, or mixed applications.
+
+## Choosing
+
+Walk the questions top to bottom; the first "yes" decides the route.
+
+| Question | If yes |
+| --- | --- |
+| Must this route keep an exact existing method + path (REST shape)? | `httpapi` |
+| Do you have a legacy `net/http` / framework handler you want to wrap as-is? | `httpapi` |
+| Does the route need GET semantics, multiple status codes, or non-JSON media? | `httpapi` |
+| Otherwise — new, typed, JSON in/JSON out? | `rpc` |
+
+> [!TIP]
+> "Not sure yet" defaults to `rpc`. It is the harder-to-misuse path: inferred
+> paths, a narrow status model, and typed clients. Drop to `httpapi` only when one
+> of the constraints above forces it.
 
 ## Use RPC when
 

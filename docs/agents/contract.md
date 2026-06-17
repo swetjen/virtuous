@@ -1,4 +1,18 @@
+---
+title: Agent Contract
+description: "Prescriptive rules an agent must follow when building, migrating, or modifying a Virtuous API."
+section: Agents
+audience: agent
+status: stable
+related:
+  - agent_quickstart.md
+  - agents/client-codegen.md
+  - agents/python-codegen-rules.md
+---
+
 # Agent Contract
+
+_Part of the [Agents](overview.md) documentation hub._
 
 ## Purpose
 

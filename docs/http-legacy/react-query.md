@@ -1,3 +1,11 @@
+---
+title: React Query Client
+description: "Generating React Query bindings from a Virtuous httpapi router."
+section: HTTP (httpapi)
+audience: both
+status: stable
+---
+
 # React Query client
 
 `httpapi` can generate an optional standalone TanStack React Query TypeScript client. It is a distinct asset from the framework-agnostic TypeScript client and may be generated instead of `client.gen.ts`.

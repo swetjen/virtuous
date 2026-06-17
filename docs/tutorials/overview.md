@@ -1,3 +1,14 @@
+---
+title: Tutorials
+description: "Index of short, task-focused migration and workflow walkthroughs."
+section: Tutorials
+audience: both
+status: stable
+related:
+  - tutorials/migrate-swaggo.md
+  - tutorials/coming-from-routers.md
+---
+
 # Tutorials
 
 ## Overview

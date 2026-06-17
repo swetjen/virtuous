@@ -1,3 +1,13 @@
+---
+title: Type Registry
+description: "How the schema registry reflects Go types into OpenAPI schemas and client language types."
+section: Internals
+audience: both
+status: stable
+related:
+  - internals/openapi.md
+---
+
 # Type registry
 
 ## Overview

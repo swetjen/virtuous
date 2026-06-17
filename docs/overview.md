@@ -1,3 +1,14 @@
+---
+title: Virtuous Documentation Overview
+description: "The canonical RPC-first overview of Virtuous, with httpapi and migration notes."
+section: Getting Started
+audience: both
+status: stable
+related:
+  - getting-started/quickstart.md
+  - concepts/rpc-vs-httpapi.md
+---
+
 # Virtuous Documentation (Overview)
 
 This is the canonical overview for Virtuous. It is RPC-first by design, with legacy `httpapi` noted for migration scenarios and a brief combined example.

@@ -1,3 +1,14 @@
+---
+title: RPC Handlers
+description: "Writing plain Go functions with typed request and response payloads as RPC handlers."
+section: RPC
+audience: both
+status: stable
+related:
+  - rpc/router.md
+  - rpc/overview.md
+---
+
 # RPC handlers
 
 ## Overview

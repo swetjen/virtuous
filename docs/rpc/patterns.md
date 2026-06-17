@@ -7,7 +7,7 @@ status: stable
 related:
   - rpc/router.md
   - rpc/guards.md
-  - rpc/docs-and-clients.md
+  - rpc/serving-docs.md
 ---
 
 # RPC Patterns (Cookbook)

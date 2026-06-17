@@ -1,3 +1,11 @@
+---
+title: Project Layout
+description: "The canonical file and folder layout for a router-first Virtuous service."
+section: Getting Started
+audience: both
+status: stable
+---
+
 # Project layout
 
 ## Overview
