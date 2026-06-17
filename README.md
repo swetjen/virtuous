@@ -6,6 +6,12 @@
 [![Build Status](https://github.com/swetjen/virtuous/actions/workflows/ci.yaml/badge.svg)](https://github.com/swetjen/virtuous/actions/workflows/ci.yaml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/swetjen/virtuous)](go.mod)
 [![License](https://img.shields.io/github/license/swetjen/virtuous)](https://github.com/swetjen/virtuous/blob/main/LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/swetjen/virtuous.svg)](https://pkg.go.dev/github.com/swetjen/virtuous)
+[![Go Report Card](https://goreportcard.com/badge/github.com/swetjen/virtuous)](https://goreportcard.com/report/github.com/swetjen/virtuous)
+
+> [!NOTE]
+> Virtuous is pre-1.0 (`v0.0.x`). It is usable and tested, but the API may change
+> between releases — pin a version with `go get github.com/swetjen/virtuous@vX.Y.Z`.
 
 Virtuous gives you two libraries and a strong opinion about which to use:
 
@@ -19,6 +25,30 @@ Virtuous gives you two libraries and a strong opinion about which to use:
 It's a strong migration target from **swaggo, gin, echo, chi, and vanilla
 `net/http`** — keep your handlers, wrap them in `httpapi`, and move to `rpc` at
 your own pace.
+
+> [!TIP]
+> **Using a coding agent?** Point it at [`docs/agents/`](docs/agents/overview.md)
+> and [`docs/agent_quickstart.md`](docs/agent_quickstart.md). The constraints
+> below exist so generated code, docs, and clients stay stable and predictable.
+
+## Features
+
+- **Runtime OpenAPI 3.0** generated from your handlers — never hand-written.
+- **Typed clients** in JavaScript, TypeScript, and Python, served from the running server.
+- **Scalar API reference** docs UI out of the box.
+- **Guards** that enforce auth *and* emit OpenAPI security schemes for generated clients.
+- **In-memory observability** with opt-in advanced metrics, live event logging, and a debug console.
+- **Two routers** — `rpc` for new typed services, `httpapi` for migration and raw HTTP control.
+
+## Table of contents
+
+- [The constraints](#the-constraints-and-why-each-exists)
+- [Quick start](#quick-start-cut-paste-run)
+- [Why RPC is the default](#why-rpc-is-the-default)
+- [When to use httpapi](#when-to-use-httpapi)
+- [Migrating to Virtuous](#migrating-to-virtuous)
+- [Examples](#examples)
+- [Docs](#docs)
 
 ## The constraints (and why each exists)
 
@@ -101,6 +131,23 @@ OpenAPI spec is at `/rpc/openapi.json` and generated clients at
 `/rpc/client.gen.{js,ts,py}`.
 
 ![Virtuous Basic API Docs](docs/example.png)
+
+### Your frontend calls it like this
+
+That same server generated a typed TypeScript client at `/rpc/client.gen.ts` — no
+hand-written types, no `fetch` boilerplate. Once `GetState` lives in a `states`
+package, the call namespace mirrors your Go packages:
+
+```ts
+import { createClient } from "./client.gen"
+
+const api = createClient("https://api.example.com")
+const res = await api.states.GetState({ code: "MN" })
+//    res is a typed StateResponse, generated from your Go structs
+```
+
+JavaScript and Python clients are generated the same way, at
+`/rpc/client.gen.js` and `/rpc/client.gen.py`.
 
 ## Why RPC is the default
 
@@ -185,6 +232,15 @@ mux.Handle("/", httpRouter)
   [Coming from gin/echo/chi/fiber/net-http](docs/tutorials/coming-from-routers.md)
   for a concept map and before/after recipes — keep your handlers, wrap them in
   `httpapi`, migrate to `rpc` incrementally.
+
+## Examples
+
+Runnable example apps live in [`example/`](example):
+
+- [`basic-rpc`](example/basic-rpc) — a minimal RPC service.
+- [`basic-httpapi`](example/basic-httpapi) — typed handlers on the httpapi router.
+- [`basic-combined`](example/basic-combined) — both routers in one server.
+- [`byodb`](example/byodb) / [`byodb-sqlite`](example/byodb-sqlite) — fuller apps with a database, generated clients, and a frontend.
 
 ## Docs
 
