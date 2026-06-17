@@ -12,6 +12,8 @@ related:
 
 # Agent Contract
 
+_Part of the [Agents](overview.md) documentation hub._
+
 ## Purpose
 
 Use this contract when an agent is asked to build, migrate, or modify a Virtuous API. It is intentionally prescriptive so generated code, docs, and clients stay stable.

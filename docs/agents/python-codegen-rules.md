@@ -10,6 +10,8 @@ related:
 
 # Python Codegen Rules
 
+_Part of the [Agents](overview.md) documentation hub._
+
 ## Overview
 
 Generated Python has one module namespace. DTO classes, transport classes, service classes, helper functions, imports, method names, fields, query params, path params, auth params, and locals must be generated as if they can collide.

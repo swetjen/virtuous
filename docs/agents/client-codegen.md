@@ -11,6 +11,8 @@ related:
 
 # Client Codegen
 
+_Part of the [Agents](overview.md) documentation hub._
+
 ## Principle
 
 Generated clients are part of the product. They should be direct-use, typed, stable, compact, and readable by agents.
