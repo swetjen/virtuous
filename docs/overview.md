@@ -240,13 +240,6 @@ These routers are useful for low-level HTTP control, but they do not provide nat
 
 If you have existing handlers built on these routers, keep them and wrap them via `httpapi` while you plan an RPC migration.
 
-Agent prompt (porting legacy handlers):
+See the full guide for a concept map, before/after recipes per framework, and an agent port prompt:
 
-```text
-Port legacy handlers into Virtuous.
-- Target Virtuous version: read `VERSION` in the repo and pin it in the output.
-- For each handler, decide: RPC (new) or httpapi (legacy).
-- For legacy: wrap http.HandlerFunc with httpapi.WrapFunc and register a method-prefixed route.
-- For new: create an RPC handler and register with router.HandleRPC.
-- Keep documentation served from Virtuous routers only.
-```
+- `docs/tutorials/coming-from-routers.md`
