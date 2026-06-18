@@ -134,6 +134,34 @@ Client hash endpoints are available but must be registered explicitly. Use
 your chosen paths. Hashes cover the stable generated client body and exclude the
 mutable generated-at metadata header.
 
+## Signed Python clients
+
+Use `WithPythonClientSigning(...)` to embed an Ed25519 signature envelope in
+generated `client.gen.py` output. Virtuous does not load keys from files; provide
+signing material or signer callbacks from your own config, secret manager, or
+deployment environment.
+
+```go
+signing, err := rpc.NewEd25519PythonClientSigning(
+	"root-2026",
+	rootPrivateKey,
+	"artifact-2026-06",
+	artifactPrivateKey,
+)
+if err != nil {
+	panic(err)
+}
+
+router := rpc.NewRouter(
+	rpc.WithPrefix("/rpc"),
+	rpc.WithPythonClientSigning(signing),
+)
+```
+
+The Python loader's `load_remote_module(...)` verifies the embedded envelope
+against a caller-provided root public key or trust callback before executing the
+client.
+
 ## Observability endpoints
 
 The endpoint paths above are how observability data is exposed; for enabling

@@ -39,6 +39,9 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.WithStrictJSONDecoding()`
 - `rpc.WithDebugConsole()`
 - `rpc.WithDebugConsoleWriter(w io.Writer)`
+- `rpc.PythonClientSigning`
+- `rpc.WithPythonClientSigning(signing rpc.PythonClientSigning)`
+- `rpc.NewEd25519PythonClientSigning(rootKeyID string, rootPrivateKey ed25519.PrivateKey, artifactKeyID string, artifactPrivateKey ed25519.PrivateKey)`
 - `type rpc.Module`
 - `rpc.ModuleAPI`
 - `rpc.ModuleObservability`
@@ -68,6 +71,9 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.NewRouter(opts ...httpapi.RouterOption)`
 - `httpapi.WithDebugConsole()`
 - `httpapi.WithDebugConsoleWriter(w io.Writer)`
+- `httpapi.PythonClientSigning`
+- `httpapi.WithPythonClientSigning(signing httpapi.PythonClientSigning)`
+- `httpapi.NewEd25519PythonClientSigning(rootKeyID string, rootPrivateKey ed25519.PrivateKey, artifactKeyID string, artifactPrivateKey ed25519.PrivateKey)`
 - `(*httpapi.Router).Handle(pattern string, h http.Handler, guards ...httpapi.Guard)`
 - `(*httpapi.Router).HandleTyped(pattern string, h httpapi.TypedHandler, guards ...httpapi.Guard)`
 - `(*httpapi.Router).Describe(pattern string, req any, resp any, meta httpapi.HandlerMeta, guards ...httpapi.Guard)`

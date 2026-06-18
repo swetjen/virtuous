@@ -4,11 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "virtuous"
-version = "0.0.55"
+version = "0.0.56"
 description = "Loader for Virtuous Python clients"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
+license = "MIT"
+dependencies = [
+    "cryptography>=41",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

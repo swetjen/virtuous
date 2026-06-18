@@ -1,14 +1,19 @@
 package httpapi
 
 import (
+	"crypto/ed25519"
 	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/swetjen/virtuous/internal/adminui"
+	"github.com/swetjen/virtuous/internal/clientgen"
 	"github.com/swetjen/virtuous/internal/debugconsole"
 )
+
+// PythonClientSigning configures embedded signatures for generated Python clients.
+type PythonClientSigning = clientgen.PythonClientSigning
 
 // HandlerMeta provides optional documentation metadata for a handler.
 type HandlerMeta struct {
@@ -101,12 +106,14 @@ type Router struct {
 	openAPIOptions *OpenAPIOptions
 	debugConsole   *debugconsole.Logger
 	debugHandler   http.Handler
+	pythonSigning  *clientgen.PythonClientSigning
 }
 
 // RouterOptions configures a Router.
 type RouterOptions struct {
 	DebugConsole       bool
 	DebugConsoleWriter io.Writer
+	PythonSigning      *clientgen.PythonClientSigning
 }
 
 // RouterOption mutates RouterOptions.
@@ -127,6 +134,20 @@ func WithDebugConsoleWriter(w io.Writer) RouterOption {
 	}
 }
 
+// WithPythonClientSigning embeds signatures in generated Python clients.
+func WithPythonClientSigning(signing PythonClientSigning) RouterOption {
+	return func(o *RouterOptions) {
+		copySigning := signing
+		o.PythonSigning = &copySigning
+	}
+}
+
+// NewEd25519PythonClientSigning builds a Python client signing configuration
+// from caller-provided Ed25519 root and artifact private keys.
+func NewEd25519PythonClientSigning(rootKeyID string, rootPrivateKey ed25519.PrivateKey, artifactKeyID string, artifactPrivateKey ed25519.PrivateKey) (PythonClientSigning, error) {
+	return clientgen.NewEd25519PythonClientSigning(rootKeyID, rootPrivateKey, artifactKeyID, artifactPrivateKey)
+}
+
 // NewRouter returns a new Router.
 func NewRouter(opts ...RouterOption) *Router {
 	var config RouterOptions
@@ -137,6 +158,10 @@ func NewRouter(opts ...RouterOption) *Router {
 		mux:    http.NewServeMux(),
 		logger: slog.Default(),
 		events: adminui.NewEventFeed(600),
+	}
+	if config.PythonSigning != nil {
+		copySigning := *config.PythonSigning
+		router.pythonSigning = &copySigning
 	}
 	if config.DebugConsole {
 		router.debugConsole = debugconsole.New(config.DebugConsoleWriter)

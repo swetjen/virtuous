@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.56
+
+- Add signed generated Python client support for RPC and `httpapi`, plus verified `load_remote_module(...)` and explicit `unsafe_load_module(...)` Python loader APIs.
+- Remove Python loader `load_module(...)` in favor of verified remote loading or the explicitly unsafe compatibility API.
+- Raise Go `golang.org/x/crypto` and example `golang.org/x/sys` dependency resolution, lifting related transitive `x/*` modules above current vulnerable ranges.
+
 ## 0.0.55
 
 - Match Go `encoding/json` default field names for untagged exported struct fields in OpenAPI and generated clients, so `Error string` is documented as wire key `Error` unless applications explicitly tag it as `json:"error"`.

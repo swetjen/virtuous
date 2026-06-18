@@ -937,6 +937,11 @@ func (r *Router) WriteClientPY(w io.Writer) error {
 	if err := clientgen.WriteArtifactHeader(w, "#", "Virtuous client hash", hash); err != nil {
 		return err
 	}
+	if r.pythonSigning != nil {
+		if err := clientgen.WritePythonSignatureEnvelope(w, *r.pythonSigning, body, hash); err != nil {
+			return err
+		}
+	}
 	_, err = w.Write(body)
 	return err
 }
