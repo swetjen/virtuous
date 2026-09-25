@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.0.57
+
+Security fixes:
+
+- BREAKING: remove `WithAllowCredentials` and the `CORSOptions.AllowCredentials` field; add `CorsWithCredentials(allowedOrigins, opts...)`, which requires an explicit origin list and panics at construction on `"*"`, an empty list, or a blank entry. The removed combination previously echoed any request `Origin` alongside `Access-Control-Allow-Credentials: true`, letting any website read authenticated responses cross-origin. Migration: `Cors(WithAllowedOrigins("https://app.example.com"), WithAllowCredentials(true))` → `CorsWithCredentials([]string{"https://app.example.com"})`.
+- BREAKING: `rpc.ServeDocs` no longer registers public `<prefix>/_virtuous/metrics` and `/_virtuous/observability` endpoints (or their root aliases); observability data is served only from the guarded admin surface at `<docs>/_admin/metrics`.
+- Replace the in-memory observability tracker's unbounded 24h raw-event retention with fixed-size incremental aggregates (O(routes) memory; counters are cumulative since process start). Snapshot JSON drops `requestsLastMinute`/`requestsLastHour`/error `sparkline`, renames `*Last24h` fields to cumulative names, and adds `minLatencyMs`/`maxLatencyMs`/`lastRequestAt`/`trackingSince`.
+- Enforce `Content-Type: application/json` on RPC requests that carry a body (parameters such as `charset` accepted); violations return 415. Blocks cross-site `text/plain` form CSRF against cookie-guarded RPCs. Generated clients already send the header.
+- Escape all dynamic strings in generated JS/TS/Python clients through a shared `internal/clientgen` escaping layer: non-identifier wire names (e.g. `json:"user-id"`) now generate quoted keys and bracketed access instead of silently-wrong JS or invalid TS, and `doc:` tag content can no longer break out of generated comments into executable code.
+- Sign the Python client's origin scope and a new issued-at timestamp in a v2 manifest (`Virtuous-Manifest-Version: 2`); the loader verifies them and gains `expected_scope`, `max_age`, and `expected_hash` pins. BREAKING: `NewEd25519PythonClientSigning` takes a fifth `originScope` argument, and custom signers implement `SignManifest` instead of `SignBody`. v1 envelopes still verify with a `DeprecationWarning`.
+- Generated-client endpoints (`client.gen.js/ts/py`, React Query) are now guarded by the docs guards by default (override with the new `WithClientGuards` doc option), are rendered once and served from cache with a strong `ETag` and `304` support, and no longer write generation error details to the wire.
+
+Wire and behavior changes:
+
+- Framework-generated RPC errors now return a documented envelope `{"error":{"code":"...","message":"..."}}`: `invalid_json` (400, previously 422 with a zero-value response body — `null` for pointer responses), `body_too_large` (413), `unsupported_media_type` (415), `method_not_allowed` (405, now with an `Allow: POST` header), and `internal` (500). Handler-returned 200/422/500 bodies are unchanged, and OpenAPI documents the envelope as each operation's `default` response.
+- Handler panics are recovered and answered with a 500 `internal` envelope (panic text is logged with a stack trace, never sent) instead of severing the connection; `http.ErrAbortHandler` still aborts.
+- Handler statuses outside 200/422/500 are coerced 4xx→422 and 5xx→500 (previously everything→500) with a logged warning naming the RPC.
+- Non-POST requests to guarded RPC routes now answer 405 before guards run (previously 401).
+- BREAKING: routers freeze on the first served request; registering routes or changing settings afterwards panics. Invalid routes (missing response type, bad `ResponseSpec` status, unparseable `query:`/`path:` tags) panic at registration instead of killing the process via `log.Fatal` when docs are served.
+- Generated clients skip optional query parameters only when null/None/undefined; explicit `0`, `false`, and `""` now serialize. Python bool query values render as `true`/`false`, the httpapi JS client no longer coerces `null`/`false`/`0` JSON responses to `{}`, generated Python clients raise `TypeError` for naive datetimes instead of sending values the server rejects, and all client error paths expose the new envelope's `code`/`message`.
+- `AuthAny` buffers request bodies (up to the 1 MiB JSON limit) so body-reading guards no longer starve later guards or the handler, and the winning guard's headers — including `Set-Cookie` — now reach the client.
+
+Correctness fixes:
+
+- Guard `collectSchemaTypes` against recursive types, which previously crashed the process with a stack overflow when generating OpenAPI or clients.
+- Register the `json.RawMessage` type override by reflected identity so arbitrary-JSON fields survive toolchains where `encoding/json` is built on json/v2 (`jsontext.Value`), instead of degrading to integer arrays.
+- Flatten anonymous embedded structs in `httpapi` request-body, query, and path derivation exactly like `encoding/json`, honoring promoted `query:`/`path:` tags (previously documented a bogus nested property and turned promoted query params into a required GET body).
+- Sanitize instantiated generic type names into OpenAPI-legal component keys (`Page[pkg.Item]` → `Page_Item`) with deterministic collision handling, in OpenAPI and generated TS/Python type names.
+- Emit `Vary: Origin` on CORS responses even when the origin is absent or disallowed, so shared caches cannot serve header-less variants to allowed origins.
+- Remove the `example/byodb` Postgres example (it required an unbuilt frontend to compile); `example/byodb-sqlite` is the full-app reference and now runs in `make test-example`.
+
 ## 0.0.56
 
 - Add signed generated Python client support for RPC and `httpapi`, plus verified `load_remote_module(...)` and explicit `unsafe_load_module(...)` Python loader APIs.
