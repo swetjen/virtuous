@@ -131,12 +131,19 @@ func TestReactQueryTSClientEscapesHostileWireNamesAndDocs(t *testing.T) {
 		t.Fatalf("quoteTSString = %s, want %s", got, want)
 	}
 
+	// tsc can only resolve the @tanstack/react-query import when the package
+	// is installed; the string assertions above run regardless.
+	packagePath := installedTanStackReactQueryPackage(t)
+	if packagePath == "" {
+		return
+	}
 	dir := t.TempDir()
 	tsPath := filepath.Join(dir, "client.gen.ts")
 	if err := os.WriteFile(tsPath, []byte(ts), 0644); err != nil {
 		t.Fatalf("write react query ts client: %v", err)
 	}
-	if err := runCommand("tsc", "--noEmit", "--target", "ES2020", "--lib", "ES2020,DOM", "--skipLibCheck", tsPath); err != nil {
+	linkInstalledPackage(t, dir, packagePath)
+	if err := runCommand("tsc", "--noEmit", "--strict", "--target", "ES2017", "--lib", "ES2017,DOM", "--jsx", "react-jsx", "--module", "Node16", "--moduleResolution", "node16", "--skipLibCheck", tsPath); err != nil {
 		t.Fatalf("tsc check failed: %v", err)
 	}
 }
