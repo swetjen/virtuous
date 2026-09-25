@@ -88,7 +88,7 @@ func TestRPCOpenAPIIncludesResponsesAndGuard(t *testing.T) {
 	if !ok {
 		t.Fatalf("OpenAPI missing responses")
 	}
-	for _, code := range []string{"200", "422", "500", "401"} {
+	for _, code := range []string{"200", "422", "500", "401", "default"} {
 		if _, ok := responses[code]; !ok {
 			t.Fatalf("OpenAPI missing response %s", code)
 		}

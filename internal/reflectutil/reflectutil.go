@@ -41,8 +41,18 @@ type JSONField struct {
 
 type jsonFieldCandidate struct {
 	JSONField
-	index  []int
-	tagged bool
+	index    []int
+	tagged   bool
+	jsonSkip bool
+}
+
+// PromotedField describes an exported struct field reachable at the top level
+// of a struct, including fields promoted from anonymous embedded structs.
+type PromotedField struct {
+	// ParentOptional reports whether the field was promoted through a
+	// pointer-embedded struct.
+	ParentOptional bool
+	Field          reflect.StructField
 }
 
 // JSONFields resolves exported JSON fields for a struct, including promoted
@@ -55,6 +65,9 @@ func JSONFields(t reflect.Type) []JSONField {
 	candidates := collectJSONFields(t, nil, false, map[reflect.Type]bool{t: true})
 	byName := map[string][]jsonFieldCandidate{}
 	for _, candidate := range candidates {
+		if candidate.jsonSkip {
+			continue
+		}
 		byName[candidate.Name] = append(byName[candidate.Name], candidate)
 	}
 
@@ -94,12 +107,9 @@ func collectJSONFields(t reflect.Type, prefix []int, parentOptional bool, visite
 		}
 
 		tagName, omit, explicitName, skip := parseJSONTag(field)
-		if skip {
-			continue
-		}
 
 		index := append(append([]int(nil), prefix...), i)
-		if field.Anonymous && !explicitName && embeddedType.Kind() == reflect.Struct {
+		if field.Anonymous && !explicitName && !skip && embeddedType.Kind() == reflect.Struct {
 			if visited[embeddedType] {
 				continue
 			}
@@ -123,11 +133,68 @@ func collectJSONFields(t reflect.Type, prefix []int, parentOptional bool, visite
 				ParentOptional: parentOptional,
 				Field:          field,
 			},
-			index:  index,
-			tagged: explicitName,
+			index:    index,
+			tagged:   explicitName,
+			jsonSkip: skip,
 		})
 	}
 	return fields
+}
+
+// PromotedFields resolves the exported fields of a struct, promoting fields of
+// anonymous embedded structs to the top level the way encoding/json flattens
+// them. Shadowing follows Go's promotion rules: a shallower field hides deeper
+// fields with the same name, and same-depth conflicts are dropped. Unlike
+// JSONFields, fields excluded from JSON with a `json:"-"` tag are still
+// returned, so callers can honor non-JSON struct tags (such as query, path,
+// and form) on promoted fields.
+func PromotedFields(t reflect.Type) []PromotedField {
+	t = DerefType(t)
+	if t == nil || t.Kind() != reflect.Struct {
+		return nil
+	}
+	candidates := collectJSONFields(t, nil, false, map[reflect.Type]bool{t: true})
+	byName := map[string][]jsonFieldCandidate{}
+	for _, candidate := range candidates {
+		byName[candidate.Field.Name] = append(byName[candidate.Field.Name], candidate)
+	}
+
+	fields := make([]jsonFieldCandidate, 0, len(byName))
+	for _, candidates := range byName {
+		if field, ok := dominantPromotedField(candidates); ok {
+			fields = append(fields, field)
+		}
+	}
+	sort.Slice(fields, func(i, j int) bool {
+		return compareIndex(fields[i].index, fields[j].index) < 0
+	})
+
+	resolved := make([]PromotedField, 0, len(fields))
+	for _, field := range fields {
+		resolved = append(resolved, PromotedField{
+			ParentOptional: field.ParentOptional,
+			Field:          field.Field,
+		})
+	}
+	return resolved
+}
+
+func dominantPromotedField(fields []jsonFieldCandidate) (jsonFieldCandidate, bool) {
+	if len(fields) == 0 {
+		return jsonFieldCandidate{}, false
+	}
+	dominant := fields[0]
+	unique := true
+	for _, field := range fields[1:] {
+		switch cmp := len(field.index) - len(dominant.index); {
+		case cmp < 0:
+			dominant = field
+			unique = true
+		case cmp == 0:
+			unique = false
+		}
+	}
+	return dominant, unique
 }
 
 func cloneTypeSet(values map[reflect.Type]bool) map[reflect.Type]bool {

@@ -59,7 +59,7 @@ predictable, and safe for an agent to extend without drifting.
 | --- | --- |
 | **Types are the contract** | Request/response structs *are* the API. There is no separate schema to sync, so OpenAPI and SDKs can't drift from the code. |
 | **Routes are inferred** | RPC paths derive from package + function names. No manual path design to maintain or argue about. |
-| **A narrow status model** | RPC handlers return `200` / `422` / `500` (plus `401` from guards). Error handling stays explicit and uniform. |
+| **A narrow status model** | RPC handlers return `200` / `422` / `500` (plus `401` from guards); other handler statuses are coerced to `422`/`500` with a logged warning. The framework itself answers `400`/`405`/`413`/`415` (and `500` on a recovered panic) with a documented error envelope. |
 | **Docs and clients are runtime truth** | They're emitted from the running server, not hand-written, so they always match what's deployed. |
 
 ## Quick start (cut, paste, run)
@@ -180,7 +180,28 @@ func(context.Context) (Resp, int)
 
 Handlers return an HTTP status directly: `200` (success), `422` (invalid input),
 or `500` (server error). Guarded routes may also return `401`. Responses should
-include a canonical `error` field when something goes wrong.
+include a canonical `error` field when something goes wrong. If a handler
+returns any other status, the framework coerces it — other `4xx` become `422`,
+everything else becomes `500` — and logs a warning naming the RPC and the
+returned status.
+
+The framework itself generates a few more statuses, all carrying one error
+envelope shape on the wire:
+
+```json
+{"error": {"code": "<code>", "message": "<human message>"}}
+```
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_json` | Request body could not be decoded as JSON. |
+| `405` | `method_not_allowed` | Non-POST request to an RPC route (with `Allow: POST`). |
+| `413` | `body_too_large` | Request body exceeds the configured cap. |
+| `415` | `unsupported_media_type` | Non-empty body without `Content-Type: application/json`. |
+| `500` | `internal` | A handler panic was recovered; the panic detail never reaches the wire. |
+
+The envelope is exported as `rpc.ErrorEnvelope` / `rpc.ErrorBody` and appears
+in the OpenAPI document as each operation's `default` response.
 
 More: **[RPC patterns cookbook](docs/rpc/patterns.md)** covers group guards,
 multiple docs sets, protected docs, OR auth, and observability.
@@ -247,7 +268,7 @@ Runnable example apps live in [`example/`](example):
 - [`docs/overview.md`](docs/overview.md) — primary documentation (RPC-first)
 - [`docs/agent_quickstart.md`](docs/agent_quickstart.md) — agent-oriented usage guide
 - [`docs/doc-spec.md`](docs/doc-spec.md) — the documentation contract these docs follow
-- `example/byodb/docs/STYLEGUIDES.md` — byodb styleguide index and canonical flow
+- [`example/byodb-sqlite/`](example/byodb-sqlite/) — full-app example: SQLite-backed RPC service with an embedded frontend and generated clients
 
 ## Requirements
 

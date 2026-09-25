@@ -5,19 +5,37 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sync"
+	"sync/atomic"
 
 	"github.com/swetjen/virtuous/internal/adminui"
 	"github.com/swetjen/virtuous/internal/clientgen"
 	"github.com/swetjen/virtuous/internal/debugconsole"
 	"github.com/swetjen/virtuous/internal/jsonlimit"
+	"github.com/swetjen/virtuous/schema"
 )
 
 // PythonClientSigning configures embedded signatures for generated Python clients.
 type PythonClientSigning = clientgen.PythonClientSigning
 
 // Router registers RPC handlers and exposes documentation metadata.
+//
+// Lifecycle: a Router has two phases. During the registration phase, register
+// every handler and docs/client route (HandleRPC, ServeDocs, ServeAdmin,
+// ServeAllDocs) and apply settings (SetTypeOverrides, SetOpenAPIOptions).
+// Registration is validated eagerly: an invalid handler or route panics at
+// registration time rather than failing later during docs or client
+// generation. Concurrent registration before serving is safe.
+//
+// The first request handled by ServeHTTP freezes the Router. After the
+// freeze, every mutator (HandleRPC, ServeDocs, ServeAdmin, ServeAllDocs,
+// SetTypeOverrides, SetOpenAPIOptions, SetLogger) panics with "router is
+// serving; register everything before starting". Docs and generated clients
+// are therefore stable snapshots of the frozen route set.
 type Router struct {
 	mux            *http.ServeMux
+	mu             sync.Mutex
+	frozen         atomic.Bool
 	routes         []Route
 	prefix         string
 	guards         []Guard
@@ -33,6 +51,25 @@ type Router struct {
 	debugConsole   *debugconsole.Logger
 	debugHandler   http.Handler
 	pythonSigning  *clientgen.PythonClientSigning
+	clientJSCache  clientArtifact
+	clientTSCache  clientArtifact
+	clientPYCache  clientArtifact
+}
+
+// mustBeMutable panics when the router has already started serving requests.
+func (r *Router) mustBeMutable() {
+	if r.frozen.Load() {
+		panic("rpc: router is serving; register everything before starting")
+	}
+}
+
+// currentTypeOverrides returns the type override map under the registration
+// mutex so pre-freeze concurrent registration is race-free. The map is only
+// ever replaced wholesale, never mutated in place.
+func (r *Router) currentTypeOverrides() map[string]TypeOverride {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.typeOverrides
 }
 
 // RouterOptions configures a Router.
@@ -105,9 +142,11 @@ func WithPythonClientSigning(signing PythonClientSigning) RouterOption {
 }
 
 // NewEd25519PythonClientSigning builds a Python client signing configuration
-// from caller-provided Ed25519 root and artifact private keys.
-func NewEd25519PythonClientSigning(rootKeyID string, rootPrivateKey ed25519.PrivateKey, artifactKeyID string, artifactPrivateKey ed25519.PrivateKey) (PythonClientSigning, error) {
-	return clientgen.NewEd25519PythonClientSigning(rootKeyID, rootPrivateKey, artifactKeyID, artifactPrivateKey)
+// from caller-provided Ed25519 root and artifact private keys. originScope
+// names the deployment the signed client belongs to (for example the API base
+// URL) and is bound into the signed manifest.
+func NewEd25519PythonClientSigning(rootKeyID string, rootPrivateKey ed25519.PrivateKey, artifactKeyID string, artifactPrivateKey ed25519.PrivateKey, originScope string) (PythonClientSigning, error) {
+	return clientgen.NewEd25519PythonClientSigning(rootKeyID, rootPrivateKey, artifactKeyID, artifactPrivateKey, originScope)
 }
 
 // NewRouter returns a new Router.
@@ -143,15 +182,23 @@ func NewRouter(opts ...RouterOption) *Router {
 	return router
 }
 
-// SetLogger overrides the logger used for warnings.
+// SetLogger overrides the logger used for warnings. It must be called before
+// the router starts serving.
 func (r *Router) SetLogger(logger *slog.Logger) {
+	r.mustBeMutable()
 	if logger != nil {
+		r.mu.Lock()
 		r.logger = logger
+		r.mu.Unlock()
 	}
 }
 
 // SetTypeOverrides replaces the current type overrides used for client and OpenAPI generation.
+// It must be called before the router starts serving.
 func (r *Router) SetTypeOverrides(overrides map[string]TypeOverride) {
+	r.mustBeMutable()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if overrides == nil {
 		r.typeOverrides = nil
 		return
@@ -164,7 +211,9 @@ func (r *Router) SetTypeOverrides(overrides map[string]TypeOverride) {
 }
 
 // SetOpenAPIOptions replaces the OpenAPI document settings.
+// It must be called before the router starts serving.
 func (r *Router) SetOpenAPIOptions(opts OpenAPIOptions) {
+	r.mustBeMutable()
 	copyOpts := opts
 	if opts.Servers != nil {
 		copyOpts.Servers = append([]OpenAPIServer(nil), opts.Servers...)
@@ -184,27 +233,39 @@ func (r *Router) SetOpenAPIOptions(opts OpenAPIOptions) {
 		external := *opts.ExternalDocs
 		copyOpts.ExternalDocs = &external
 	}
+	r.mu.Lock()
 	r.openAPIOptions = &copyOpts
+	r.mu.Unlock()
 }
 
-// HandleRPC registers a typed RPC handler.
+// HandleRPC registers a typed RPC handler. The handler signature, route path,
+// and request/response schemas are validated eagerly: HandleRPC panics on any
+// violation so misconfiguration surfaces at registration time instead of when
+// docs or clients are generated. It must be called before the router starts
+// serving.
 func (r *Router) HandleRPC(fn any, guards ...Guard) {
+	r.mustBeMutable()
 	spec, err := parseHandler(fn, r.prefix)
 	if err != nil {
 		panic(err)
 	}
-	for _, route := range r.routes {
-		if route.Path == spec.path {
-			panic("rpc: duplicate route for path " + spec.path)
-		}
+	if spec.respType == nil {
+		panic("rpc: route " + spec.path + ": response type is required")
 	}
+	// Exercise schema generation for the request/response types so any type
+	// the generator cannot handle fails here, at registration, rather than in
+	// OpenAPI() or client generation.
+	gen := schema.NewGenerator(r.currentTypeOverrides())
+	if spec.reqType != nil {
+		_ = gen.SchemaForType(spec.reqType)
+	}
+	_ = gen.SchemaForType(spec.respType)
 
 	allGuards := append([]Guard(nil), r.guards...)
 	allGuards = append(allGuards, guards...)
 
 	handler := r.buildRPCHandler(spec)
 	handler = r.wrapRPCHandler(spec, handler, allGuards)
-	r.mux.Handle(spec.path, handler)
 
 	route := Route{
 		Path:         spec.path,
@@ -214,11 +275,24 @@ func (r *Router) HandleRPC(fn any, guards ...Guard) {
 		ResponseType: spec.respType,
 		Guards:       guardSpecs(allGuards),
 	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, existing := range r.routes {
+		if existing.Path == spec.path {
+			panic("rpc: duplicate route for path " + spec.path)
+		}
+	}
+	r.mux.Handle(spec.path, handler)
 	r.routes = append(r.routes, route)
 }
 
-// ServeHTTP implements http.Handler.
+// ServeHTTP implements http.Handler. The first request freezes the router:
+// all registration must happen before serving starts.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if !r.frozen.Load() {
+		r.frozen.Store(true)
+	}
 	if r.debugHandler != nil {
 		r.debugHandler.ServeHTTP(w, req)
 		return
@@ -228,9 +302,26 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // Routes returns a snapshot of registered routes with metadata.
 func (r *Router) Routes() []Route {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	out := make([]Route, len(r.routes))
 	copy(out, r.routes)
 	return out
+}
+
+// rejectNonPOST answers non-POST requests with the framework 405 envelope
+// before any guard runs, so unauthenticated callers still learn the correct
+// method rather than a guard's 401.
+func rejectNonPOST(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			setTraceError(req.Context(), "method not allowed")
+			w.Header().Set("Allow", http.MethodPost)
+			writeErrorEnvelope(w, http.StatusMethodNotAllowed, ErrorCodeMethodNotAllowed, "method not allowed; RPC routes accept POST only")
+			return
+		}
+		next.ServeHTTP(w, req)
+	})
 }
 
 func wrapWithGuards(h http.Handler, guards []Guard) http.Handler {

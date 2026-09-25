@@ -63,3 +63,28 @@ func TestPathParamsForRejectsUnsupportedOptions(t *testing.T) {
 		t.Fatalf("expected unsupported path option error")
 	}
 }
+
+type pathEmbeddedBase struct {
+	WidgetID int64 `path:"widgetId"`
+}
+
+type pathEmbeddedRequest struct {
+	pathEmbeddedBase
+	Name string `json:"name"`
+}
+
+func TestPathParamsForEmbeddedStruct(t *testing.T) {
+	params, err := pathParamsFor(reflect.TypeOf(pathEmbeddedRequest{}))
+	if err != nil {
+		t.Fatalf("path params: %v", err)
+	}
+	if len(params) != 1 {
+		t.Fatalf("expected 1 promoted path param, got %d: %#v", len(params), params)
+	}
+	if params[0].Name != "widgetId" {
+		t.Fatalf("param name = %q, want widgetId", params[0].Name)
+	}
+	if params[0].Type.Kind() != reflect.Int64 {
+		t.Fatalf("param type = %v, want int64", params[0].Type)
+	}
+}

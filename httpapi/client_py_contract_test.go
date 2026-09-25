@@ -205,7 +205,7 @@ func TestHTTPAPIPythonMegaContractDecodingEncodingAndTransport(t *testing.T) {
 
 	snippet := pythonImportSnippet(pyPath) + `
 from dataclasses import is_dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from urllib import parse as urlparse
 import json
@@ -376,6 +376,13 @@ assert body.wire._decode_value == "decode-value"
 assert body.wire.create_client == "factory-value"
 assert body.wire.from_2 == "literal-from-underscore"
 assert body.wire.date == "wire-date"
+
+try:
+    mod._encode_value(body.temporal.naive_stamp)
+    raise AssertionError("expected TypeError for naive datetime")
+except TypeError as err:
+    assert "timezone-aware datetime required" in str(err)
+body.temporal.naive_stamp = body.temporal.naive_stamp.replace(tzinfo=timezone.utc)
 
 encoded = mod._encode_value(body)
 assert encoded["decimal"]["money"] == "123.4500"

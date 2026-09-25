@@ -83,3 +83,90 @@ func TestJSONFieldsMatchEncodingJSONDefaultNames(t *testing.T) {
 		}
 	}
 }
+
+type promotedBase struct {
+	ID     string `json:"id"`
+	Limit  int    `query:"limit,optional"`
+	Hidden string `json:"-"`
+}
+
+type promotedOuter struct {
+	promotedBase
+	Name string `json:"name"`
+}
+
+type promotedShadowOuter struct {
+	promotedBase
+	ID string `json:"outer_id"`
+}
+
+type promotedPointerOuter struct {
+	*promotedBase
+	Name string `json:"name"`
+}
+
+func TestPromotedFieldsFlattenAnonymousEmbeddedStructs(t *testing.T) {
+	fields := PromotedFields(reflect.TypeOf(promotedOuter{}))
+	byName := map[string]PromotedField{}
+	for _, field := range fields {
+		byName[field.Field.Name] = field
+	}
+	for _, name := range []string{"ID", "Limit", "Hidden", "Name"} {
+		if _, ok := byName[name]; !ok {
+			t.Fatalf("missing promoted field %q in %#v", name, fields)
+		}
+	}
+	if _, ok := byName["promotedBase"]; ok {
+		t.Fatalf("embedded struct should be flattened, not returned as a field")
+	}
+	if byName["Limit"].Field.Tag.Get("query") != "limit,optional" {
+		t.Fatalf("promoted field should carry query tag")
+	}
+}
+
+func TestPromotedFieldsKeepJSONSkippedFields(t *testing.T) {
+	fields := PromotedFields(reflect.TypeOf(promotedBase{}))
+	found := false
+	for _, field := range fields {
+		if field.Field.Name == "Hidden" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("json:\"-\" field should still be visible to PromotedFields: %#v", fields)
+	}
+}
+
+func TestPromotedFieldsShallowFieldShadowsEmbedded(t *testing.T) {
+	fields := PromotedFields(reflect.TypeOf(promotedShadowOuter{}))
+	var id PromotedField
+	count := 0
+	for _, field := range fields {
+		if field.Field.Name == "ID" {
+			id = field
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly one promoted ID field, got %d", count)
+	}
+	if id.Field.Tag.Get("json") != "outer_id" {
+		t.Fatalf("outer field should shadow the embedded one, got tag %q", id.Field.Tag.Get("json"))
+	}
+}
+
+func TestPromotedFieldsMarkPointerEmbeddedFieldsOptional(t *testing.T) {
+	fields := PromotedFields(reflect.TypeOf(promotedPointerOuter{}))
+	for _, field := range fields {
+		switch field.Field.Name {
+		case "ID", "Limit":
+			if !field.ParentOptional {
+				t.Fatalf("field %s promoted through pointer embed should be ParentOptional", field.Field.Name)
+			}
+		case "Name":
+			if field.ParentOptional {
+				t.Fatalf("top-level field Name should not be ParentOptional")
+			}
+		}
+	}
+}

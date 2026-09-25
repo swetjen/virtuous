@@ -147,6 +147,7 @@ signing, err := rpc.NewEd25519PythonClientSigning(
 	rootPrivateKey,
 	"artifact-2026-06",
 	artifactPrivateKey,
+	"billing-api", // origin scope, signed into the artifact manifest
 )
 if err != nil {
 	panic(err)
@@ -160,7 +161,9 @@ router := rpc.NewRouter(
 
 The Python loader's `load_remote_module(...)` verifies the embedded envelope
 against a caller-provided root public key or trust callback before executing the
-client.
+client. The v2 envelope signs the origin scope and an issued-at timestamp, and
+the loader accepts optional `expected_scope`, `max_age`, and `expected_hash`
+pins.
 
 ## Observability endpoints
 

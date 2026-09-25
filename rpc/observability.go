@@ -82,7 +82,9 @@ type guardDecision struct {
 }
 
 func (r *Router) wrapRPCHandler(spec handlerSpec, h http.Handler, guards []Guard) http.Handler {
-	wrapped := wrapWithObservedGuards(h, guards)
+	// The method check sits outside the guard chain: a non-POST request is
+	// answered with the 405 envelope without invoking any guard.
+	wrapped := rejectNonPOST(wrapWithObservedGuards(h, guards))
 	if r == nil || r.observability == nil {
 		return wrapped
 	}

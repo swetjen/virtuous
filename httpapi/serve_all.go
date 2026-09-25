@@ -1,5 +1,15 @@
 package httpapi
 
+import (
+	"bytes"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+
+	"github.com/swetjen/virtuous/internal/clientgen"
+)
+
 // ServeAllDocsOptions configures ServeAllDocs behavior.
 type ServeAllDocsOptions struct {
 	DocsEnabled      bool
@@ -66,7 +76,10 @@ func WithoutDocs() ServeAllDocsOpt {
 }
 
 // ServeAllDocs registers docs, OpenAPI, and client routes on the router.
+// Generated-client routes are guarded by WithClientGuards, defaulting to the
+// WithDocsGuards guards. It must be called before the router starts serving.
 func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
+	r.mustBeMutable()
 	config := ServeAllDocsOptions{
 		DocsEnabled:  true,
 		ClientJSPath: "/client.gen.js",
@@ -79,20 +92,71 @@ func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
 	if config.DocsEnabled {
 		r.ServeDocs(config.DocsOptions...)
 	}
+	clientGuards := applyDocOpts(config.DocsOptions...).clientGuards()
 	if config.ClientJSPath != "" {
-		r.HandleFunc("GET "+config.ClientJSPath, r.ServeClientJS)
+		r.Handle("GET "+config.ClientJSPath, http.HandlerFunc(r.ServeClientJS), clientGuards...)
 		r.logger.Info("client js available", "path", config.ClientJSPath)
 	}
 	if config.ClientTSPath != "" {
-		r.HandleFunc("GET "+config.ClientTSPath, r.ServeClientTS)
+		r.Handle("GET "+config.ClientTSPath, http.HandlerFunc(r.ServeClientTS), clientGuards...)
 		r.logger.Info("client ts available", "path", config.ClientTSPath)
 	}
 	if config.ClientPYPath != "" {
-		r.HandleFunc("GET "+config.ClientPYPath, r.ServeClientPY)
+		r.Handle("GET "+config.ClientPYPath, http.HandlerFunc(r.ServeClientPY), clientGuards...)
 		r.logger.Info("client py available", "path", config.ClientPYPath)
 	}
 	if config.ReactQueryTSPath != "" {
-		r.HandleFunc("GET "+config.ReactQueryTSPath, r.ServeReactQueryTS)
+		r.Handle("GET "+config.ReactQueryTSPath, http.HandlerFunc(r.ServeReactQueryTS), clientGuards...)
 		r.logger.Info("react query ts client available", "path", config.ReactQueryTSPath)
 	}
+}
+
+// clientArtifact caches one generated client's fully rendered bytes so serving
+// it is render-once per process. Safe under concurrency via sync.Once; routes
+// are frozen once the router serves, so the cached bytes cannot go stale.
+type clientArtifact struct {
+	once sync.Once
+	body []byte
+	etag string
+	err  error
+}
+
+// serveCachedClient renders the client once, then serves the cached bytes
+// with an ETag and If-None-Match support. Generation failures are logged via
+// the router logger and answered with an opaque 500 body.
+func (r *Router) serveCachedClient(w http.ResponseWriter, req *http.Request, artifact *clientArtifact, contentType, label string, render func(io.Writer) error) {
+	artifact.once.Do(func() {
+		var buf bytes.Buffer
+		if err := render(&buf); err != nil {
+			artifact.err = err
+			return
+		}
+		artifact.body = buf.Bytes()
+		artifact.etag = `"` + clientgen.HashBytes(artifact.body) + `"`
+	})
+	if artifact.err != nil {
+		r.logger.Error(label+" generation failed", "error", artifact.err)
+		http.Error(w, "client generation failed", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("ETag", artifact.etag)
+	if req != nil && ifNoneMatchSatisfied(req.Header.Get("If-None-Match"), artifact.etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	_, _ = w.Write(artifact.body)
+}
+
+func ifNoneMatchSatisfied(header, etag string) bool {
+	if header == "" {
+		return false
+	}
+	for _, candidate := range strings.Split(header, ",") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" || candidate == etag || strings.TrimPrefix(candidate, "W/") == etag {
+			return true
+		}
+	}
+	return false
 }

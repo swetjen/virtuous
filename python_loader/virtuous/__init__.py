@@ -1,7 +1,10 @@
 """Public API for the Virtuous loader."""
 
 from .loader import (
+    ArtifactExpiredError,
+    HashPinMismatchError,
     RemoteClientVerificationError,
+    ScopeMismatchError,
     get_remote_hash,
     hash_url,
     load_remote_module,
@@ -11,7 +14,10 @@ from .loader import (
 )
 
 __all__ = [
+    "ArtifactExpiredError",
+    "HashPinMismatchError",
     "RemoteClientVerificationError",
+    "ScopeMismatchError",
     "get_remote_hash",
     "hash_url",
     "load_remote_module",

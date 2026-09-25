@@ -32,11 +32,8 @@ func queryParamsFor(t reflect.Type) (queryParamsInfo, error) {
 	info := queryParamsInfo{
 		QueryFieldSet: map[string]struct{}{},
 	}
-	for i := 0; i < base.NumField(); i++ {
-		field := base.Field(i)
-		if field.PkgPath != "" {
-			continue
-		}
+	for _, promoted := range reflectutil.PromotedFields(base) {
+		field := promoted.Field
 		name, optional, ok, err := parseQueryTag(field)
 		if err != nil {
 			return queryParamsInfo{}, err
@@ -51,7 +48,7 @@ func queryParamsFor(t reflect.Type) (queryParamsInfo, error) {
 			}
 			info.Params = append(info.Params, queryParam{
 				Name:     name,
-				Optional: optional,
+				Optional: optional || promoted.ParentOptional,
 				IsArray:  isArray,
 				Doc:      reflectutil.FieldDoc(field),
 				Type:     field.Type,

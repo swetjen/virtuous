@@ -8,7 +8,7 @@ import (
 	"text/template"
 )
 
-var clientJSTemplate = template.Must(template.New("virtuous-rpc-js").Parse(`/**
+var clientJSTemplate = template.Must(template.New("virtuous-rpc-js").Funcs(clientgen.TemplateFuncs()).Parse(`/**
  * @typedef {Object} AuthOptions
  * @property {string} [auth]
  */
@@ -24,10 +24,28 @@ export class RPCError extends Error {
 	 * @param {string} message
 	 */
 	constructor(status, body, message) {
-		super(message)
+		const envelope = _errorEnvelope(body)
+		super(envelope ? message + ": " + envelope.message : message)
 		this.status = status
 		this.body = body
+		if (envelope) {
+			this.code = envelope.code
+		}
 	}
+}
+
+function _errorEnvelope(body) {
+	if (!body || typeof body !== "object") {
+		return null
+	}
+	const error = body.error
+	if (!error || typeof error !== "object") {
+		return null
+	}
+	if (typeof error.code === "string" && typeof error.message === "string") {
+		return error
+	}
+	return null
 }
 
 // Type definitions
@@ -35,7 +53,7 @@ export class RPCError extends Error {
 /**
  * @typedef {Object} {{ $object.Name }}
 {{- range $field := $object.Fields }}
- * @property{{- if $field.Nullable }} {{ printf "{%s|null}" $field.Type }}{{ else }} {{ printf "{%s}" $field.Type }}{{ end }} {{ if $field.Optional }}[{{ $field.Name }}]{{ else }}{{ $field.Name }}{{ end }}{{ if $field.Doc }} - {{ $field.Doc }}{{ end }}
+ * @property{{- if $field.Nullable }} {{ jsdoc (printf "{%s|null}" $field.Type) }}{{ else }} {{ jsdoc (printf "{%s}" $field.Type) }}{{ end }} {{ if $field.Optional }}[{{ jsdoc $field.Name }}]{{ else }}{{ jsdoc $field.Name }}{{ end }}{{ if $field.Doc }} - {{ jsdoc $field.Doc }}{{ end }}
 {{- end }}
  */
 
@@ -64,19 +82,19 @@ export function createClient(basepath = "/") {
 					"Accept": "application/json",
 					"Content-Type": "application/json",
 				}
-				let url = basepath + "{{ $method.Path }}"
+				let url = basepath + {{ jsStr $method.Path }}
 {{- if $method.HasAuth }}
 				const authValue = options && options.auth
 				if (authValue) {
 {{- if eq $method.Auth.In "header" }}
-					headers["{{ $method.Auth.Param }}"] = {{ if ne $method.Auth.Prefix "" }}"{{ $method.Auth.Prefix }} " + {{ end }}authValue
+					headers[{{ jsStr $method.Auth.Param }}] = {{ if ne $method.Auth.Prefix "" }}{{ jsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue
 {{- end }}
 {{- if eq $method.Auth.In "query" }}
 					const sep = url.includes("?") ? "&" : "?"
-					url = url + sep + encodeURIComponent("{{ $method.Auth.Param }}") + "=" + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}"{{ $method.Auth.Prefix }} " + {{ end }}authValue)
+					url = url + sep + encodeURIComponent({{ jsStr $method.Auth.Param }}) + "=" + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}{{ jsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue)
 {{- end }}
 {{- if eq $method.Auth.In "cookie" }}
-					document.cookie = "{{ $method.Auth.Param }}=" + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}"{{ $method.Auth.Prefix }} " + {{ end }}authValue) + "; path=/"
+					document.cookie = {{ jsStr (printf "%s=" $method.Auth.Param) }} + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}{{ jsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue) + "; path=/"
 {{- end }}
 				}
 {{- end }}
@@ -151,19 +169,22 @@ func (r *Router) WriteClientJSHash(w io.Writer) error {
 }
 
 // ServeClientJS writes a runtime-generated JS client as an HTTP response.
-func (r *Router) ServeClientJS(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/javascript")
-	if err := r.WriteClientJS(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+// The client is rendered once per process, then served from cache with an
+// ETag; If-None-Match requests are answered with 304.
+func (r *Router) ServeClientJS(w http.ResponseWriter, req *http.Request) {
+	r.serveCachedClient(w, req, &r.clientJSCache, "application/javascript", "rpc client js", r.WriteClientJS)
 }
 
 // ServeClientJSHash writes the hash of the JS client as an HTTP response.
 func (r *Router) ServeClientJSHash(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if err := r.WriteClientJSHash(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	hash, err := r.clientJSHash()
+	if err != nil {
+		r.logger.Error("rpc client js hash generation failed", "error", err)
+		http.Error(w, "client generation failed", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, hash)
 }
 
 func (r *Router) clientJSBody() ([]byte, error) {

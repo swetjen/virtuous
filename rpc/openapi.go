@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"unicode"
 
@@ -17,6 +18,7 @@ func (r *Router) OpenAPI() ([]byte, error) {
 	gen := schema.NewGenerator(r.typeOverrides)
 	paths := make(map[string]map[string]*openAPIOperation)
 	securitySchemes := make(map[string]openAPISecurityScheme)
+	envelopeSchema := gen.SchemaForType(reflect.TypeOf(ErrorEnvelope{}))
 
 	for _, route := range routes {
 		op := &openAPIOperation{
@@ -70,6 +72,12 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			Description: http.StatusText(http.StatusInternalServerError),
 			Content: map[string]openAPIMedia{
 				"application/json": {Schema: respSchema},
+			},
+		}
+		op.Responses["default"] = openAPIResponse{
+			Description: "Framework error envelope: 400 invalid_json, 405 method_not_allowed, 413 body_too_large, 415 unsupported_media_type, 500 internal (recovered panic)",
+			Content: map[string]openAPIMedia{
+				"application/json": {Schema: envelopeSchema},
 			},
 		}
 

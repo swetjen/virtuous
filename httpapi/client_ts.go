@@ -9,7 +9,7 @@ import (
 	"github.com/swetjen/virtuous/internal/clientgen"
 )
 
-var clientTSTemplate = template.Must(template.New("virtuous-ts").Parse(`export type RequestOptions = {
+var clientTSTemplate = template.Must(template.New("virtuous-ts").Funcs(clientgen.TemplateFuncs()).Parse(`export type RequestOptions = {
 	signal?: AbortSignal
 	auth?: RequestAuth
 }
@@ -17,7 +17,7 @@ var clientTSTemplate = template.Must(template.New("virtuous-ts").Parse(`export t
 export type RequestAuth = {
 	auth?: string
 {{- range $auth := .AuthParams }}
-	{{ $auth.ParamName }}?: string
+	{{ tsKey $auth.ParamName }}?: string
 {{- end }}
 	[key: string]: string | undefined
 }
@@ -41,16 +41,16 @@ export class AuthNotReadyError extends Error {
 {{range $object := .Objects}}
 export interface {{$object.Name}} {
 {{- range $field := $object.Fields}}
-	{{$field.Name}}{{if $field.Optional}}?{{end}}: {{$field.Type}}{{if $field.Nullable}} | null{{end}};
+	{{tsKey $field.Name}}{{if $field.Optional}}?{{end}}: {{$field.Type}}{{if $field.Nullable}} | null{{end}};
 {{- end}}
 }
 {{end}}
 {{- range $service := .Services }}{{- range $method := $service.Methods }}
 {{- if $method.PathParams }}
-export type {{ $method.PathParamsType }} = { {{- range $param := $method.PathParams }}{{ $param.Name }}: {{ $param.Type }}; {{- end }} }
+export type {{ $method.PathParamsType }} = { {{- range $param := $method.PathParams }}{{ tsKey $param.Name }}: {{ $param.Type }}; {{- end }} }
 {{ end -}}
 {{- if $method.HasQuery }}
-export type {{ $method.QueryParamsType }} = { {{- range $param := $method.QueryParams }}{{ $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ $param.Type }}; {{- end }} }
+export type {{ $method.QueryParamsType }} = { {{- range $param := $method.QueryParams }}{{ tsKey $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ $param.Type }}; {{- end }} }
 {{ end -}}
 {{- end }}{{- end }}
 export function createClient(options: ClientOptions = {}) {
@@ -66,24 +66,24 @@ export function createClient(options: ClientOptions = {}) {
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
 			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: {{ $method.PathParamsType }}, {{ end }}{{ if $method.HasBody }}request{{ if $method.BodyOptional }}?{{ end }}: {{ $method.RequestType }}, {{ end }}{{ if $method.HasQuery }}query?: {{ $method.QueryParamsType }}, {{ end }}options?: RequestOptions): Promise<{{ if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}> {
-				let path = "{{ $method.Path }}"
+				let path = {{ tsStr $method.Path }}
 {{- if $method.PathParams }}
 				if (!pathParams) {
 					throw new Error("pathParams is required")
 				}
 {{- range $param := $method.PathParams }}
-				path = path.replace("{{ printf "{%s}" $param.Name }}", encodeURIComponent(String(pathParams.{{ $param.Name }})))
+				path = path.replace({{ tsStr (printf "{%s}" $param.Name) }}, encodeURIComponent(String({{ jsGet "pathParams" $param.Name }})))
 {{- end }}
 {{- end }}
 				return _request<{{ if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}>(clientOptions, {
-					method: "{{ $method.HTTPMethod }}",
+					method: {{ tsStr $method.HTTPMethod }},
 					path,
-					accept: "{{ $method.AcceptType }}",
-					response: "{{ $method.ResponseMode }}",
+					accept: {{ tsStr $method.AcceptType }},
+					response: {{ tsStr $method.ResponseMode }},
 {{- if $method.HasBody }}
-					bodyMode: "{{ $method.BodyMode }}",
+					bodyMode: {{ tsStr $method.BodyMode }},
 {{- if ne $method.BodyMode "multipart" }}
-					contentType: "{{ $method.RequestMedia }}",
+					contentType: {{ tsStr $method.RequestMedia }},
 {{- end }}
 {{- if $method.BodyOptional }}
 					body: request === undefined || request === null ? undefined : request,
@@ -93,7 +93,7 @@ export function createClient(options: ClientOptions = {}) {
 {{- if $method.BodyFields }}
 					bodyFields: [
 {{- range $field := $method.BodyFields }}
-						["{{ $field.WireName }}", "{{ $field.Name }}", {{ if $field.IsFile }}true{{ else }}false{{ end }}],
+						[{{ tsStr $field.WireName }}, {{ tsStr $field.Name }}, {{ if $field.IsFile }}true{{ else }}false{{ end }}],
 {{- end }}
 					],
 {{- end }}
@@ -101,7 +101,7 @@ export function createClient(options: ClientOptions = {}) {
 {{- if $method.HasQuery }}
 					query: [
 {{- range $param := $method.QueryParams }}
-						["{{ $param.Name }}", query?.{{ $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }}],
+						[{{ tsStr $param.Name }}, {{ jsGetOpt "query" $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }}],
 {{- end }}
 					],
 {{- end }}
@@ -110,9 +110,9 @@ export function createClient(options: ClientOptions = {}) {
 {{- range $req := $method.AuthReqs }}
 						[
 {{- if eq (len $req.Guards) 1 }}{{- range $guard := $req.Guards }}
-							{ name: "{{ $guard.ParamName }}", in: "{{ $guard.Spec.In }}", param: "{{ $guard.Spec.Param }}", prefix: "{{ $guard.Spec.Prefix }}", generic: {{ if eq (len $method.AuthReqs) 1 }}true{{ else }}false{{ end }} },
+							{ name: {{ tsStr $guard.ParamName }}, in: {{ tsStr $guard.Spec.In }}, param: {{ tsStr $guard.Spec.Param }}, prefix: {{ tsStr $guard.Spec.Prefix }}, generic: {{ if eq (len $method.AuthReqs) 1 }}true{{ else }}false{{ end }} },
 {{- end }}{{- else }}{{- range $guard := $req.Guards }}
-							{ name: "{{ $guard.ParamName }}", in: "{{ $guard.Spec.In }}", param: "{{ $guard.Spec.Param }}", prefix: "{{ $guard.Spec.Prefix }}" },
+							{ name: {{ tsStr $guard.ParamName }}, in: {{ tsStr $guard.Spec.In }}, param: {{ tsStr $guard.Spec.Param }}, prefix: {{ tsStr $guard.Spec.Prefix }} },
 {{- end }}{{- end }}
 						],
 {{- end }}
@@ -213,7 +213,7 @@ function _applyAuth(url: string, headers: Record<string, string>, guard: AuthGua
 function _appendQuery(url: string, key: string, value: unknown, optional: boolean): string {
 	const parts: string[] = []
 	const append = (item: unknown) => {
-		if (optional && (item === "" || item === 0 || item === false || item === null || item === undefined)) {
+		if (optional && (item === null || item === undefined)) {
 			return
 		}
 		parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(item === null || item === undefined ? "" : String(item)))
@@ -321,10 +321,34 @@ async function _decodeResponse<T>(response: Response, mode: string): Promise<T> 
 		}
 	}
 	if (!response.ok) {
+		const envelope = _errorEnvelope(json)
+		if (envelope) {
+			const err = new Error(response.status + " " + response.statusText + ": " + envelope.message) as Error & { status: number; code: string; body: unknown }
+			err.status = response.status
+			err.code = envelope.code
+			err.body = json
+			throw err
+		}
 		const errorBody = json as { error?: string } | null
 		throw new Error(errorBody?.error || (response.status + " " + response.statusText))
 	}
 	return json as T
+}
+
+function _errorEnvelope(body: unknown): { code: string; message: string } | null {
+	if (!body || typeof body !== "object") {
+		return null
+	}
+	const error = (body as { error?: unknown }).error
+	if (!error || typeof error !== "object") {
+		return null
+	}
+	const code = (error as { code?: unknown }).code
+	const message = (error as { message?: unknown }).message
+	if (typeof code === "string" && typeof message === "string") {
+		return { code, message }
+	}
+	return null
 }
 `))
 
@@ -363,19 +387,22 @@ func (r *Router) WriteClientTSHash(w io.Writer) error {
 }
 
 // ServeClientTS writes a generated TS client as an HTTP response.
-func (r *Router) ServeClientTS(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/typescript")
-	if err := r.WriteClientTS(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+// The client is rendered once per process, then served from cache with an
+// ETag; If-None-Match requests are answered with 304.
+func (r *Router) ServeClientTS(w http.ResponseWriter, req *http.Request) {
+	r.serveCachedClient(w, req, &r.clientTSCache, "application/typescript", "client ts", r.WriteClientTS)
 }
 
 // ServeClientTSHash writes the hash of the TS client as an HTTP response.
 func (r *Router) ServeClientTSHash(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if err := r.WriteClientTSHash(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	hash, err := r.clientTSHash()
+	if err != nil {
+		r.logger.Error("client ts hash generation failed", "error", err)
+		http.Error(w, "client generation failed", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, hash)
 }
 
 func (r *Router) clientTSBody() ([]byte, error) {

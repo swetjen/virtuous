@@ -19,14 +19,14 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 ## Root package
 
 - `virtuous.Cors(opts ...virtuous.CORSOption)`
+- `virtuous.CorsWithCredentials(allowedOrigins []string, opts ...virtuous.CORSOption)`
 - `virtuous.WithAllowedOrigins(origins ...string)`
 - `virtuous.WithAllowedMethods(methods ...string)`
 - `virtuous.WithAllowedHeaders(headers ...string)`
 - `virtuous.WithExposedHeaders(headers ...string)`
-- `virtuous.WithAllowCredentials(enabled bool)`
 - `virtuous.WithMaxAgeSeconds(seconds int)`
 
-`Cors` is framework-level HTTP middleware for any `http.Handler`, including RPC routers, `httpapi` routers, plain `http.ServeMux` instances, and mixed applications.
+`Cors` is framework-level HTTP middleware for any `http.Handler`, including RPC routers, `httpapi` routers, plain `http.ServeMux` instances, and mixed applications. `Cors` never sends `Access-Control-Allow-Credentials`; for cookie- or credential-bearing cross-origin APIs use `CorsWithCredentials`, which requires an explicit origin list (no wildcard) and panics at construction if the list is empty, blank, or contains `"*"`.
 
 ## RPC package
 
@@ -41,7 +41,7 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.WithDebugConsoleWriter(w io.Writer)`
 - `rpc.PythonClientSigning`
 - `rpc.WithPythonClientSigning(signing rpc.PythonClientSigning)`
-- `rpc.NewEd25519PythonClientSigning(rootKeyID string, rootPrivateKey ed25519.PrivateKey, artifactKeyID string, artifactPrivateKey ed25519.PrivateKey)`
+- `rpc.NewEd25519PythonClientSigning(rootKeyID string, rootPrivateKey ed25519.PrivateKey, artifactKeyID string, artifactPrivateKey ed25519.PrivateKey, originScope string)`
 - `type rpc.Module`
 - `rpc.ModuleAPI`
 - `rpc.ModuleObservability`
@@ -73,7 +73,7 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.WithDebugConsoleWriter(w io.Writer)`
 - `httpapi.PythonClientSigning`
 - `httpapi.WithPythonClientSigning(signing httpapi.PythonClientSigning)`
-- `httpapi.NewEd25519PythonClientSigning(rootKeyID string, rootPrivateKey ed25519.PrivateKey, artifactKeyID string, artifactPrivateKey ed25519.PrivateKey)`
+- `httpapi.NewEd25519PythonClientSigning(rootKeyID string, rootPrivateKey ed25519.PrivateKey, artifactKeyID string, artifactPrivateKey ed25519.PrivateKey, originScope string)`
 - `(*httpapi.Router).Handle(pattern string, h http.Handler, guards ...httpapi.Guard)`
 - `(*httpapi.Router).HandleTyped(pattern string, h httpapi.TypedHandler, guards ...httpapi.Guard)`
 - `(*httpapi.Router).Describe(pattern string, req any, resp any, meta httpapi.HandlerMeta, guards ...httpapi.Guard)`

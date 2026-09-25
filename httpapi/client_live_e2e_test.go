@@ -11,6 +11,17 @@ import (
 	"testing"
 )
 
+type liveEchoQueryRequest struct {
+	Page  int    `query:"page,omitempty"`
+	Flag  bool   `query:"flag,omitempty"`
+	Label string `query:"label,omitempty"`
+	Req   string `query:"req"`
+}
+
+type liveEchoScalarRequest struct {
+	Kind string `query:"kind"`
+}
+
 func TestHTTPAPIGeneratedClientsLiveE2E(t *testing.T) {
 	router := newLiveClientE2ERouter(t)
 	server := httptest.NewServer(router)
@@ -67,6 +78,19 @@ assert pg_resp.flag is True
 assert pg_resp.amount == 123.45
 assert pg_resp.date.isoformat() == "2025-01-02"
 assert pg_resp.legacy_jsonb[1]["b"] == 2
+
+from urllib.parse import parse_qs
+echoed = client.live_echo_query(req="", page=0, flag=False, label="")
+echo_params = parse_qs(echoed, keep_blank_values=True)
+assert echo_params.get("page") == ["0"], echoed
+assert echo_params.get("flag") == ["false"], echoed
+assert echo_params.get("label") == [""], echoed
+assert echo_params.get("req") == [""], echoed
+assert client.live_echo_query(req="x") == "req=x"
+
+assert client.live_echo_scalar(kind="null") is None
+assert client.live_echo_scalar(kind="false") is False
+assert client.live_echo_scalar(kind="zero") == 0
 `
 		if err := runPythonCommand("-c", snippet); err != nil {
 			t.Fatalf("python live E2E failed: %v", err)
@@ -177,6 +201,31 @@ func newLiveClientE2ERouter(t *testing.T) *Router {
 		Method:      "RoundTrip",
 		OperationID: "live_pgtype",
 	}))
+	router.HandleTyped("GET /echo/query", WrapFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(r.URL.RawQuery))
+	}, liveEchoQueryRequest{}, "", HandlerMeta{
+		Service:     "Echo",
+		Method:      "Query",
+		OperationID: "live_echo_query",
+	}))
+	router.HandleTyped("GET /echo/scalar", WrapFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("kind") {
+		case "null":
+			_, _ = w.Write([]byte("null"))
+		case "false":
+			_, _ = w.Write([]byte("false"))
+		case "zero":
+			_, _ = w.Write([]byte("0"))
+		default:
+			http.Error(w, "bad kind", http.StatusBadRequest)
+		}
+	}, liveEchoScalarRequest{}, clientRuntimeResponse{}, HandlerMeta{
+		Service:     "Echo",
+		Method:      "Scalar",
+		OperationID: "live_echo_scalar",
+	}))
 	return router
 }
 
@@ -226,6 +275,22 @@ if (pg.text !== "hello" || pg.flag !== true || pg.amount !== 123.45 || pg.date !
   throw new Error("bad pgtype response " + JSON.stringify(pg));
 }
 if (pg.legacy_jsonb[1].b !== 2) throw new Error("bad pgtype jsonb");
+
+const echoed = await client.Echo.query({ page: 0, flag: false, label: "", req: "" });
+const echoParams = new URLSearchParams(echoed);
+if (echoParams.get("page") !== "0") throw new Error("page=0 missing from wire: " + echoed);
+if (echoParams.get("flag") !== "false") throw new Error("flag=false missing from wire: " + echoed);
+if (echoParams.get("label") !== "") throw new Error("empty label missing from wire: " + echoed);
+if (echoParams.get("req") !== "") throw new Error("empty req missing from wire: " + echoed);
+const echoedOmitted = await client.Echo.query({ req: "x" });
+if (echoedOmitted !== "req=x") throw new Error("omitted optionals must not serialize: " + echoedOmitted);
+
+const nullValue = await client.Echo.scalar({ kind: "null" });
+if (nullValue !== null) throw new Error("JSON null must reach the caller, got " + JSON.stringify(nullValue));
+const falseValue = await client.Echo.scalar({ kind: "false" });
+if (falseValue !== false) throw new Error("JSON false must reach the caller, got " + JSON.stringify(falseValue));
+const zeroValue = await client.Echo.scalar({ kind: "zero" });
+if (zeroValue !== 0) throw new Error("JSON zero must reach the caller, got " + JSON.stringify(zeroValue));
 `
 	if err := os.WriteFile(path, []byte(harness), 0644); err != nil {
 		t.Fatalf("write live node harness: %v", err)

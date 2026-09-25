@@ -50,6 +50,7 @@ func TestRPCHandleOK(t *testing.T) {
 	path := routes[0].Path
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"Virtuous"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -75,6 +76,7 @@ func TestRPCHandleInvalid(t *testing.T) {
 	path := routes[0].Path
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":""}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -97,6 +99,7 @@ func TestRPCOversizedJSONReturns413WithoutInvokingHandler(t *testing.T) {
 	path := router.Routes()[0].Path
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"payload too large"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -105,6 +108,10 @@ func TestRPCOversizedJSONReturns413WithoutInvokingHandler(t *testing.T) {
 	}
 	if oversizedHandlerCalled {
 		t.Fatalf("handler should not be invoked for oversized request body")
+	}
+	envelope := decodeEnvelope(t, rec.Body)
+	if envelope.Error.Code != ErrorCodeBodyTooLarge {
+		t.Fatalf("expected code %q, got %q", ErrorCodeBodyTooLarge, envelope.Error.Code)
 	}
 }
 
@@ -135,11 +142,16 @@ func TestRPCStrictJSONRejectsUnknownFieldsDuplicateKeysAndTrailingTokens(t *test
 		t.Run(tt.name, func(t *testing.T) {
 			strictHandlerCalled = false
 			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
-			if rec.Code != StatusInvalid {
-				t.Fatalf("expected status %d, got %d", StatusInvalid, rec.Code)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+			}
+			envelope := decodeEnvelope(t, rec.Body)
+			if envelope.Error.Code != ErrorCodeInvalidJSON {
+				t.Fatalf("expected code %q, got %q", ErrorCodeInvalidJSON, envelope.Error.Code)
 			}
 			if strictHandlerCalled {
 				t.Fatalf("handler should not be invoked for invalid strict JSON")

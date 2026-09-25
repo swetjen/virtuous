@@ -99,6 +99,7 @@ func TestRPCPgtypeRoundTrip(t *testing.T) {
 		"legacy_jsonb":["a",{"b":2}]
 	}`
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

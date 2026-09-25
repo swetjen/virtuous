@@ -1330,3 +1330,43 @@ func containsString(list []any, value string) bool {
 	}
 	return false
 }
+
+type recursiveNode struct {
+	Name     string                    `json:"name"`
+	Parent   *recursiveNode            `json:"parent,omitempty"`
+	Children []recursiveNode           `json:"children,omitempty"`
+	Index    map[string]*recursiveNode `json:"index,omitempty"`
+}
+
+type recursiveHandler struct{}
+
+func (recursiveHandler) ServeHTTP(_ http.ResponseWriter, _ *http.Request) {}
+func (recursiveHandler) RequestType() any                                 { return nil }
+func (recursiveHandler) ResponseType() any                                { return recursiveNode{} }
+func (recursiveHandler) Metadata() HandlerMeta {
+	return HandlerMeta{Service: "Test", Method: "Recursive"}
+}
+
+func TestOpenAPIRecursiveTypesDoNotOverflow(t *testing.T) {
+	router := NewRouter()
+	router.HandleTyped("GET /tree", recursiveHandler{})
+
+	data, err := router.OpenAPI()
+	if err != nil {
+		t.Fatalf("OpenAPI: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("OpenAPI JSON invalid: %v", err)
+	}
+
+	types := map[reflect.Type]struct{}{}
+	collectSchemaTypes(types, reflect.TypeOf(recursiveNode{}))
+	if _, ok := types[reflect.TypeOf(recursiveNode{})]; !ok {
+		t.Fatalf("recursive type missing from collected schema types")
+	}
+
+	if _, err := buildClientSpec(router.Routes(), nil); err != nil {
+		t.Fatalf("buildClientSpec: %v", err)
+	}
+}

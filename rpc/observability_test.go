@@ -47,10 +47,12 @@ func TestRPCObservabilityTracksBasicRouteMetrics(t *testing.T) {
 	path := router.Routes()[0].Path
 
 	okReq := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"Virtuous"}`))
+	okReq.Header.Set("Content-Type", "application/json")
 	okRec := httptest.NewRecorder()
 	router.ServeHTTP(okRec, okReq)
 
 	invalidReq := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":""}`))
+	invalidReq.Header.Set("Content-Type", "application/json")
 	invalidRec := httptest.NewRecorder()
 	router.ServeHTTP(invalidRec, invalidReq)
 
@@ -66,17 +68,17 @@ func TestRPCObservabilityTracksBasicRouteMetrics(t *testing.T) {
 	if route.RPCName != "rpc.testHandler" {
 		t.Fatalf("unexpected rpc name: %q", route.RPCName)
 	}
-	if route.RequestsLast24H != 2 {
-		t.Fatalf("expected 2 requests, got %d", route.RequestsLast24H)
+	if route.Requests != 2 {
+		t.Fatalf("expected 2 requests, got %d", route.Requests)
 	}
-	if route.ClientErrorsLast24H != 1 {
-		t.Fatalf("expected 1 client error, got %d", route.ClientErrorsLast24H)
+	if route.ClientErrors != 1 {
+		t.Fatalf("expected 1 client error, got %d", route.ClientErrors)
 	}
-	if route.ServerErrorsLast24H != 0 {
-		t.Fatalf("expected 0 server errors, got %d", route.ServerErrorsLast24H)
+	if route.ServerErrors != 0 {
+		t.Fatalf("expected 0 server errors, got %d", route.ServerErrors)
 	}
-	if snapshot.Totals.RequestsLast24H != 2 {
-		t.Fatalf("expected totals to include 2 requests, got %d", snapshot.Totals.RequestsLast24H)
+	if snapshot.Totals.Requests != 2 {
+		t.Fatalf("expected totals to include 2 requests, got %d", snapshot.Totals.Requests)
 	}
 }
 
@@ -89,6 +91,7 @@ func TestRPCObservabilityAdvancedGroupsErrorsAndGuardDenies(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"Virtuous"}`))
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		if rec.Code != http.StatusUnauthorized {
@@ -98,6 +101,7 @@ func TestRPCObservabilityAdvancedGroupsErrorsAndGuardDenies(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"Virtuous"}`))
+		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -116,8 +120,8 @@ func TestRPCObservabilityAdvancedGroupsErrorsAndGuardDenies(t *testing.T) {
 	if len(snapshot.Errors) != 1 {
 		t.Fatalf("expected 1 grouped error, got %d", len(snapshot.Errors))
 	}
-	if snapshot.Errors[0].CountLast24H != 2 {
-		t.Fatalf("expected grouped error count 2, got %d", snapshot.Errors[0].CountLast24H)
+	if snapshot.Errors[0].Count != 2 {
+		t.Fatalf("expected grouped error count 2, got %d", snapshot.Errors[0].Count)
 	}
 	if snapshot.Errors[0].RPCName != "rpc.observabilityErrorHandler" {
 		t.Fatalf("unexpected error rpc name: %q", snapshot.Errors[0].RPCName)
@@ -136,40 +140,46 @@ func TestRPCObservabilityAdvancedGroupsErrorsAndGuardDenies(t *testing.T) {
 	}
 }
 
-func TestRPCServeDocsRegistersObservabilityEndpoints(t *testing.T) {
+func TestRPCMetricsAreNotPubliclyReachable(t *testing.T) {
 	router := NewRouter(WithAdvancedObservability())
 	router.HandleRPC(testHandler)
 	router.ServeDocs()
+	router.ServeAdmin(WithAdminGuards(denyUnlessHeaderGuard{}))
 
-	metricsReq := httptest.NewRequest(http.MethodGet, "/rpc/_virtuous/metrics", nil)
-	metricsRec := httptest.NewRecorder()
-	router.ServeHTTP(metricsRec, metricsReq)
-	if metricsRec.Code != http.StatusOK {
-		t.Fatalf("expected metrics endpoint 200, got %d", metricsRec.Code)
+	for _, path := range []string{
+		"/rpc/_virtuous/metrics",
+		"/_virtuous/metrics",
+		"/rpc/_virtuous/observability",
+		"/_virtuous/observability",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected public path %s to be 404, got %d", path, rec.Code)
+		}
+	}
+
+	deniedReq := httptest.NewRequest(http.MethodGet, "/rpc/docs/_admin/metrics", nil)
+	deniedRec := httptest.NewRecorder()
+	router.ServeHTTP(deniedRec, deniedReq)
+	if deniedRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unguarded admin metrics request to be 401, got %d", deniedRec.Code)
+	}
+
+	allowedReq := httptest.NewRequest(http.MethodGet, "/rpc/docs/_admin/metrics", nil)
+	allowedReq.Header.Set("Authorization", "Bearer token")
+	allowedRec := httptest.NewRecorder()
+	router.ServeHTTP(allowedRec, allowedReq)
+	if allowedRec.Code != http.StatusOK {
+		t.Fatalf("expected guarded admin metrics request to be 200, got %d", allowedRec.Code)
 	}
 	var snapshot map[string]any
-	if err := json.NewDecoder(metricsRec.Body).Decode(&snapshot); err != nil {
+	if err := json.NewDecoder(allowedRec.Body).Decode(&snapshot); err != nil {
 		t.Fatalf("decode metrics: %v", err)
 	}
 	if _, ok := snapshot["generatedAt"]; !ok {
 		t.Fatalf("expected generatedAt in metrics payload")
-	}
-
-	aliasReq := httptest.NewRequest(http.MethodGet, "/_virtuous/metrics", nil)
-	aliasRec := httptest.NewRecorder()
-	router.ServeHTTP(aliasRec, aliasReq)
-	if aliasRec.Code != http.StatusOK {
-		t.Fatalf("expected alias metrics endpoint 200, got %d", aliasRec.Code)
-	}
-
-	redirectReq := httptest.NewRequest(http.MethodGet, "/rpc/_virtuous/observability", nil)
-	redirectRec := httptest.NewRecorder()
-	router.ServeHTTP(redirectRec, redirectReq)
-	if redirectRec.Code != http.StatusFound {
-		t.Fatalf("expected observability redirect 302, got %d", redirectRec.Code)
-	}
-	if location := redirectRec.Header().Get("Location"); location != "/rpc/docs/" {
-		t.Fatalf("unexpected observability redirect location: %q", location)
 	}
 
 	docsReq := httptest.NewRequest(http.MethodGet, "/rpc/docs/", nil)

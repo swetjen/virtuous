@@ -66,6 +66,7 @@ func TestRPCSerializesCommonTypes(t *testing.T) {
 		"items":[{"id":1,"name":"one"},{"id":2,"name":"two"}]
 	}`
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

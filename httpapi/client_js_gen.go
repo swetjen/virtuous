@@ -8,7 +8,7 @@ import (
 	"text/template"
 )
 
-var clientJSTemplate = template.Must(template.New("virtuous-js").Parse(`/**
+var clientJSTemplate = template.Must(template.New("virtuous-js").Funcs(clientgen.TemplateFuncs()).Parse(`/**
  * @typedef {Object} AuthOptions
  * @property {string} [auth]
  */
@@ -18,7 +18,7 @@ var clientJSTemplate = template.Must(template.New("virtuous-js").Parse(`/**
 /**
  * @typedef {Object} {{ $object.Name }}
 {{- range $field := $object.Fields }}
- * @property{{- if $field.Nullable }} {{ printf "{%s|null}" $field.Type }}{{ else }} {{ printf "{%s}" $field.Type }}{{ end }} {{ if $field.Optional }}[{{ $field.Name }}]{{ else }}{{ $field.Name }}{{ end }}{{ if $field.Doc }} - {{ $field.Doc }}{{ end }}
+ * @property{{- if $field.Nullable }} {{ jsdoc (printf "{%s|null}" $field.Type) }}{{ else }} {{ jsdoc (printf "{%s}" $field.Type) }}{{ end }} {{ if $field.Optional }}[{{ jsdoc $field.Name }}]{{ else }}{{ jsdoc $field.Name }}{{ end }}{{ if $field.Doc }} - {{ jsdoc $field.Doc }}{{ end }}
 {{- end }}
  */
 
@@ -35,7 +35,7 @@ export function createClient(basepath = "/") {
 {{- range $method := $service.Methods }}
 			/**
 {{- if $method.Summary }}
-			 * {{ $method.Summary }}
+			 * {{ jsdoc $method.Summary }}
 			 *
 {{- end }}
 {{- if $method.PathParams }}
@@ -47,7 +47,7 @@ export function createClient(basepath = "/") {
 {{- if $method.HasQuery }}
 			 * @param {Object} [query]
 {{- range $param := $method.QueryParams }}
-			 * @param { {{- $param.Type }} }{{ if $param.Optional }} [{{ printf "query.%s" $param.Name }}]{{ else }} {{ printf "query.%s" $param.Name }}{{ end }}{{ if $param.Doc }} - {{ $param.Doc }}{{ end }}
+			 * @param { {{- jsdoc $param.Type }} }{{ if $param.Optional }} [{{ jsdoc (printf "query.%s" $param.Name) }}]{{ else }} {{ jsdoc (printf "query.%s" $param.Name) }}{{ end }}{{ if $param.Doc }} - {{ jsdoc $param.Doc }}{{ end }}
 {{- end }}
 {{- end }}
 			 * @param {AuthOptions} [options]
@@ -55,20 +55,20 @@ export function createClient(basepath = "/") {
 				 */
 				async {{ $method.Name }}({{ if $method.PathParams }}pathParams, {{ end }}{{ if $method.HasBody }}request, {{ end }}{{ if $method.HasQuery }}query, {{ end }}options) {
 				const headers = {
-					"Accept": "{{ $method.AcceptType }}",
+					"Accept": {{ jsStr $method.AcceptType }},
 {{- if $method.HasBody }}
 {{- if ne $method.BodyMode "multipart" }}
-						"Content-Type": "{{ $method.RequestMedia }}",
+						"Content-Type": {{ jsStr $method.RequestMedia }},
 {{- end }}
 {{- end }}
 				}
-				let url = basepath + "{{ $method.Path }}"
+				let url = basepath + {{ jsStr $method.Path }}
 {{- if $method.PathParams }}
 				if (!pathParams) {
 					throw new Error("pathParams is required")
 				}
 {{- range $param := $method.PathParams }}
-				url = url.replace("{{ printf "{%s}" $param.Name }}", encodeURIComponent(String(pathParams.{{ $param.Name }})))
+				url = url.replace({{ jsStr (printf "{%s}" $param.Name) }}, encodeURIComponent(String({{ jsGet "pathParams" $param.Name }})))
 {{- end }}
 {{- end }}
 {{- if $method.HasQuery }}
@@ -89,7 +89,7 @@ export function createClient(basepath = "/") {
 							return
 						}
 						for (const item of value) {
-							if (optional && (item === "" || item === 0 || item === false || item === null || item === undefined)) {
+							if (optional && (item === null || item === undefined)) {
 								continue
 							}
 							const encoded = item === null || item === undefined ? "" : String(item)
@@ -97,13 +97,10 @@ export function createClient(basepath = "/") {
 						}
 						return
 					}
-					if (optional && (value === "" || value === 0 || value === false)) {
-						return
-					}
 					queryParts.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(value)))
 				}
 {{- range $param := $method.QueryParams }}
-				appendQuery("{{ $param.Name }}", query && query.{{ $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }})
+				appendQuery({{ jsStr $param.Name }}, query && {{ jsGet "query" $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }})
 {{- end }}
 				if (queryParts.length > 0) {
 					const sep = url.includes("?") ? "&" : "?"
@@ -129,7 +126,7 @@ export function createClient(basepath = "/") {
 {{- range $guard := $req.Guards }}
 					const {{ $guard.ParamName }}Value = options && (options.{{ $guard.ParamName }} || options.auth)
 					if ({{ $guard.ParamName }}Value) {
-						applyAuth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", {{ $guard.ParamName }}Value)
+						applyAuth({{ jsStr $guard.Spec.In }}, {{ jsStr $guard.Spec.Param }}, {{ jsStr $guard.Spec.Prefix }}, {{ $guard.ParamName }}Value)
 						authApplied = true
 					}
 {{- end }}
@@ -137,7 +134,7 @@ export function createClient(basepath = "/") {
 					const hasAuthValues = true{{ range $guard := $req.Guards }} && !!(options && options.{{ $guard.ParamName }}){{ end }}
 					if (hasAuthValues) {
 {{- range $guard := $req.Guards }}
-						applyAuth("{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", options.{{ $guard.ParamName }})
+						applyAuth({{ jsStr $guard.Spec.In }}, {{ jsStr $guard.Spec.Param }}, {{ jsStr $guard.Spec.Prefix }}, options.{{ $guard.ParamName }})
 {{- end }}
 						authApplied = true
 					}
@@ -165,7 +162,7 @@ export function createClient(basepath = "/") {
 					const data = value || {}
 {{- if $method.BodyFields }}
 {{- range $field := $method.BodyFields }}
-					appendForm("{{ $field.WireName }}", data.{{ $field.Name }})
+					appendForm({{ jsStr $field.WireName }}, {{ jsGet "data" $field.Name }})
 {{- end }}
 {{- else }}
 					for (const [key, item] of Object.entries(data)) {
@@ -197,7 +194,7 @@ export function createClient(basepath = "/") {
 					const data = value || {}
 {{- if $method.BodyFields }}
 {{- range $field := $method.BodyFields }}
-					appendMultipart("{{ $field.WireName }}", data.{{ $field.Name }})
+					appendMultipart({{ jsStr $field.WireName }}, {{ jsGet "data" $field.Name }})
 {{- end }}
 {{- else }}
 					for (const [key, item] of Object.entries(data)) {
@@ -212,13 +209,13 @@ export function createClient(basepath = "/") {
 					const data = value || {}
 					return JSON.stringify({
 {{- range $field := $method.BodyFields }}
-						"{{ $field.WireName }}": data.{{ $field.Name }},
+						{{ jsStr $field.WireName }}: {{ jsGet "data" $field.Name }},
 {{- end }}
 					})
 				}
 {{- end }}
 				const requestInit = {
-					method: "{{ $method.HTTPMethod }}",
+					method: {{ jsStr $method.HTTPMethod }},
 					headers,
 {{- if $method.HasCookieAuth }}
 					credentials: "same-origin",
@@ -248,12 +245,19 @@ export function createClient(basepath = "/") {
 					}
 				}
 				if (!response.ok) {
+					if (json && json.error && typeof json.error.code === "string" && typeof json.error.message === "string") {
+						const err = new Error(response.status + " " + response.statusText + ": " + json.error.message)
+						err.status = response.status
+						err.code = json.error.code
+						err.body = json
+						throw err
+					}
 					if (json && json.error) {
 						throw new Error(json.error)
 					}
 					throw new Error(response.status + " " + response.statusText)
 				}
-				return json || {}
+				return json
 {{- else if eq $method.ResponseMode "text" }}
 				const text = await response.text()
 				if (!response.ok) {
@@ -315,19 +319,22 @@ func (r *Router) WriteClientJSHash(w io.Writer) error {
 }
 
 // ServeClientJS writes a generated JS client as an HTTP response.
-func (r *Router) ServeClientJS(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/javascript")
-	if err := r.WriteClientJS(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+// The client is rendered once per process, then served from cache with an
+// ETag; If-None-Match requests are answered with 304.
+func (r *Router) ServeClientJS(w http.ResponseWriter, req *http.Request) {
+	r.serveCachedClient(w, req, &r.clientJSCache, "application/javascript", "client js", r.WriteClientJS)
 }
 
 // ServeClientJSHash writes the hash of the JS client as an HTTP response.
 func (r *Router) ServeClientJSHash(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if err := r.WriteClientJSHash(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	hash, err := r.clientJSHash()
+	if err != nil {
+		r.logger.Error("client js hash generation failed", "error", err)
+		http.Error(w, "client generation failed", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, hash)
 }
 
 func (r *Router) clientJSBody() ([]byte, error) {

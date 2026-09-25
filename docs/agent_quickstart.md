@@ -137,14 +137,15 @@ Rules:
 - Nested structs/maps are not supported.
 - Fields with `query` tags cannot also use `json` tags.
 
-## Canonical flow (byodb-style)
+## Canonical flow (byodb-sqlite-style)
+
+See `example/byodb-sqlite/` for the reference layout.
 
 1) Add/update schema + queries in `db/sql/schemas` and `db/sql/queries`.
-2) Run `make gen`.
+2) Run `make gen` (sqlc).
 3) Implement RPC handlers.
-4) Run `make gen-sdk`.
-5) Update frontend using the generated JS client.
-6) Run `make gen-web` (or `make gen-all`).
+4) Run `make clients` to regenerate the static JS client.
+5) Update the frontend using the generated JS client.
 
 ## Common zero-state causes
 

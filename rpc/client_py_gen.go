@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-var clientPyTemplate = template.Must(template.New("virtuous-rpc-py").Parse(`"""Runtime-generated Python client for Virtuous RPC routes."""
+var clientPyTemplate = template.Must(template.New("virtuous-rpc-py").Funcs(clientgen.TemplateFuncs()).Parse(`"""Runtime-generated Python client for Virtuous RPC routes."""
 
 from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import date as _date, datetime as _datetime
@@ -30,7 +30,7 @@ class {{ $object.Name }}:
 {{- else }}
 {{- range $field := $object.Fields }}
 {{- if $field.Doc }}
-    # {{ $field.Doc }}
+    # {{ pyComment $field.Doc }}
 {{- end }}
     {{ $field.Declaration }}
 {{- end }}
@@ -40,9 +40,14 @@ class {{ $object.Name }}:
 
 class RPCError(RuntimeError):
     def __init__(self, status: int, body: Any, message: str):
+        envelope = _error_envelope(body)
+        if envelope is not None:
+            message = f"{message}: {envelope['message']}"
         super().__init__(message)
         self.status = status
         self.body = body
+        self.code = envelope["code"] if envelope is not None else None
+        self.message = message
 
 {{- range $service := .Services }}
 class {{ $service.ClassName }}:
@@ -55,21 +60,21 @@ class {{ $service.ClassName }}:
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        url = self._base_url + "{{ $method.Path }}"
+        url = self._base_url + {{ pyStr $method.Path }}
 {{- if $method.HasAuth }}
         if {{ $method.AuthParam }} is not None:
             auth_value = {{ $method.AuthParam }}
 {{- if ne $method.Auth.Prefix "" }}
-            auth_value = "{{ $method.Auth.Prefix }} " + {{ $method.AuthParam }}
+            auth_value = {{ pyStr (printf "%s " $method.Auth.Prefix) }} + {{ $method.AuthParam }}
 {{- end }}
 {{- if eq $method.Auth.In "header" }}
-            headers["{{ $method.Auth.Param }}"] = auth_value
+            headers[{{ pyStr $method.Auth.Param }}] = auth_value
 {{- end }}
 {{- if eq $method.Auth.In "query" }}
-            url = _append_query(url, "{{ $method.Auth.Param }}", auth_value)
+            url = _append_query(url, {{ pyStr $method.Auth.Param }}, auth_value)
 {{- end }}
 {{- if eq $method.Auth.In "cookie" }}
-            headers["Cookie"] = "{{ $method.Auth.Param }}=" + parse.quote(auth_value)
+            headers["Cookie"] = {{ pyStr (printf "%s=" $method.Auth.Param) }} + parse.quote(auth_value)
 {{- end }}
 {{- end }}
         data = None
@@ -111,6 +116,8 @@ def _rpc_request(url: str, headers: dict[str, str], data: Any, response_type: An
         except json.JSONDecodeError as err:
             raise RPCError(status, None, f"{status} {_status_text(status)}") from err
     if status >= 400:
+        if _error_envelope(body) is not None:
+            raise RPCError(status, body, f"{status} {_status_text(status)}")
         err_body = _decode_value(error_type, body)
         raise RPCError(status, err_body, f"{status} {_status_text(status)}")
     if response_type is None:
@@ -123,6 +130,15 @@ def _status_text(code: int) -> str:
         return http.HTTPStatus(code).phrase
     except ValueError:
         return "HTTP error"
+
+
+def _error_envelope(body: Any) -> Any:
+    if not isinstance(body, dict):
+        return None
+    err = body.get("error")
+    if isinstance(err, dict) and isinstance(err.get("code"), str) and isinstance(err.get("message"), str):
+        return err
+    return None
 
 
 def _decode_value(tp: Any, value: Any) -> Any:
@@ -196,6 +212,8 @@ def _encode_value(value: Any) -> Any:
     if value is None:
         return None
     if isinstance(value, _datetime):
+        if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+            raise TypeError("timezone-aware datetime required")
         return value.isoformat()
     if isinstance(value, _date):
         return value.isoformat()
@@ -300,6 +318,7 @@ func pythonReservedModuleNames(services []clientService) map[string]struct{} {
 		"_decode_decimal",
 		"_decode_value",
 		"_encode_value",
+		"_error_envelope",
 		"_datetime",
 		"_Decimal",
 		"_rpc_request",
@@ -491,19 +510,23 @@ func (r *Router) WriteClientPYHash(w io.Writer) error {
 }
 
 // ServeClientPY writes a runtime-generated Python client as an HTTP response.
-func (r *Router) ServeClientPY(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/x-python; charset=utf-8")
-	if err := r.WriteClientPY(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+// The client is rendered once per process, then served from cache with an
+// ETag; If-None-Match requests are answered with 304. The cache stores the
+// fully enveloped bytes, so a signed client carries one issued-at per process.
+func (r *Router) ServeClientPY(w http.ResponseWriter, req *http.Request) {
+	r.serveCachedClient(w, req, &r.clientPYCache, "text/x-python; charset=utf-8", "rpc client py", r.WriteClientPY)
 }
 
 // ServeClientPYHash writes the hash of the Python client as an HTTP response.
 func (r *Router) ServeClientPYHash(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if err := r.WriteClientPYHash(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	hash, err := r.clientPYHash()
+	if err != nil {
+		r.logger.Error("rpc client py hash generation failed", "error", err)
+		http.Error(w, "client generation failed", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, hash)
 }
 
 func (r *Router) clientPYBody() ([]byte, error) {

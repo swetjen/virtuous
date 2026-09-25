@@ -14,7 +14,14 @@ import (
 
 const (
 	defaultTraceSampleRate = 0.1
-	maxTraceSamples        = 200
+	// maxTraceSamples caps the shared ring of sampled traces.
+	maxTraceSamples = 200
+	// maxErrorFingerprints caps the number of distinct error groups retained;
+	// when full, the fingerprint with the oldest lastSeen is evicted.
+	maxErrorFingerprints = 200
+	// latencyWindowSize caps the per-route ring of recent latency samples used
+	// for percentile estimates.
+	latencyWindowSize = 256
 )
 
 // ObservabilityOptions configures the in-memory tracker.
@@ -45,34 +52,41 @@ type GuardDecisionEvent struct {
 }
 
 // RouteAggregate summarizes request activity for one RPC.
+//
+// Counters are cumulative since process start (they previously covered a
+// sliding 24-hour window). Latency percentiles are estimated from a bounded
+// ring of the most recent latencyWindowSize samples; min/max/average cover
+// every request since start.
 type RouteAggregate struct {
-	RPCName             string  `json:"rpcName"`
-	Path                string  `json:"path"`
-	HTTPMethod          string  `json:"httpMethod"`
-	RequestsLastMinute  int     `json:"requestsLastMinute"`
-	RequestsLastHour    int     `json:"requestsLastHour"`
-	RequestsLast24H     int     `json:"requestsLast24h"`
-	AvgLatencyLastHour  float64 `json:"avgLatencyLastHourMs"`
-	P50LatencyLastHour  float64 `json:"p50LatencyLastHourMs"`
-	P95LatencyLastHour  float64 `json:"p95LatencyLastHourMs"`
-	ClientErrorsLast24H int     `json:"clientErrorsLast24h"`
-	ServerErrorsLast24H int     `json:"serverErrorsLast24h"`
-	TraceSamplesLast24H int     `json:"traceSamplesLast24h"`
+	RPCName      string    `json:"rpcName"`
+	Path         string    `json:"path"`
+	HTTPMethod   string    `json:"httpMethod"`
+	Requests     int       `json:"requests"`
+	ClientErrors int       `json:"clientErrors"`
+	ServerErrors int       `json:"serverErrors"`
+	AvgLatencyMS float64   `json:"avgLatencyMs"`
+	MinLatencyMS int64     `json:"minLatencyMs"`
+	MaxLatencyMS int64     `json:"maxLatencyMs"`
+	P50LatencyMS float64   `json:"p50LatencyMs"`
+	P95LatencyMS float64   `json:"p95LatencyMs"`
+	LastRequest  time.Time `json:"lastRequestAt"`
+	TraceSamples int       `json:"traceSamples"`
 }
 
 // ErrorFingerprint groups repeated server-side failures for one RPC.
+// Count is cumulative since process start, not a 24-hour window.
 type ErrorFingerprint struct {
 	RPCName         string    `json:"rpcName"`
 	ErrorHash       string    `json:"errorHash"`
 	ErrorMessage    string    `json:"errorMessage"`
 	StackSignature  string    `json:"stackSignature,omitempty"`
-	CountLast24H    int       `json:"countLast24h"`
-	Sparkline       []int     `json:"sparkline"`
+	Count           int       `json:"count"`
 	LastSeen        time.Time `json:"lastSeen"`
 	TraceSampleHint bool      `json:"traceSampleHint"`
 }
 
 // GuardAggregate summarizes allow/deny activity for one guard on one RPC.
+// Counts are cumulative since process start.
 type GuardAggregate struct {
 	RPCName           string  `json:"rpcName"`
 	GuardName         string  `json:"guardName"`
@@ -96,17 +110,17 @@ type TraceSample struct {
 }
 
 // MetricsTotals provides top-level summary counts for the dashboard.
+// Counts are cumulative since process start.
 type MetricsTotals struct {
-	RequestsLastMinute  int `json:"requestsLastMinute"`
-	RequestsLastHour    int `json:"requestsLastHour"`
-	RequestsLast24H     int `json:"requestsLast24h"`
-	ClientErrorsLast24H int `json:"clientErrorsLast24h"`
-	ServerErrorsLast24H int `json:"serverErrorsLast24h"`
+	Requests     int `json:"requests"`
+	ClientErrors int `json:"clientErrors"`
+	ServerErrors int `json:"serverErrors"`
 }
 
 // MetricsSnapshot is the JSON payload for the observability dashboard.
 type MetricsSnapshot struct {
 	GeneratedAt   time.Time          `json:"generatedAt"`
+	TrackingSince time.Time          `json:"trackingSince"`
 	Advanced      bool               `json:"advanced"`
 	SampleRate    float64            `json:"sampleRate"`
 	Totals        MetricsTotals      `json:"totals"`
@@ -117,20 +131,53 @@ type MetricsSnapshot struct {
 	TraceViewerUI bool               `json:"traceViewerUi"`
 }
 
+// observabilityRoute holds fixed-size incremental aggregates for one RPC.
+// Memory is O(1) per route: counters plus a bounded latency ring.
 type observabilityRoute struct {
-	path       string
-	httpMethod string
-	requests   []RequestEvent
-	guards     []GuardDecisionEvent
-	traces     []TraceSample
+	path            string
+	httpMethod      string
+	requests        int
+	clientErrors    int
+	serverErrors    int
+	totalLatencyMS  int64
+	minLatencyMS    int64
+	maxLatencyMS    int64
+	recentLatencies []int64 // ring of at most latencyWindowSize samples
+	latencyNext     int
+	lastRequest     time.Time
+	traceSamples    int
 }
 
-// ObservabilityTracker keeps recent in-memory request history and aggregates.
+type guardCounter struct {
+	rpcName   string
+	guardName string
+	allowed   int
+	denied    int
+}
+
+type errorCounter struct {
+	rpcName         string
+	errorHash       string
+	errorMessage    string
+	stackSignature  string
+	count           int
+	lastSeen        time.Time
+	traceSampleHint bool
+}
+
+// ObservabilityTracker keeps bounded in-memory aggregates updated at record
+// time. Memory is O(routes + guards + capped fingerprints + capped traces),
+// never O(requests).
 type ObservabilityTracker struct {
 	mu         sync.RWMutex
 	advanced   bool
 	sampleRate float64
+	startedAt  time.Time
 	routes     map[string]*observabilityRoute
+	guards     map[string]*guardCounter
+	errors     map[string]*errorCounter
+	traces     []TraceSample // ring of at most maxTraceSamples
+	traceNext  int
 	random     *rand.Rand
 }
 
@@ -146,7 +193,10 @@ func NewObservabilityTracker(opts ObservabilityOptions) *ObservabilityTracker {
 	return &ObservabilityTracker{
 		advanced:   opts.Advanced,
 		sampleRate: sampleRate,
+		startedAt:  time.Now().UTC(),
 		routes:     make(map[string]*observabilityRoute),
+		guards:     make(map[string]*guardCounter),
+		errors:     make(map[string]*errorCounter),
 		random:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
@@ -171,7 +221,7 @@ func (t *ObservabilityTracker) SampleRate() float64 {
 	return t.sampleRate
 }
 
-// RecordRequest stores one request and any guard outcomes.
+// RecordRequest folds one request and any guard outcomes into the aggregates.
 func (t *ObservabilityTracker) RecordRequest(event RequestEvent, guards []GuardDecisionEvent) {
 	if t == nil {
 		return
@@ -212,23 +262,43 @@ func (t *ObservabilityTracker) RecordRequest(event RequestEvent, guards []GuardD
 	if event.HTTPMethod != "" {
 		route.httpMethod = event.HTTPMethod
 	}
-	route.requests = append(route.requests, event)
+
+	route.requests++
+	switch {
+	case event.StatusCode >= 500:
+		route.serverErrors++
+	case event.StatusCode >= 400:
+		route.clientErrors++
+	}
+	route.totalLatencyMS += event.DurationMS
+	if route.requests == 1 || event.DurationMS < route.minLatencyMS {
+		route.minLatencyMS = event.DurationMS
+	}
+	if event.DurationMS > route.maxLatencyMS {
+		route.maxLatencyMS = event.DurationMS
+	}
+	if len(route.recentLatencies) < latencyWindowSize {
+		route.recentLatencies = append(route.recentLatencies, event.DurationMS)
+	} else {
+		route.recentLatencies[route.latencyNext] = event.DurationMS
+	}
+	route.latencyNext = (route.latencyNext + 1) % latencyWindowSize
+	if event.Timestamp.After(route.lastRequest) {
+		route.lastRequest = event.Timestamp
+	}
 
 	if t.advanced {
 		for _, decision := range guards {
-			decision.Timestamp = decision.Timestamp.UTC()
-			if decision.Timestamp.IsZero() {
-				decision.Timestamp = now
-			}
-			decision.RPCName = event.RPCName
-			decision.GuardName = strings.TrimSpace(decision.GuardName)
-			if decision.GuardName == "" {
+			guardName := strings.TrimSpace(decision.GuardName)
+			if guardName == "" {
 				continue
 			}
-			route.guards = append(route.guards, decision)
+			t.recordGuardLocked(event.RPCName, guardName, decision.Allowed)
 		}
+		t.recordErrorLocked(event)
 		if t.shouldSampleTraceLocked(event) {
-			route.traces = append(route.traces, TraceSample{
+			route.traceSamples++
+			t.recordTraceLocked(TraceSample{
 				ID:             traceSampleID(event),
 				RPCName:        event.RPCName,
 				Path:           event.Path,
@@ -242,11 +312,80 @@ func (t *ObservabilityTracker) RecordRequest(event RequestEvent, guards []GuardD
 			})
 		}
 	}
-
-	t.trimRouteLocked(route, now)
 }
 
-// Snapshot computes the current dashboard view from in-memory events.
+func (t *ObservabilityTracker) recordGuardLocked(rpcName, guardName string, allowed bool) {
+	key := rpcName + "\x00" + guardName
+	counter := t.guards[key]
+	if counter == nil {
+		counter = &guardCounter{
+			rpcName:   rpcName,
+			guardName: guardName,
+		}
+		t.guards[key] = counter
+	}
+	if allowed {
+		counter.allowed++
+	} else {
+		counter.denied++
+	}
+}
+
+func (t *ObservabilityTracker) recordErrorLocked(event RequestEvent) {
+	if event.StatusCode < 500 {
+		return
+	}
+	if event.ErrorMessage == "" && event.StackSignature == "" {
+		return
+	}
+	hash := fingerprintHash(event.ErrorMessage, event.StackSignature)
+	key := event.RPCName + "\x00" + hash
+	counter := t.errors[key]
+	if counter == nil {
+		if len(t.errors) >= maxErrorFingerprints {
+			t.evictOldestErrorLocked()
+		}
+		counter = &errorCounter{
+			rpcName:        event.RPCName,
+			errorHash:      hash,
+			errorMessage:   event.ErrorMessage,
+			stackSignature: event.StackSignature,
+		}
+		t.errors[key] = counter
+	}
+	counter.count++
+	if event.Timestamp.After(counter.lastSeen) {
+		counter.lastSeen = event.Timestamp
+	}
+	counter.traceSampleHint = counter.traceSampleHint || event.StackSignature != ""
+}
+
+func (t *ObservabilityTracker) evictOldestErrorLocked() {
+	oldestKey := ""
+	var oldestSeen time.Time
+	for key, counter := range t.errors {
+		if oldestKey == "" || counter.lastSeen.Before(oldestSeen) {
+			oldestKey = key
+			oldestSeen = counter.lastSeen
+		}
+	}
+	if oldestKey != "" {
+		delete(t.errors, oldestKey)
+	}
+}
+
+func (t *ObservabilityTracker) recordTraceLocked(sample TraceSample) {
+	if len(t.traces) < maxTraceSamples {
+		t.traces = append(t.traces, sample)
+	} else {
+		t.traces[t.traceNext] = sample
+	}
+	t.traceNext = (t.traceNext + 1) % maxTraceSamples
+}
+
+// Snapshot returns the current aggregates. It is a cheap read: no
+// re-aggregation over raw events happens here, only a copy of the
+// O(routes)-sized state under a read lock.
 func (t *ObservabilityTracker) Snapshot() MetricsSnapshot {
 	if t == nil {
 		return MetricsSnapshot{
@@ -254,12 +393,13 @@ func (t *ObservabilityTracker) Snapshot() MetricsSnapshot {
 		}
 	}
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 
 	now := time.Now().UTC()
 	snapshot := MetricsSnapshot{
 		GeneratedAt:   now,
+		TrackingSince: t.startedAt,
 		Advanced:      t.advanced,
 		SampleRate:    t.sampleRate,
 		Routes:        []RouteAggregate{},
@@ -269,54 +409,55 @@ func (t *ObservabilityTracker) Snapshot() MetricsSnapshot {
 		TraceViewerUI: false,
 	}
 
-	errorMap := map[string]*ErrorFingerprint{}
-	guardMap := map[string]*GuardAggregate{}
-
 	for rpcName, route := range t.routes {
-		t.trimRouteLocked(route, now)
-		aggregate := summarizeRoute(rpcName, route, now)
+		aggregate := summarizeRoute(rpcName, route)
 		snapshot.Routes = append(snapshot.Routes, aggregate)
 
-		snapshot.Totals.RequestsLastMinute += aggregate.RequestsLastMinute
-		snapshot.Totals.RequestsLastHour += aggregate.RequestsLastHour
-		snapshot.Totals.RequestsLast24H += aggregate.RequestsLast24H
-		snapshot.Totals.ClientErrorsLast24H += aggregate.ClientErrorsLast24H
-		snapshot.Totals.ServerErrorsLast24H += aggregate.ServerErrorsLast24H
-
-		if t.advanced {
-			accumulateErrors(errorMap, rpcName, route, now)
-			accumulateGuards(guardMap, rpcName, route, now)
-			snapshot.RecentTraces = append(snapshot.RecentTraces, route.traces...)
-		}
+		snapshot.Totals.Requests += aggregate.Requests
+		snapshot.Totals.ClientErrors += aggregate.ClientErrors
+		snapshot.Totals.ServerErrors += aggregate.ServerErrors
 	}
 
 	sort.Slice(snapshot.Routes, func(i, j int) bool {
-		if snapshot.Routes[i].ServerErrorsLast24H != snapshot.Routes[j].ServerErrorsLast24H {
-			return snapshot.Routes[i].ServerErrorsLast24H > snapshot.Routes[j].ServerErrorsLast24H
+		if snapshot.Routes[i].ServerErrors != snapshot.Routes[j].ServerErrors {
+			return snapshot.Routes[i].ServerErrors > snapshot.Routes[j].ServerErrors
 		}
-		if snapshot.Routes[i].RequestsLast24H != snapshot.Routes[j].RequestsLast24H {
-			return snapshot.Routes[i].RequestsLast24H > snapshot.Routes[j].RequestsLast24H
+		if snapshot.Routes[i].Requests != snapshot.Routes[j].Requests {
+			return snapshot.Routes[i].Requests > snapshot.Routes[j].Requests
 		}
 		return snapshot.Routes[i].RPCName < snapshot.Routes[j].RPCName
 	})
 
 	if t.advanced {
-		for _, item := range errorMap {
-			snapshot.Errors = append(snapshot.Errors, *item)
+		for _, counter := range t.errors {
+			snapshot.Errors = append(snapshot.Errors, ErrorFingerprint{
+				RPCName:         counter.rpcName,
+				ErrorHash:       counter.errorHash,
+				ErrorMessage:    counter.errorMessage,
+				StackSignature:  counter.stackSignature,
+				Count:           counter.count,
+				LastSeen:        counter.lastSeen,
+				TraceSampleHint: counter.traceSampleHint,
+			})
 		}
 		sort.Slice(snapshot.Errors, func(i, j int) bool {
-			if snapshot.Errors[i].CountLast24H != snapshot.Errors[j].CountLast24H {
-				return snapshot.Errors[i].CountLast24H > snapshot.Errors[j].CountLast24H
+			if snapshot.Errors[i].Count != snapshot.Errors[j].Count {
+				return snapshot.Errors[i].Count > snapshot.Errors[j].Count
 			}
 			return snapshot.Errors[i].RPCName < snapshot.Errors[j].RPCName
 		})
 
-		for _, item := range guardMap {
-			total := item.AllowedCount + item.DeniedCount
-			if total > 0 {
-				item.DenialRatePercent = (float64(item.DeniedCount) / float64(total)) * 100
+		for _, counter := range t.guards {
+			item := GuardAggregate{
+				RPCName:      counter.rpcName,
+				GuardName:    counter.guardName,
+				AllowedCount: counter.allowed,
+				DeniedCount:  counter.denied,
 			}
-			snapshot.Guards = append(snapshot.Guards, *item)
+			if total := counter.allowed + counter.denied; total > 0 {
+				item.DenialRatePercent = (float64(counter.denied) / float64(total)) * 100
+			}
+			snapshot.Guards = append(snapshot.Guards, item)
 		}
 		sort.Slice(snapshot.Guards, func(i, j int) bool {
 			if snapshot.Guards[i].DenialRatePercent != snapshot.Guards[j].DenialRatePercent {
@@ -331,12 +472,10 @@ func (t *ObservabilityTracker) Snapshot() MetricsSnapshot {
 			return snapshot.Guards[i].GuardName < snapshot.Guards[j].GuardName
 		})
 
+		snapshot.RecentTraces = append(snapshot.RecentTraces, t.traces...)
 		sort.Slice(snapshot.RecentTraces, func(i, j int) bool {
 			return snapshot.RecentTraces[i].Timestamp.After(snapshot.RecentTraces[j].Timestamp)
 		})
-		if len(snapshot.RecentTraces) > maxTraceSamples {
-			snapshot.RecentTraces = snapshot.RecentTraces[:maxTraceSamples]
-		}
 	}
 
 	return snapshot
@@ -358,100 +497,24 @@ func (t *ObservabilityTracker) shouldSampleTraceLocked(event RequestEvent) bool 
 	return t.random.Float64() <= t.sampleRate
 }
 
-func (t *ObservabilityTracker) trimRouteLocked(route *observabilityRoute, now time.Time) {
-	if route == nil {
-		return
-	}
-	cutoff := now.Add(-24 * time.Hour)
-	route.requests = trimRequests(route.requests, cutoff)
-	route.guards = trimGuardEvents(route.guards, cutoff)
-	route.traces = trimTraceSamples(route.traces, cutoff)
-	if len(route.traces) > maxTraceSamples {
-		route.traces = route.traces[len(route.traces)-maxTraceSamples:]
-	}
-}
-
-func trimRequests(items []RequestEvent, cutoff time.Time) []RequestEvent {
-	if len(items) == 0 {
-		return items
-	}
-	idx := 0
-	for idx < len(items) && items[idx].Timestamp.Before(cutoff) {
-		idx++
-	}
-	if idx == 0 {
-		return items
-	}
-	return append([]RequestEvent(nil), items[idx:]...)
-}
-
-func trimGuardEvents(items []GuardDecisionEvent, cutoff time.Time) []GuardDecisionEvent {
-	if len(items) == 0 {
-		return items
-	}
-	idx := 0
-	for idx < len(items) && items[idx].Timestamp.Before(cutoff) {
-		idx++
-	}
-	if idx == 0 {
-		return items
-	}
-	return append([]GuardDecisionEvent(nil), items[idx:]...)
-}
-
-func trimTraceSamples(items []TraceSample, cutoff time.Time) []TraceSample {
-	if len(items) == 0 {
-		return items
-	}
-	idx := 0
-	for idx < len(items) && items[idx].Timestamp.Before(cutoff) {
-		idx++
-	}
-	if idx == 0 {
-		return items
-	}
-	return append([]TraceSample(nil), items[idx:]...)
-}
-
-func summarizeRoute(rpcName string, route *observabilityRoute, now time.Time) RouteAggregate {
-	cutoffMinute := now.Add(-1 * time.Minute)
-	cutoffHour := now.Add(-1 * time.Hour)
-	cutoffDay := now.Add(-24 * time.Hour)
-	durations := make([]int64, 0, len(route.requests))
-
+func summarizeRoute(rpcName string, route *observabilityRoute) RouteAggregate {
 	out := RouteAggregate{
-		RPCName:    rpcName,
-		Path:       route.path,
-		HTTPMethod: route.httpMethod,
+		RPCName:      rpcName,
+		Path:         route.path,
+		HTTPMethod:   route.httpMethod,
+		Requests:     route.requests,
+		ClientErrors: route.clientErrors,
+		ServerErrors: route.serverErrors,
+		MinLatencyMS: route.minLatencyMS,
+		MaxLatencyMS: route.maxLatencyMS,
+		LastRequest:  route.lastRequest,
+		TraceSamples: route.traceSamples,
 	}
-
-	var totalDurationHour int64
-	for _, event := range route.requests {
-		if event.Timestamp.Before(cutoffDay) {
-			continue
-		}
-		out.RequestsLast24H++
-		switch {
-		case event.StatusCode >= 500:
-			out.ServerErrorsLast24H++
-		case event.StatusCode >= 400:
-			out.ClientErrorsLast24H++
-		}
-		if !event.Timestamp.Before(cutoffMinute) {
-			out.RequestsLastMinute++
-		}
-		if !event.Timestamp.Before(cutoffHour) {
-			out.RequestsLastHour++
-			totalDurationHour += event.DurationMS
-			durations = append(durations, event.DurationMS)
-		}
+	if route.requests > 0 {
+		out.AvgLatencyMS = float64(route.totalLatencyMS) / float64(route.requests)
+		out.P50LatencyMS = percentile(route.recentLatencies, 0.50)
+		out.P95LatencyMS = percentile(route.recentLatencies, 0.95)
 	}
-	if out.RequestsLastHour > 0 {
-		out.AvgLatencyLastHour = float64(totalDurationHour) / float64(out.RequestsLastHour)
-		out.P50LatencyLastHour = percentile(durations, 0.50)
-		out.P95LatencyLastHour = percentile(durations, 0.95)
-	}
-	out.TraceSamplesLast24H = len(route.traces)
 	return out
 }
 
@@ -469,73 +532,6 @@ func percentile(values []int64, p float64) float64 {
 	}
 	index := int(float64(len(copied)-1) * p)
 	return float64(copied[index])
-}
-
-func accumulateErrors(out map[string]*ErrorFingerprint, rpcName string, route *observabilityRoute, now time.Time) {
-	cutoff := now.Add(-24 * time.Hour)
-	for _, event := range route.requests {
-		if event.Timestamp.Before(cutoff) {
-			continue
-		}
-		if event.StatusCode < 500 {
-			continue
-		}
-		if event.ErrorMessage == "" && event.StackSignature == "" {
-			continue
-		}
-		hash := fingerprintHash(event.ErrorMessage, event.StackSignature)
-		item := out[hash]
-		if item == nil {
-			item = &ErrorFingerprint{
-				RPCName:        rpcName,
-				ErrorHash:      hash,
-				ErrorMessage:   event.ErrorMessage,
-				StackSignature: event.StackSignature,
-				Sparkline:      make([]int, 24),
-			}
-			out[hash] = item
-		}
-		item.CountLast24H++
-		if event.Timestamp.After(item.LastSeen) {
-			item.LastSeen = event.Timestamp
-		}
-		item.TraceSampleHint = item.TraceSampleHint || event.StackSignature != ""
-		if bucket := sparklineBucket(now, event.Timestamp); bucket >= 0 && bucket < len(item.Sparkline) {
-			item.Sparkline[bucket]++
-		}
-	}
-}
-
-func accumulateGuards(out map[string]*GuardAggregate, rpcName string, route *observabilityRoute, now time.Time) {
-	cutoff := now.Add(-24 * time.Hour)
-	for _, event := range route.guards {
-		if event.Timestamp.Before(cutoff) {
-			continue
-		}
-		key := rpcName + "\x00" + event.GuardName
-		item := out[key]
-		if item == nil {
-			item = &GuardAggregate{
-				RPCName:   rpcName,
-				GuardName: event.GuardName,
-			}
-			out[key] = item
-		}
-		if event.Allowed {
-			item.AllowedCount++
-		} else {
-			item.DeniedCount++
-		}
-	}
-}
-
-func sparklineBucket(now, ts time.Time) int {
-	age := now.Sub(ts)
-	if age < 0 || age > 24*time.Hour {
-		return -1
-	}
-	hoursAgo := int(age / time.Hour)
-	return 23 - hoursAgo
 }
 
 func fingerprintHash(message, stack string) string {

@@ -88,6 +88,7 @@ func (r *Router) WriteClientPY(w io.Writer) error
 ### Middleware helpers
 ```
 func Cors(opts ...CORSOption) func(http.Handler) http.Handler
+func CorsWithCredentials(allowedOrigins []string, opts ...CORSOption) func(http.Handler) http.Handler
 ```
 
 ### Route metadata

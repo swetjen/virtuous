@@ -334,6 +334,13 @@ assert body.wire.create_client == "factory-value"
 assert body.wire.from_2 == "literal-from-underscore"
 assert body.wire.date == "wire-date"
 
+try:
+    mod._encode_value(body.temporal.naive_stamp)
+    raise AssertionError("expected TypeError for naive datetime")
+except TypeError as err:
+    assert "timezone-aware datetime required" in str(err)
+body.temporal.naive_stamp = body.temporal.naive_stamp.replace(tzinfo=timezone.utc)
+
 encoded = mod._encode_value(body)
 assert encoded["decimal"]["money"] == "123.4500"
 assert encoded["decimal"]["money_number"] == "99.25"

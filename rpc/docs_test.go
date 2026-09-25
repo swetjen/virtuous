@@ -135,18 +135,20 @@ func TestRPCServeDocsWithDocsGuards(t *testing.T) {
 		t.Fatalf("expected guarded docs redirect endpoint 401, got %d", recRedirect.Code)
 	}
 
+	// Public observability endpoints were removed: metrics are only reachable
+	// through the guarded admin surface.
 	reqMetrics := httptest.NewRequest(http.MethodGet, "/rpc/_virtuous/metrics", nil)
 	recMetrics := httptest.NewRecorder()
 	router.ServeHTTP(recMetrics, reqMetrics)
-	if recMetrics.Code != http.StatusUnauthorized {
-		t.Fatalf("expected guarded metrics endpoint 401, got %d", recMetrics.Code)
+	if recMetrics.Code != http.StatusNotFound {
+		t.Fatalf("expected removed metrics endpoint 404, got %d", recMetrics.Code)
 	}
 
 	reqObservability := httptest.NewRequest(http.MethodGet, "/rpc/_virtuous/observability", nil)
 	recObservability := httptest.NewRecorder()
 	router.ServeHTTP(recObservability, reqObservability)
-	if recObservability.Code != http.StatusUnauthorized {
-		t.Fatalf("expected guarded observability redirect endpoint 401, got %d", recObservability.Code)
+	if recObservability.Code != http.StatusNotFound {
+		t.Fatalf("expected removed observability endpoint 404, got %d", recObservability.Code)
 	}
 
 	reqOpenAPI.Header.Set("X-Docs", "1")

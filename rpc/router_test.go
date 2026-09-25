@@ -100,6 +100,7 @@ func TestRPCInvalidStatusDefaultsTo500(t *testing.T) {
 	path := router.Routes()[0].Path
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"test"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -141,6 +142,7 @@ func TestRPCEventFeedRequiresAttachLogger(t *testing.T) {
 	path := router.Routes()[0].Path
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"Virtuous"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -154,6 +156,7 @@ func TestRPCEventFeedRequiresAttachLogger(t *testing.T) {
 
 	wrapped := router.AttachLogger(router)
 	req = httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":"Virtuous"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	wrapped.ServeHTTP(rec, req)
 
@@ -203,6 +206,7 @@ func TestRPCDebugConsolePrintsRequestLine(t *testing.T) {
 	path := router.Routes()[0].Path
 
 	req := httptest.NewRequest(http.MethodPost, path+"?trace=1", strings.NewReader(`{"name":"Virtuous"}`))
+	req.Header.Set("Content-Type", "application/json")
 	req.RemoteAddr = "10.0.0.9:4321"
 	req.Header.Set("X-Forwarded-For", "203.0.113.10, 10.0.0.9")
 	rec := httptest.NewRecorder()
@@ -232,6 +236,7 @@ func TestRPCDebugConsoleCapturesErrorStatus(t *testing.T) {
 	path := router.Routes()[0].Path
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"name":""}`))
+	req.Header.Set("Content-Type", "application/json")
 	req.RemoteAddr = "192.0.2.55:4321"
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

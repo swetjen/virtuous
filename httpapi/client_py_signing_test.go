@@ -14,6 +14,8 @@ import (
 	"testing"
 )
 
+const testHTTPAPIPythonSigningScope = "https://api.example.test"
+
 func TestHTTPAPIPythonClientSigningIsOptIn(t *testing.T) {
 	router := NewRouter()
 
@@ -38,8 +40,12 @@ func TestHTTPAPIPythonClientSigningEnvelopeIsEmitted(t *testing.T) {
 	for _, want := range []string{
 		"# Virtuous-Signature-Version: 1\n",
 		"# Virtuous-Signature-Algorithm: ed25519\n",
+		"# Virtuous-Manifest-Version: 2\n",
+		"# Virtuous-Origin-Scope: " + testHTTPAPIPythonSigningScope + "\n",
+		"# Virtuous-Issued-At: ",
 		"# Virtuous-Root-Key-ID: root\n",
 		"# Virtuous-Artifact-Key-ID: artifact\n",
+		"# Virtuous-Manifest-Signature: ",
 		"# Virtuous-Signature-End\n",
 	} {
 		if !strings.Contains(text, want) {
@@ -62,9 +68,15 @@ func TestHTTPAPISignedPythonClientLoadsThroughVerifiedLoader(t *testing.T) {
 	clientURL := (&url.URL{Scheme: "file", Path: pyPath}).String()
 	snippet := fmt.Sprintf(`
 from virtuous import load_remote_module
-mod = load_remote_module(%q, root_public_key=%q)
+mod = load_remote_module(
+    %q,
+    root_public_key=%q,
+    expected_scope=%q,
+    max_age=300,
+)
 assert hasattr(mod, "create_client")
-`, clientURL, base64.StdEncoding.EncodeToString(rootPublicKey))
+assert mod.__virtuous_scope__ == %q
+`, clientURL, base64.StdEncoding.EncodeToString(rootPublicKey), testHTTPAPIPythonSigningScope, testHTTPAPIPythonSigningScope)
 	cmd := exec.Command("python3", "-c", snippet)
 	cmd.Env = append(os.Environ(), "PYTHONPATH="+loaderPath)
 	output, err := cmd.CombinedOutput()
@@ -89,7 +101,7 @@ func testHTTPAPIPythonSigningWithRoot(t *testing.T) (PythonClientSigning, ed2551
 	if err != nil {
 		t.Fatalf("generate artifact key: %v", err)
 	}
-	signing, err := NewEd25519PythonClientSigning("root", rootPrivate, "artifact", artifactPrivate)
+	signing, err := NewEd25519PythonClientSigning("root", rootPrivate, "artifact", artifactPrivate, testHTTPAPIPythonSigningScope)
 	if err != nil {
 		t.Fatalf("new signing: %v", err)
 	}

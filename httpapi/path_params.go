@@ -21,11 +21,8 @@ func pathParamsFor(t reflect.Type) ([]pathParam, error) {
 		return nil, nil
 	}
 	var out []pathParam
-	for i := 0; i < base.NumField(); i++ {
-		field := base.Field(i)
-		if field.PkgPath != "" {
-			continue
-		}
+	for _, promoted := range reflectutil.PromotedFields(base) {
+		field := promoted.Field
 		name, ok, err := parsePathTag(field)
 		if err != nil {
 			return nil, err

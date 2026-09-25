@@ -10,7 +10,7 @@ import (
 	"unicode"
 )
 
-var clientPyTemplate = template.Must(template.New("virtuous-py").Parse(`"""Generated Python client for Virtuous routes."""
+var clientPyTemplate = template.Must(template.New("virtuous-py").Funcs(clientgen.TemplateFuncs()).Parse(`"""Generated Python client for Virtuous routes."""
 
 from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import date as _date, datetime as _datetime
@@ -32,7 +32,7 @@ class {{ $object.Name }}:
 {{- else }}
 {{- range $field := $object.Fields }}
 {{- if $field.Doc }}
-    # {{ $field.Doc }}
+    # {{ pyComment $field.Doc }}
 {{- end }}
     {{ $field.Declaration }}
 {{- end }}
@@ -51,22 +51,22 @@ class {{ $service.ClassName }}:
 {{- range $method := $service.Methods }}
     def {{ $method.Name }}(self{{ $method.SignatureParams }}) -> {{ $method.ReturnType }}:
         headers = {
-            "Accept": "{{ $method.AcceptType }}",
+            "Accept": {{ pyStr $method.AcceptType }},
 {{- if $method.HasBody }}
 {{- if ne $method.BodyMode "multipart" }}
-            "Content-Type": "{{ $method.RequestMedia }}",
+            "Content-Type": {{ pyStr $method.RequestMedia }},
 {{- end }}
 {{- end }}
         }
-        url = self._base_url + "{{ $method.Path }}"
+        url = self._base_url + {{ pyStr $method.Path }}
 {{- if $method.PathParams }}
 {{- range $param := $method.PathParams }}
-        url = url.replace("{{ printf "{%s}" $param.Name }}", parse.quote(str({{ $param.VarName }})))
+        url = url.replace({{ pyStr (printf "{%s}" $param.Name) }}, parse.quote(str({{ $param.VarName }})))
 {{- end }}
 {{- end }}
 {{- if $method.HasQuery }}
 {{- range $param := $method.QueryParams }}
-        url = _append_query_param(url, "{{ $param.WireName }}", {{ $param.VarName }}, {{ if $param.Optional }}True{{ else }}False{{ end }})
+        url = _append_query_param(url, {{ pyStr $param.WireName }}, {{ $param.VarName }}, {{ if $param.Optional }}True{{ else }}False{{ end }})
 {{- end }}
 {{- end }}
 {{- if $method.HasAuth }}
@@ -77,7 +77,7 @@ class {{ $service.ClassName }}:
 {{- range $guard := $req.Guards }}
             auth_value = {{ $guard.ParamName }} if {{ $guard.ParamName }} is not None else self.{{ $guard.DefaultAttr }}
             if auth_value is not None:
-                url = _apply_auth(url, headers, "{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", auth_value)
+                url = _apply_auth(url, headers, {{ pyStr $guard.Spec.In }}, {{ pyStr $guard.Spec.Param }}, {{ pyStr $guard.Spec.Prefix }}, auth_value)
                 auth_applied = True
 {{- end }}
 {{- else }}
@@ -86,26 +86,26 @@ class {{ $service.ClassName }}:
 {{- end }}
             if {{ range $i, $guard := $req.Guards }}{{ if gt $i 0 }} and {{ end }}{{ $guard.ValueName }} is not None{{ end }}:
 {{- range $guard := $req.Guards }}
-                url = _apply_auth(url, headers, "{{ $guard.Spec.In }}", "{{ $guard.Spec.Param }}", "{{ $guard.Spec.Prefix }}", {{ $guard.ValueName }})
+                url = _apply_auth(url, headers, {{ pyStr $guard.Spec.In }}, {{ pyStr $guard.Spec.Param }}, {{ pyStr $guard.Spec.Prefix }}, {{ $guard.ValueName }})
 {{- end }}
                 auth_applied = True
 {{- end }}
 {{- end }}
         if not auth_applied:
-            raise RuntimeError("auth not configured: {{ $method.AuthError }}")
+            raise RuntimeError({{ pyStr (printf "auth not configured: %s" $method.AuthError) }})
 {{- end }}
         data = None
 {{- if $method.HasBody }}
         if body is not None:
-            data, content_type = _encode_body(body, "{{ $method.BodyMode }}", [
+            data, content_type = _encode_body(body, {{ pyStr $method.BodyMode }}, [
 {{- range $field := $method.BodyFields }}
-                ("{{ $field.WireName }}", "{{ $field.ValueName }}", {{ if $field.IsFile }}True{{ else }}False{{ end }}),
+                ({{ pyStr $field.WireName }}, {{ pyStr $field.ValueName }}, {{ if $field.IsFile }}True{{ else }}False{{ end }}),
 {{- end }}
             ])
             if content_type:
                 headers["Content-Type"] = content_type
 {{- end }}
-        return _request("{{ $method.HTTPMethod }}", url, headers, data, "{{ $method.ResponseMode }}", {{ if $method.ResponseDecodeType }}{{ $method.ResponseDecodeType }}{{ else }}None{{ end }})
+        return _request({{ pyStr $method.HTTPMethod }}, url, headers, data, {{ pyStr $method.ResponseMode }}, {{ if $method.ResponseDecodeType }}{{ $method.ResponseDecodeType }}{{ else }}None{{ end }})
 
 {{- end }}
 {{- end }}
@@ -162,6 +162,14 @@ def _request(method: str, url: str, headers: dict[str, str], data: Any, response
                 raise RuntimeError(f"{status} {_status_text(status)}") from err
             raise
     if status >= 400:
+        envelope = _error_envelope(decoded)
+        if envelope is not None:
+            failure = RuntimeError(f"{status} {_status_text(status)}: {envelope['message']}")
+            failure.status = status
+            failure.code = envelope["code"]
+            failure.message = f"{status} {_status_text(status)}: {envelope['message']}"
+            failure.body = decoded
+            raise failure
         if isinstance(decoded, dict) and "error" in decoded:
             raise RuntimeError(str(decoded["error"]))
         raise RuntimeError(f"{status} {_status_text(status)}")
@@ -192,13 +200,19 @@ def _append_query_param(url: str, key: str, value: Any, optional: bool) -> str:
                 return _append_query(url, key, "")
             return url
         for item in value:
-            if optional and item in ("", 0, False, None):
+            if optional and item is None:
                 continue
-            url = _append_query(url, key, "" if item is None else str(item))
+            url = _append_query(url, key, "" if item is None else _query_str(item))
         return url
-    if optional and value in ("", 0, False):
-        return url
-    return _append_query(url, key, str(value))
+    return _append_query(url, key, _query_str(value))
+
+
+def _query_str(value: Any) -> str:
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    return str(value)
 
 
 def _encode_body(body: Any, mode: str, fields: list[tuple[str, str, bool]]) -> tuple[Any, Optional[str]]:
@@ -217,6 +231,15 @@ def _status_text(code: int) -> str:
         return http.HTTPStatus(code).phrase
     except ValueError:
         return "HTTP error"
+
+
+def _error_envelope(body: Any) -> Any:
+    if not isinstance(body, dict):
+        return None
+    err = body.get("error")
+    if isinstance(err, dict) and isinstance(err.get("code"), str) and isinstance(err.get("message"), str):
+        return err
+    return None
 
 
 def _decode_value(tp: Any, value: Any) -> Any:
@@ -290,6 +313,8 @@ def _encode_value(value: Any) -> Any:
     if value is None:
         return None
     if isinstance(value, _datetime):
+        if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+            raise TypeError("timezone-aware datetime required")
         return value.isoformat()
     if isinstance(value, _date):
         return value.isoformat()
@@ -561,6 +586,8 @@ func pythonReservedModuleNames(services []clientService) map[string]struct{} {
 		"_encode_form",
 		"_encode_multipart",
 		"_encode_value",
+		"_error_envelope",
+		"_query_str",
 		"_datetime",
 		"_Decimal",
 		"_multipart_file_value",
@@ -967,19 +994,23 @@ func (r *Router) WriteClientPYHash(w io.Writer) error {
 }
 
 // ServeClientPY writes a generated Python client as an HTTP response.
-func (r *Router) ServeClientPY(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/x-python; charset=utf-8")
-	if err := r.WriteClientPY(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+// The client is rendered once per process, then served from cache with an
+// ETag; If-None-Match requests are answered with 304. The cache stores the
+// fully enveloped bytes, so a signed client carries one issued-at per process.
+func (r *Router) ServeClientPY(w http.ResponseWriter, req *http.Request) {
+	r.serveCachedClient(w, req, &r.clientPYCache, "text/x-python; charset=utf-8", "client py", r.WriteClientPY)
 }
 
 // ServeClientPYHash writes the hash of the Python client as an HTTP response.
 func (r *Router) ServeClientPYHash(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if err := r.WriteClientPYHash(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	hash, err := r.clientPYHash()
+	if err != nil {
+		r.logger.Error("client py hash generation failed", "error", err)
+		http.Error(w, "client generation failed", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, hash)
 }
 
 func (r *Router) clientPYBody() ([]byte, error) {

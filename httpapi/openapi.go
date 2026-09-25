@@ -236,19 +236,12 @@ func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]st
 
 	props := map[string]*schema.OpenAPISchema{}
 	var required []string
-	for i := 0; i < base.NumField(); i++ {
-		field := base.Field(i)
-		if field.PkgPath != "" {
-			continue
-		}
+	for _, jsonField := range reflectutil.JSONFields(base) {
+		field := jsonField.Field
 		if _, ok := skip[field.Name]; ok {
 			continue
 		}
 		if field.Tag.Get("path") != "" {
-			continue
-		}
-		name, omit := reflectutil.JSONFieldName(field)
-		if name == "" {
 			continue
 		}
 		fieldSchema := gen.SchemaForType(field.Type)
@@ -256,9 +249,9 @@ func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]st
 			continue
 		}
 		fieldSchema = schema.ApplyFieldMetadata(field, fieldSchema)
-		props[name] = fieldSchema
-		if !omit && field.Type.Kind() != reflect.Ptr {
-			required = append(required, name)
+		props[jsonField.Name] = fieldSchema
+		if !jsonField.OmitEmpty && !jsonField.ParentOptional && field.Type.Kind() != reflect.Ptr {
+			required = append(required, jsonField.Name)
 		}
 	}
 	sort.Strings(required)
@@ -311,11 +304,8 @@ func formRequestBodySchema(gen *schema.Generator, t reflect.Type) *schema.OpenAP
 	}
 	props := map[string]*schema.OpenAPISchema{}
 	var required []string
-	for i := 0; i < base.NumField(); i++ {
-		field := base.Field(i)
-		if field.PkgPath != "" {
-			continue
-		}
+	for _, promoted := range reflectutil.PromotedFields(base) {
+		field := promoted.Field
 		name, omit := formFieldName(field)
 		if name == "" {
 			continue
@@ -325,7 +315,7 @@ func formRequestBodySchema(gen *schema.Generator, t reflect.Type) *schema.OpenAP
 			continue
 		}
 		props[name] = schema.ApplyFieldMetadata(field, fieldSchema)
-		if !omit && field.Type.Kind() != reflect.Ptr {
+		if !omit && !promoted.ParentOptional && field.Type.Kind() != reflect.Ptr {
 			required = append(required, name)
 		}
 	}
@@ -546,6 +536,9 @@ func collectSchemaTypes(out map[reflect.Type]struct{}, typ reflect.Type) {
 	switch typ.Kind() {
 	case reflect.Struct:
 		if typ.Name() != "" {
+			if _, seen := out[typ]; seen {
+				return
+			}
 			out[typ] = struct{}{}
 		}
 		if typ.PkgPath() == "time" && typ.Name() == "Time" {

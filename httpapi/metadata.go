@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"bytes"
+	"io"
 	"net/http"
+
+	"github.com/swetjen/virtuous/internal/jsonlimit"
 )
 
 const (
@@ -102,6 +105,21 @@ type authAnyGuard struct {
 
 // AuthAny composes guards with runtime OR semantics and exposes matching
 // OpenAPI/client security alternatives.
+//
+// At runtime each guard is probed against a cloned request and a throwaway
+// response recorder until one authorizes, so guards composed here must
+// tolerate probing: a denial must have no irreversible side effects (such as
+// consuming a one-time token or persisting state), because a later guard may
+// still authorize the same request. Headers written by the guard that
+// authorizes are replayed onto the real response; when every guard denies,
+// the last guard's response is replayed.
+//
+// When more than one guard is present and the request has a body, AuthAny
+// buffers the body in memory (up to the framework's default JSON body limit,
+// 1 MiB) so each guard and the final handler read a fresh copy. Bodies larger
+// than that are not buffered and are shared across guard probes, so a guard
+// that reads an oversized body consumes it for the guards and handler that
+// follow.
 func AuthAny(guards ...Guard) Guard {
 	out := &authAnyGuard{guards: make([]Guard, 0, len(guards))}
 	specs := make([]GuardSpec, 0, len(guards))
@@ -133,22 +151,50 @@ func (g *authAnyGuard) SecuritySpec() SecuritySpec {
 func (g *authAnyGuard) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var last *captureResponse
+			middlewares := make([]func(http.Handler) http.Handler, 0, len(g.guards))
 			for _, guard := range g.guards {
-				if guard == nil || guard.Middleware() == nil {
+				if guard == nil {
 					continue
 				}
+				if mw := guard.Middleware(); mw != nil {
+					middlewares = append(middlewares, mw)
+				}
+			}
+			// With a single guard the probe passes the original body straight
+			// through; buffering only matters when a failed probe could drain
+			// the body before the next guard or the handler reads it.
+			var getBody func() io.ReadCloser
+			if len(middlewares) > 1 && r.Body != nil && r.Body != http.NoBody {
+				getBody = bufferAuthAnyBody(r)
+			}
+			var last *captureResponse
+			for _, mw := range middlewares {
 				allowed := false
 				var allowedReq *http.Request
-				probe := guard.Middleware()(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+				probe := mw(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
 					allowed = true
 					allowedReq = req
 				}))
 				rec := newCaptureResponse()
-				probe.ServeHTTP(rec, r.Clone(r.Context()))
+				clone := r.Clone(r.Context())
+				if getBody != nil {
+					clone.Body = getBody()
+				}
+				probe.ServeHTTP(rec, clone)
 				if allowed {
 					if allowedReq == nil {
-						allowedReq = r
+						allowedReq = clone
+					}
+					if getBody != nil {
+						allowedReq.Body = getBody()
+					}
+					// The winning guard only ever ran against the probe
+					// recorder, so replay everything it wrote (for example a
+					// refreshed session cookie) onto the real response.
+					for key, values := range rec.Header() {
+						for _, value := range values {
+							w.Header().Add(key, value)
+						}
 					}
 					next.ServeHTTP(w, allowedReq)
 					return
@@ -172,6 +218,38 @@ func (g *authAnyGuard) Middleware() func(http.Handler) http.Handler {
 			_, _ = w.Write(last.body.Bytes())
 		})
 	}
+}
+
+// authAnyMaxBufferBytes bounds how much of a request body AuthAny buffers for
+// guard probing. Guards run before the handler's own decode-time limiter
+// (jsonlimit wraps the body inside Decode*, not in middleware), so the raw
+// body is unbounded here and the buffer must impose its own cap. It matches
+// the framework's default JSON body limit.
+const authAnyMaxBufferBytes = jsonlimit.DefaultMaxBytes
+
+// bufferAuthAnyBody reads the request body into memory and returns a factory
+// for fresh readers over it, also installing one (plus GetBody) on r. It
+// returns nil when the body cannot be fully buffered within the cap; r then
+// keeps a reader that replays the consumed prefix followed by the rest, and
+// probes fall back to sharing that reader.
+func bufferAuthAnyBody(r *http.Request) func() io.ReadCloser {
+	orig := r.Body
+	buf, err := io.ReadAll(io.LimitReader(orig, authAnyMaxBufferBytes+1))
+	if err != nil || int64(len(buf)) > authAnyMaxBufferBytes {
+		r.Body = stitchedBody{Reader: io.MultiReader(bytes.NewReader(buf), orig), Closer: orig}
+		return nil
+	}
+	_ = orig.Close()
+	getBody := func() io.ReadCloser { return io.NopCloser(bytes.NewReader(buf)) }
+	r.Body = getBody()
+	r.GetBody = func() (io.ReadCloser, error) { return getBody(), nil }
+	return getBody
+}
+
+// stitchedBody rejoins an already-consumed body prefix with its remainder.
+type stitchedBody struct {
+	io.Reader
+	io.Closer
 }
 
 type captureResponse struct {

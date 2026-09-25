@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"reflect"
 	"sort"
 	"strconv"
@@ -170,6 +171,11 @@ func defaultTypeOverrides() map[string]TypeOverride {
 			OpenAPIFormat: "binary",
 		},
 	}
+	// On toolchains where encoding/json is built on json/v2, json.RawMessage is
+	// an alias (e.g. encoding/json/jsontext.Value), so the literal key above
+	// never matches reflection. Register the reflected identity too.
+	rawType := reflect.TypeOf(json.RawMessage(nil))
+	overrides[rawType.PkgPath()+"."+rawType.Name()] = overrides["encoding/json.RawMessage"]
 	addPgtypeOverrides(overrides, "github.com/jackc/pgx/v5/pgtype")
 	addPgtypeOverrides(overrides, "github.com/jackc/pgtype")
 	addPgtypeZeronullOverrides(overrides, "github.com/jackc/pgx/v5/pgtype/zeronull")
@@ -258,7 +264,7 @@ func (r *Registry) objectName(t reflect.Type) string {
 		r.typeByName[preferred] = t
 		return preferred
 	}
-	name := t.Name()
+	name := sanitizeSchemaName(t.Name())
 	if name == "" {
 		name = schemaName(t)
 	}
@@ -272,7 +278,7 @@ func (r *Registry) objectName(t reflect.Type) string {
 
 func uniqueRegistryName(seen map[string]reflect.Type, base string, t reflect.Type) string {
 	if base == "" {
-		base = t.Name()
+		base = sanitizeSchemaName(t.Name())
 	}
 	if base == "" {
 		base = "Object"
@@ -438,7 +444,7 @@ func PreferredNameOf(service string, t reflect.Type) string {
 	if base == nil || base.Name() == "" {
 		return ""
 	}
-	return service + base.Name()
+	return service + sanitizeSchemaName(base.Name())
 }
 
 func isOptionalType(t reflect.Type) bool {

@@ -8,24 +8,45 @@ import (
 	"text/template"
 )
 
-var clientTSTemplate = template.Must(template.New("virtuous-rpc-ts").Parse(`export type AuthOptions = {
+var clientTSTemplate = template.Must(template.New("virtuous-rpc-ts").Funcs(clientgen.TemplateFuncs()).Parse(`export type AuthOptions = {
 	auth?: string
 }
 
 export class RPCError<E = unknown> extends Error {
 	status: number
 	body: E | null
+	code?: string
 	constructor(status: number, body: E | null, message: string) {
-		super(message)
+		const envelope = _errorEnvelope(body)
+		super(envelope ? message + ": " + envelope.message : message)
 		this.status = status
 		this.body = body
+		if (envelope) {
+			this.code = envelope.code
+		}
 	}
+}
+
+function _errorEnvelope(body: unknown): { code: string; message: string } | null {
+	if (!body || typeof body !== "object") {
+		return null
+	}
+	const error = (body as { error?: unknown }).error
+	if (!error || typeof error !== "object") {
+		return null
+	}
+	const code = (error as { code?: unknown }).code
+	const message = (error as { message?: unknown }).message
+	if (typeof code === "string" && typeof message === "string") {
+		return { code, message }
+	}
+	return null
 }
 
 {{range $object := .Objects}}
 export interface {{$object.Name}} {
 {{- range $field := $object.Fields}}
-	{{$field.Name}}{{if $field.Optional}}?{{end}}: {{$field.Type}}{{if $field.Nullable}} | null{{end}};
+	{{tsKey $field.Name}}{{if $field.Optional}}?{{end}}: {{$field.Type}}{{if $field.Nullable}} | null{{end}};
 {{- end}}
 }
 {{end}}
@@ -39,19 +60,19 @@ export function createClient(basepath: string = "/") {
 					"Accept": "application/json",
 					"Content-Type": "application/json",
 				}
-				let url = basepath + "{{ $method.Path }}"
+				let url = basepath + {{ tsStr $method.Path }}
 {{- if $method.HasAuth }}
 				const authValue = options && options.auth
 				if (authValue) {
 {{- if eq $method.Auth.In "header" }}
-					headers["{{ $method.Auth.Param }}"] = {{ if ne $method.Auth.Prefix "" }}"{{ $method.Auth.Prefix }} " + {{ end }}authValue
+					headers[{{ tsStr $method.Auth.Param }}] = {{ if ne $method.Auth.Prefix "" }}{{ tsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue
 {{- end }}
 {{- if eq $method.Auth.In "query" }}
 					const sep = url.includes("?") ? "&" : "?"
-					url = url + sep + encodeURIComponent("{{ $method.Auth.Param }}") + "=" + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}"{{ $method.Auth.Prefix }} " + {{ end }}authValue)
+					url = url + sep + encodeURIComponent({{ tsStr $method.Auth.Param }}) + "=" + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}{{ tsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue)
 {{- end }}
 {{- if eq $method.Auth.In "cookie" }}
-					document.cookie = "{{ $method.Auth.Param }}=" + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}"{{ $method.Auth.Prefix }} " + {{ end }}authValue) + "; path=/"
+					document.cookie = {{ tsStr (printf "%s=" $method.Auth.Param) }} + encodeURIComponent({{ if ne $method.Auth.Prefix "" }}{{ tsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue) + "; path=/"
 {{- end }}
 				}
 {{- end }}
@@ -126,19 +147,22 @@ func (r *Router) WriteClientTSHash(w io.Writer) error {
 }
 
 // ServeClientTS writes a runtime-generated TS client as an HTTP response.
-func (r *Router) ServeClientTS(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/typescript")
-	if err := r.WriteClientTS(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+// The client is rendered once per process, then served from cache with an
+// ETag; If-None-Match requests are answered with 304.
+func (r *Router) ServeClientTS(w http.ResponseWriter, req *http.Request) {
+	r.serveCachedClient(w, req, &r.clientTSCache, "application/typescript", "rpc client ts", r.WriteClientTS)
 }
 
 // ServeClientTSHash writes the hash of the TS client as an HTTP response.
 func (r *Router) ServeClientTSHash(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if err := r.WriteClientTSHash(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	hash, err := r.clientTSHash()
+	if err != nil {
+		r.logger.Error("rpc client ts hash generation failed", "error", err)
+		http.Error(w, "client generation failed", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, hash)
 }
 
 func (r *Router) clientTSBody() ([]byte, error) {

@@ -22,7 +22,7 @@ func preferredPythonSchemaName(route Route, t reflect.Type) string {
 	if base == nil || base.Name() == "" {
 		return ""
 	}
-	name := base.Name()
+	name := schema.SanitizedNameOf(base)
 	if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
 		return titleTag(name)
 	}

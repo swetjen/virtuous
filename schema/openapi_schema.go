@@ -377,11 +377,75 @@ func parseEnumTag(raw string, t reflect.Type) []any {
 
 func schemaName(t reflect.Type) string {
 	if t.PkgPath() == "" {
-		return t.Name()
+		return sanitizeSchemaName(t.Name())
 	}
-	name := strings.ReplaceAll(t.PkgPath(), "/", "_") + "_" + t.Name()
+	name := strings.ReplaceAll(t.PkgPath(), "/", "_") + "_" + sanitizeSchemaName(t.Name())
 	name = strings.ReplaceAll(name, ".", "_")
 	return name
+}
+
+// SanitizedNameOf returns the type's bare name reduced to characters that are
+// valid in OpenAPI component keys and generated client identifiers.
+// Instantiated generic types such as Page[pkg.Item] become Page_Item.
+func SanitizedNameOf(t reflect.Type) string {
+	t = reflectutil.DerefType(t)
+	if t == nil {
+		return ""
+	}
+	return sanitizeSchemaName(t.Name())
+}
+
+// sanitizeSchemaName rewrites a reflected type name into the OpenAPI
+// component-key charset ([a-zA-Z0-9.\-_]), which is also identifier-safe for
+// generated clients. Non-generic Go type names are already valid and pass
+// through unchanged. For instantiated generics such as Page[pkg.Item], the
+// type arguments lose their package qualifiers and are joined onto the base
+// name with underscores: Page_Item, Pair_string_Item, Page_List_Item.
+func sanitizeSchemaName(name string) string {
+	if !strings.ContainsRune(name, '[') {
+		return name
+	}
+	var parts []string
+	var current strings.Builder
+	flush := func() {
+		if current.Len() == 0 {
+			return
+		}
+		part := current.String()
+		current.Reset()
+		// Drop package qualifiers on type arguments, e.g. main.Item or
+		// github.com/user/pkg.Item both reduce to Item.
+		if i := strings.LastIndexByte(part, '.'); i >= 0 {
+			part = part[i+1:]
+		}
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	for _, r := range name {
+		switch r {
+		case '[', ']', ',', ' ', '*':
+			flush()
+		default:
+			current.WriteRune(r)
+		}
+	}
+	flush()
+	joined := strings.Join(parts, "_")
+	var out strings.Builder
+	out.Grow(len(joined))
+	for _, r := range joined {
+		switch {
+		case r == '_' || r == '.' || r == '-',
+			'0' <= r && r <= '9',
+			'a' <= r && r <= 'z',
+			'A' <= r && r <= 'Z':
+			out.WriteRune(r)
+		default:
+			out.WriteRune('_')
+		}
+	}
+	return out.String()
 }
 
 // QualifiedNameOf derives a stable package-qualified schema name for a Go type.
@@ -394,7 +458,7 @@ func QualifiedNameOf(t reflect.Type) string {
 }
 
 func schemaNameOrFallback(seen map[string]reflect.Type, t reflect.Type) string {
-	name := t.Name()
+	name := sanitizeSchemaName(t.Name())
 	if name == "" {
 		name = schemaName(t)
 	}
@@ -418,7 +482,7 @@ func (g *Generator) schemaNameFor(t reflect.Type) string {
 
 func uniqueSchemaName(seen map[string]reflect.Type, base string, t reflect.Type) string {
 	if base == "" {
-		base = t.Name()
+		base = sanitizeSchemaName(t.Name())
 	}
 	if base == "" {
 		base = "Schema"

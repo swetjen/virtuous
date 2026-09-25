@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -51,15 +50,27 @@ func WriteDocsHTMLFile(path, openAPIPath string) error {
 
 // DocsOptions configures docs and OpenAPI routes.
 type DocsOptions struct {
-	DocsPath    string
-	DocsFile    string
-	OpenAPIPath string
-	OpenAPIFile string
-	Modules     []Module
-	DocsGuards  []Guard
-	AdminGuards []Guard
-	PublicAdmin bool
-	modulesSet  bool
+	DocsPath        string
+	DocsFile        string
+	OpenAPIPath     string
+	OpenAPIFile     string
+	Modules         []Module
+	DocsGuards      []Guard
+	AdminGuards     []Guard
+	ClientGuards    []Guard
+	PublicAdmin     bool
+	modulesSet      bool
+	clientGuardsSet bool
+}
+
+// clientGuards returns the guards for generated-client endpoints: the guards
+// from WithClientGuards when set, otherwise the same guards as the docs
+// endpoints.
+func (o DocsOptions) clientGuards() []Guard {
+	if o.clientGuardsSet {
+		return o.ClientGuards
+	}
+	return o.DocsGuards
 }
 
 // DocOpt mutates DocsOptions.
@@ -113,6 +124,16 @@ func WithModules(modules ...Module) DocOpt {
 func WithDocsGuards(guards ...Guard) DocOpt {
 	return func(o *DocsOptions) {
 		o.DocsGuards = append(o.DocsGuards, guards...)
+	}
+}
+
+// WithClientGuards applies guards to generated-client endpoints (the routes
+// registered by ServeAllDocs for the JS/TS/Python/React Query clients). When
+// unset, client endpoints default to the same guards as WithDocsGuards.
+func WithClientGuards(guards ...Guard) DocOpt {
+	return func(o *DocsOptions) {
+		o.clientGuardsSet = true
+		o.ClientGuards = append(o.ClientGuards, guards...)
 	}
 }
 
@@ -246,7 +267,10 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 
 	openAPI, err := r.OpenAPI()
 	if err != nil {
-		log.Fatal(err)
+		// Defensive: registration-time validation should make this
+		// unreachable. Never crash the process from a docs path.
+		r.logger.Error("httpapi: OpenAPI generation failed; docs disabled", "error", err)
+		return docsGenerationFailedHandler()
 	}
 	openAPIFile := docsAssetFile(config.OpenAPIFile, "openapi.json")
 	docsHTML := adminui.DocsShellHTML(adminui.DocsShellOptions{
@@ -315,7 +339,9 @@ func (r *Router) AdminHandler(opts ...DocOpt) http.Handler {
 }
 
 // ServeDocs registers default docs and OpenAPI routes on the router.
+// It must be called before the router starts serving.
 func (r *Router) ServeDocs(opts ...DocOpt) {
+	r.mustBeMutable()
 	config := applyDocOpts(opts...)
 	modules := config.enabledModules()
 
@@ -337,15 +363,20 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 
 	openAPIPath := ensureLeadingSlash(config.OpenAPIPath)
 	if modules[ModuleAPI] && openAPIPath != "" {
+		var openAPIHandler http.Handler
 		openAPI, err := r.OpenAPI()
 		if err != nil {
-			log.Fatal(err)
+			// Defensive: registration-time validation should make this
+			// unreachable. Never crash the process from a docs path.
+			r.logger.Error("httpapi: OpenAPI generation failed; openapi route disabled", "error", err)
+			openAPIHandler = docsGenerationFailedHandler()
+		} else {
+			openAPIHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				adminui.SetDocsSecurityHeaders(w)
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				_, _ = w.Write(openAPI)
+			})
 		}
-		openAPIHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			adminui.SetDocsSecurityHeaders(w)
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			_, _ = w.Write(openAPI)
-		})
 		r.mux.Handle("GET "+openAPIPath, wrapWithGuards(openAPIHandler, config.DocsGuards))
 	}
 
@@ -359,7 +390,9 @@ func (r *Router) ServeDocs(opts ...DocOpt) {
 }
 
 // ServeAdmin registers docs/admin endpoints under the docs _admin subtree.
+// It must be called before the router starts serving.
 func (r *Router) ServeAdmin(opts ...DocOpt) {
+	r.mustBeMutable()
 	config := applyDocOpts(opts...)
 	config.requireAdminProtection()
 
@@ -382,4 +415,13 @@ func (r *Router) ServeAdmin(opts ...DocOpt) {
 
 func ensureLeadingSlash(path string) string {
 	return textutil.EnsureLeadingSlash(path)
+}
+
+// docsGenerationFailedHandler answers every request with an opaque 500. It is
+// mounted when docs generation fails so the error never crashes the process
+// or leaks details on the wire.
+func docsGenerationFailedHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "documentation generation failed", http.StatusInternalServerError)
+	})
 }

@@ -32,13 +32,33 @@ client = module.create_client("https://api.example.com")
 module = unsafe_load_module("http://localhost:8080/rpc/client.gen.py")
 ```
 
+## Pinning and freshness
+
+The v2 signing envelope covers the origin scope and an issued-at timestamp, so
+these can be enforced at load time:
+
+```python
+module = load_remote_module(
+    "https://api.example.com/client.gen.py",
+    root_public_key="...",
+    expected_scope="billing-api",   # exact match against the signed scope
+    max_age=86400,                  # seconds (or a timedelta) since Issued-At
+    expected_hash="<sha256 hex>",   # pin an exact artifact
+)
+```
+
+Each pin raises a dedicated `RemoteClientVerificationError` subclass on
+violation (`ScopeMismatchError`, `ArtifactExpiredError`, `HashPinMismatchError`).
+v1 envelopes still verify with a `DeprecationWarning`, but cannot satisfy
+`expected_scope` or `max_age` (their scope and age are unauthenticated).
+
 ## Notes
 
 - `load_remote_module` requires a signed client and a trusted root key supplied by `root_public_key` or a `trust` callback/provider.
 - `unsafe_load_module` preserves the old remote execution behavior under an explicit unsafe name for local/dev or fully trusted workflows.
 - `load_module` was removed in Virtuous 0.0.56.
-- `get_remote_hash` reads from `<url>.sha256`.
-- Loaded modules expose `__virtuous_hash__` with the computed SHA-256 digest.
+- `get_remote_hash` reads from `<url>.sha256` — a change detector only, not an integrity mechanism.
+- Loaded modules expose `__virtuous_hash__` (computed SHA-256), `__virtuous_scope__` (the signed scope; `None` for v1), and `__virtuous_issued_at__` (`datetime`, or `None` for v1).
 
 ## Trust callbacks
 
@@ -54,4 +74,4 @@ module = load_remote_module(
 )
 ```
 
-The callback may return `True` to accept the offered key, or return the trusted root public key value to compare against the signed client envelope.
+The callback may return `True` to accept the offered key, or return the trusted root public key value to compare against the signed client envelope. For v2 envelopes the `scope` argument is authenticated by the artifact's signed manifest; for v1 envelopes it is unauthenticated and should not be used as a trust decision on its own.

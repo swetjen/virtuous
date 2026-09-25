@@ -1,17 +1,26 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
+	"mime"
 	"net/http"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strings"
 
 	"github.com/swetjen/virtuous/internal/jsondecode"
 	"github.com/swetjen/virtuous/internal/jsonlimit"
 )
+
+// errUnsupportedMediaType marks a request body sent without an
+// application/json Content-Type.
+var errUnsupportedMediaType = errors.New("rpc: unsupported media type")
 
 type handlerSpec struct {
 	fn       reflect.Value
@@ -127,21 +136,21 @@ func (router *Router) buildRPCHandler(spec handlerSpec) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			setTraceError(req.Context(), "method not allowed")
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			w.Header().Set("Allow", http.MethodPost)
+			writeErrorEnvelope(w, http.StatusMethodNotAllowed, ErrorCodeMethodNotAllowed, "method not allowed; RPC routes accept POST only")
 			return
 		}
+
+		tw := &trackedResponseWriter{ResponseWriter: w}
+		defer router.recoverRPCPanic(tw, req, spec)
+
 		args := make([]reflect.Value, 0, 2)
 		args = append(args, reflect.ValueOf(req.Context()))
 
 		if spec.reqType != nil {
-			reqVal, err := decodeRequest(w, req, spec.reqType, router.maxBodyBytes, router.strictJSON)
+			reqVal, err := decodeRequest(tw, req, spec.reqType, router.maxBodyBytes, router.strictJSON)
 			if err != nil {
-				setTraceError(req.Context(), "invalid request body")
-				if jsonlimit.IsBodyTooLarge(err) {
-					writeJSON(w, http.StatusRequestEntityTooLarge, reflect.Zero(spec.respType))
-					return
-				}
-				writeJSON(w, StatusInvalid, reflect.Zero(spec.respType))
+				writeDecodeError(tw, req, err)
 				return
 			}
 			args = append(args, reqVal)
@@ -151,20 +160,96 @@ func (router *Router) buildRPCHandler(spec handlerSpec) http.Handler {
 		respVal := out[0]
 		statusVal := out[1]
 		status := int(statusVal.Int())
-		if status != StatusOK && status != StatusInvalid && status != StatusError {
+		switch status {
+		case StatusOK, StatusInvalid, StatusError:
+		default:
+			coerced := StatusError
+			if status >= 400 && status < 500 {
+				coerced = StatusInvalid
+			}
+			router.handlerLogger().Warn("rpc: handler returned status outside 200/422/500; coercing",
+				"rpc", rpcName(spec), "status", status, "coerced", coerced)
 			setTraceError(req.Context(), "invalid rpc status")
-			status = StatusError
+			status = coerced
 		}
 		if status >= 400 {
 			setTraceError(req.Context(), extractResponseErrorMessage(respVal))
 		}
-		writeJSON(w, status, respVal)
+		writeJSON(tw, status, respVal)
 	})
+}
+
+// recoverRPCPanic recovers panics raised by the handler function or the
+// encode path and converts them into a 500 framework error envelope. The
+// panic value never reaches the wire. http.ErrAbortHandler is re-raised
+// unchanged, and a panic after a partial write aborts the connection.
+func (router *Router) recoverRPCPanic(w *trackedResponseWriter, req *http.Request, spec handlerSpec) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	if rec == http.ErrAbortHandler {
+		panic(rec)
+	}
+	if trace := requestTraceFromContext(req.Context()); trace != nil {
+		trace.setPanic(rec)
+	}
+	router.handlerLogger().Error("rpc: recovered handler panic",
+		"rpc", rpcName(spec), "panic", rec, "stack", string(debug.Stack()))
+	if w.wrote {
+		// The response is already partially written; abort the connection
+		// rather than appending an envelope to a corrupt body.
+		panic(http.ErrAbortHandler)
+	}
+	writeErrorEnvelope(w, http.StatusInternalServerError, ErrorCodeInternal, "internal server error")
+}
+
+func (router *Router) handlerLogger() *slog.Logger {
+	if router != nil && router.logger != nil {
+		return router.logger
+	}
+	return slog.Default()
+}
+
+// writeDecodeError maps request decode failures to framework error envelopes.
+func writeDecodeError(w http.ResponseWriter, req *http.Request, err error) {
+	switch {
+	case errors.Is(err, errUnsupportedMediaType):
+		setTraceError(req.Context(), "unsupported media type")
+		writeErrorEnvelope(w, http.StatusUnsupportedMediaType, ErrorCodeUnsupportedMediaType, "Content-Type must be application/json")
+	case jsonlimit.IsBodyTooLarge(err):
+		setTraceError(req.Context(), "request body too large")
+		writeErrorEnvelope(w, http.StatusRequestEntityTooLarge, ErrorCodeBodyTooLarge, "request body too large")
+	default:
+		setTraceError(req.Context(), "invalid request body")
+		writeErrorEnvelope(w, http.StatusBadRequest, ErrorCodeInvalidJSON, "request body is not valid JSON for this operation")
+	}
+}
+
+// trackedResponseWriter records whether any part of the response has been
+// written, so panic recovery can decide between writing a 500 envelope and
+// aborting the connection.
+type trackedResponseWriter struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (w *trackedResponseWriter) WriteHeader(status int) {
+	w.wrote = true
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *trackedResponseWriter) Write(p []byte) (int, error) {
+	w.wrote = true
+	return w.ResponseWriter.Write(p)
 }
 
 func decodeRequest(w http.ResponseWriter, r *http.Request, reqType reflect.Type, maxBytes int64, strictJSON bool) (reflect.Value, error) {
 	if reqType == nil {
 		return reflect.Value{}, errors.New("rpc: request type missing")
+	}
+	if err := checkJSONContentType(r); err != nil {
+		return reflect.Value{}, err
 	}
 	if maxBytes <= 0 {
 		maxBytes = jsonlimit.DefaultMaxBytes
@@ -190,6 +275,52 @@ func decodeRequest(w http.ResponseWriter, r *http.Request, reqType reflect.Type,
 		return reflect.Value{}, err
 	}
 	return target.Elem(), nil
+}
+
+// checkJSONContentType enforces Content-Type: application/json on requests
+// that carry a body. Media-type parameters (such as "; charset=utf-8") are
+// accepted and the comparison is case-insensitive. A request with an empty
+// body may omit the header.
+func checkJSONContentType(r *http.Request) error {
+	contentType := strings.TrimSpace(r.Header.Get("Content-Type"))
+	if contentType == "" {
+		if requestHasBody(r) {
+			return errUnsupportedMediaType
+		}
+		return nil
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return errUnsupportedMediaType
+	}
+	return nil
+}
+
+// requestHasBody reports whether the request carries body bytes. When the
+// length is unknown (chunked encoding), it peeks one byte and re-attaches it
+// to the body.
+func requestHasBody(r *http.Request) bool {
+	if r.ContentLength > 0 {
+		return true
+	}
+	if r.ContentLength == 0 || r.Body == nil {
+		return false
+	}
+	var one [1]byte
+	n, _ := io.ReadFull(r.Body, one[:])
+	if n == 0 {
+		return false
+	}
+	r.Body = peekedBody{
+		Reader: io.MultiReader(bytes.NewReader(one[:n]), r.Body),
+		Closer: r.Body,
+	}
+	return true
+}
+
+type peekedBody struct {
+	io.Reader
+	io.Closer
 }
 
 func writeJSON(w http.ResponseWriter, status int, v reflect.Value) {

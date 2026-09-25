@@ -1,7 +1,10 @@
 """Basic import smoke test for virtuous."""
 
 from virtuous import (
+    ArtifactExpiredError,
+    HashPinMismatchError,
     RemoteClientVerificationError,
+    ScopeMismatchError,
     get_remote_hash,
     hash_url,
     load_remote_module,
@@ -12,7 +15,10 @@ from virtuous import (
 
 
 def main() -> None:
+    _ = ArtifactExpiredError
+    _ = HashPinMismatchError
     _ = RemoteClientVerificationError
+    _ = ScopeMismatchError
     _ = get_remote_hash
     _ = hash_url
     _ = load_remote_module
