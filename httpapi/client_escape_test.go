@@ -13,6 +13,7 @@ import (
 // quotes and backslashes, and doc tags with comment terminators and newlines.
 type hostileEscapeRequest struct {
 	FilterBy string `query:"filter-by,omitempty" doc:"filter doc */ escape"`
+	BrandRay string `header:"X-Bra'nd-Ray,omitempty" doc:"header doc */ escape"`
 	UserID   string `json:"user-id"`
 	Quoted   string `json:"quote\"back\\slash"`
 }
@@ -52,6 +53,13 @@ func TestJSClientEscapesHostileWireNamesDocsAndGuards(t *testing.T) {
 	assertContains(t, js, `appendQuery("filter-by", query && query["filter-by"], true)`)
 	assertNotContains(t, js, "query && query.filter-by")
 
+	// Header wire names are escaped string literals with bracketed access, and
+	// header docs cannot terminate the JSDoc comment.
+	assertContains(t, js, `_setHeader(requestHeaders, "X-Bra'nd-Ray", String(headers["X-Bra'nd-Ray"]))`)
+	assertNotContains(t, js, "String(headers.X-Bra")
+	assertContains(t, js, `header doc *\/ escape`)
+	assertNotContains(t, js, "header doc */")
+
 	// Docs and summaries cannot terminate the JSDoc comment.
 	assertContains(t, js, `sum *\/ alert('sum') /* mary`)
 	assertNotContains(t, js, "sum */ alert")
@@ -87,6 +95,12 @@ func TestTSClientEscapesHostileWireNamesDocsAndGuards(t *testing.T) {
 	assertContains(t, ts, `"filter-by"?: string;`)
 	assertContains(t, ts, `["filter-by", query?.["filter-by"], true]`)
 	assertNotContains(t, ts, "query?.filter-by")
+
+	// Header param types and runtime tuples use quoted keys and bracketed
+	// optional access.
+	assertContains(t, ts, `"X-Bra'nd-Ray"?: string;`)
+	assertContains(t, ts, `["X-Bra'nd-Ray", headers?.["X-Bra'nd-Ray"], true]`)
+	assertNotContains(t, ts, "headers?.X-Bra")
 
 	// Body field tuples keep the exact wire name as an escaped literal.
 	assertContains(t, ts, `["user-id", "user-id", false]`)
@@ -162,7 +176,13 @@ func TestPythonClientEscapesHostileWireNamesDocsAndGuards(t *testing.T) {
 
 	// Query wire names and guard params/prefixes are escaped literals.
 	assertContains(t, py, `_append_query_param(url, "filter-by", filter_by, True)`)
-	assertContains(t, py, `_apply_auth(url, headers, "header", "X-Api\"Key", "Bear\"er", auth_value)`)
+	assertContains(t, py, `_apply_auth(url, request_headers, "header", "X-Api\"Key", "Bear\"er", auth_value)`)
+
+	// Hostile header wire names survive through a sanitized Python identifier
+	// plus an escaped literal, and the doc stays inside the '#' comment.
+	assertContains(t, py, "x_bra_nd_ray: Optional[str] = None")
+	assertContains(t, py, `_set_header(request_headers, "X-Bra'nd-Ray", _query_str(x_bra_nd_ray))`)
+	assertContains(t, py, "# header doc */ escape")
 
 	// JSON body tuples keep the exact wire names.
 	assertContains(t, py, `("user-id", "user-id", False)`)

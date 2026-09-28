@@ -77,6 +77,75 @@ Rules:
 - generate query key helpers, query options helpers, and hooks
 - keep caller-provided `queryOptions` and `mutationOptions` spread last
 
+## Headers and Transport
+
+Every generated client (RPC and `httpapi`, JS/TS/Python, React Query) exposes
+the same header surface:
+
+- **Client-wide defaults** — TS/JS `ClientOptions.headers?: Record<string, string>`
+  (`createClient(basepath, { headers })` for RPC/legacy JS); Python
+  `create_client(base_url, *, headers=None, ...)`.
+- **Declared header params** (`httpapi` only) — `header:"X-Name"` struct tags or
+  `httpapi.HeaderParam(...)` specs become a typed `headers` argument placed
+  after `query` and before `options` (TS/JS), or named kwargs (Python).
+- **Per-call headers** — TS/JS `RequestOptions.headers` / `AuthOptions.headers`;
+  Python per-method `headers: Optional[dict] = None`.
+- **Transport hook** — TS/JS `ClientOptions.fetch?: typeof fetch` replaces the
+  global fetch; Python `create_client(..., transport=...)` takes a callable
+  that receives the prepared `urllib.request.Request` and returns a response
+  with `.status`/`.read()`/`.headers` (default `urllib.request.urlopen`).
+
+Merge precedence, implemented case-insensitively in every runtime: client
+defaults → declared header params → per-call headers → framework-computed
+headers (`Accept`, `Content-Type` when a body is sent, auth headers) last and
+unoverridable.
+
+## Client Spec Document
+
+Both routers export the internal client-generation model as a stable, versioned
+JSON document (package `clientspec`), so first-party generators can consume the
+same rich model the built-in JS/TS/Python templates render from instead of
+reverse-engineering `openapi.json`.
+
+Surfaces:
+
+- **Endpoint** — `ServeAllDocs()` registers `GET /client.spec.json` (`httpapi`)
+  and `GET /rpc/client.spec.json` (`rpc`) next to the generated clients, served
+  with `Content-Type: application/json`, render-once caching, and an ETag, and
+  wrapped by the same `WithClientGuards` guards as the other client endpoints.
+  Override the path with `WithClientSpecPath(...)`.
+- **Go API** — `Router.ClientSpec() (clientspec.Document, error)` and
+  `Router.WriteClientSpecJSON(w io.Writer) error` on both routers. The writer
+  emits stable, two-space-indented JSON, byte-identical to the endpoint.
+
+Document shape (top level):
+
+- `specVersion` — the document format version, currently `"1.0"`.
+- `module` / `version` — generator provenance (the Virtuous module path and
+  release).
+- `services[]` — methods with name, operation ID, HTTP method, path, summary;
+  path/query/header params; body (mode `json`/`form`/`multipart`, media type,
+  optionality, wire-named fields); primary response (mode
+  `json`/`text`/`bytes`/`none`, media type, and any documented response
+  headers from `ResponseSpec.Headers`); and auth as OR-alternatives of
+  ANDed guards (`name`, `in`, `param`, `prefix`, `paramName`).
+- `objects[]` — the resolved schema graph: fields with wire name, optional,
+  nullable, and doc.
+- `authParams[]` — the distinct guards across all methods.
+
+Every typed field, param, body, and response carries both language renderings
+(`tsType` and `pyType`) exactly as the TS and Python generators produce them.
+The document is built by the same internal spec builder the served clients
+render from, so the two can never disagree; a drift test
+(`TestHTTPAPIClientSpecDocumentCoversInternalSpec` /
+`TestRPCClientSpecDocumentCoversInternalSpec`) forces every internal model
+field to be exported or explicitly recorded as internal, and golden tests
+(`testdata/client_spec_golden.json` in each router package) pin the bytes.
+
+Compatibility policy: adding fields is backward compatible and does not bump
+`specVersion`; renaming or removing fields, or changing a field's meaning,
+bumps it. Consumers should ignore unknown fields.
+
 ## Model Names
 
 Prefer API names over implementation names.

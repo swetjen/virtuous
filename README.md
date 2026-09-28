@@ -227,7 +227,7 @@ router.ServeAllDocs()
 ```
 
 More: **[httpapi patterns cookbook](docs/http-legacy/patterns.md)** covers typed
-handlers, guards, OR auth, typed path/query params, form bodies, and explicit
+handlers, guards, OR auth, typed path/query/header params, form bodies, and explicit
 response specs.
 
 ## Migrating to Virtuous

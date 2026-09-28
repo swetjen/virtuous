@@ -60,6 +60,13 @@ func queryParamsFor(t reflect.Type) (queryParamsInfo, error) {
 		if field.Tag.Get("path") != "" {
 			continue
 		}
+		if _, _, isHeader, err := parseHeaderTag(field); err != nil {
+			return queryParamsInfo{}, err
+		} else if isHeader {
+			// Header-tagged fields are typed header params (headerParamsFor);
+			// like query-tagged fields they never count toward the body.
+			continue
+		}
 
 		if jsonName, _ := reflectutil.JSONFieldName(field); jsonName != "" {
 			info.BodyFields++

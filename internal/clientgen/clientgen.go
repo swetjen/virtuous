@@ -14,7 +14,7 @@ import (
 
 const (
 	virtuousModulePath       = "github.com/swetjen/virtuous"
-	fallbackVirtuousVersion  = "0.0.57"
+	fallbackVirtuousVersion  = "0.0.58"
 	generatedTimestampFormat = "2006-01-02 15:04:05 UTC"
 )
 
@@ -56,6 +56,11 @@ func GeneratedLine(commentPrefix string, generatedAt time.Time) string {
 // FormatGeneratedAt renders generation timestamps in a stable UTC format.
 func FormatGeneratedAt(generatedAt time.Time) string {
 	return generatedAt.UTC().Format(generatedTimestampFormat)
+}
+
+// ModulePath returns the Virtuous module path recorded in exported artifacts.
+func ModulePath() string {
+	return virtuousModulePath
 }
 
 // VirtuousVersionLabel returns the version label displayed in generated assets.

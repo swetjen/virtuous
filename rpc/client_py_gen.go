@@ -51,15 +51,23 @@ class RPCError(RuntimeError):
 
 {{- range $service := .Services }}
 class {{ $service.ClassName }}:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, headers: Optional[dict] = None, transport: Any = None):
         self._base_url = base_url
+        self._headers = headers
+        self._transport = transport
 
 {{- range $method := $service.Methods }}
-    def {{ $method.Name }}(self{{- if $method.HasBody }}, body: {{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}{{- end }}{{- if $method.HasAuth }}, {{ $method.AuthParam }}: str | None = None{{- end }}) -> {{- if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}None{{- end }}:
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
+    def {{ $method.Name }}(self{{- if $method.HasBody }}, body: {{- if $method.RequestType }}{{ $method.RequestType }}{{- else }}Any{{- end }}{{- end }}{{- if $method.HasAuth }}, {{ $method.AuthParam }}: str | None = None{{- end }}, headers: Optional[dict] = None) -> {{- if $method.ResponseType }}{{ $method.ResponseType }}{{- else }}None{{- end }}:
+{{ if $method.Deprecated }}        {{ if $method.DeprecationNote }}{{ pyStr (printf "Deprecated. %s" (pyComment $method.DeprecationNote)) }}{{ else }}"Deprecated."{{ end }}
+{{ end }}        # Header precedence: client-wide default headers first, then the
+        # per-call 'headers' argument; framework-computed headers (Accept,
+        # Content-Type, auth) are applied last and cannot be overridden. The
+        # merge is case-insensitive.
+        request_headers: dict[str, str] = {}
+        _merge_headers(request_headers, self._headers)
+        _merge_headers(request_headers, headers)
+        _set_header(request_headers, "Accept", "application/json")
+        _set_header(request_headers, "Content-Type", "application/json")
         url = self._base_url + {{ pyStr $method.Path }}
 {{- if $method.HasAuth }}
         if {{ $method.AuthParam }} is not None:
@@ -68,44 +76,86 @@ class {{ $service.ClassName }}:
             auth_value = {{ pyStr (printf "%s " $method.Auth.Prefix) }} + {{ $method.AuthParam }}
 {{- end }}
 {{- if eq $method.Auth.In "header" }}
-            headers[{{ pyStr $method.Auth.Param }}] = auth_value
+            _set_header(request_headers, {{ pyStr $method.Auth.Param }}, auth_value)
 {{- end }}
 {{- if eq $method.Auth.In "query" }}
             url = _append_query(url, {{ pyStr $method.Auth.Param }}, auth_value)
 {{- end }}
 {{- if eq $method.Auth.In "cookie" }}
-            headers["Cookie"] = {{ pyStr (printf "%s=" $method.Auth.Param) }} + parse.quote(auth_value)
+            _set_header(request_headers, "Cookie", {{ pyStr (printf "%s=" $method.Auth.Param) }} + parse.quote(auth_value))
 {{- end }}
 {{- end }}
         data = None
 {{- if $method.HasBody }}
         data = json.dumps(_encode_value(body)).encode("utf-8")
 {{- end }}
-        return _rpc_request(url, headers, data, {{ if $method.ResponseDecodeType }}{{ $method.ResponseDecodeType }}{{ else }}None{{ end }}, {{ $method.ErrorDecodeType }})
+        return _rpc_request(url, request_headers, data, {{ if $method.ResponseDecodeType }}{{ $method.ResponseDecodeType }}{{ else }}None{{ end }}, {{ $method.ErrorDecodeType }}, transport=self._transport)
 
 {{- end }}
 {{- end }}
 
 class _VirtuousClient:
-    def __init__(self, base_url: str = "/"):
+    def __init__(self, base_url: str = "/", *, headers: Optional[dict] = None, transport: Any = None):
         self._base_url = base_url
 {{- range $service := .Services }}
-        self.{{ $service.AttrName }} = {{ $service.ClassName }}(base_url)
+        self.{{ $service.AttrName }} = {{ $service.ClassName }}(base_url, headers=headers, transport=transport)
 {{- end }}
 
 
-def create_client(base_url: str = "/") -> _VirtuousClient:
-    return _VirtuousClient(base_url)
+def create_client(base_url: str = "/", *, headers: Optional[dict] = None, transport: Any = None) -> _VirtuousClient:
+    """Create a client.
+
+    'headers' are default headers sent with every request; per-call
+    'headers' arguments override them, and framework-computed headers
+    (Accept, Content-Type, auth) always win. 'transport' is a callable
+    receiving the prepared urllib.request.Request and returning a response
+    object with .status, .read() and .headers (the default is
+    urllib.request.urlopen).
+    """
+    return _VirtuousClient(base_url, headers=headers, transport=transport)
 
 
-def _rpc_request(url: str, headers: dict[str, str], data: Any, response_type: Any, error_type: Any) -> Any:
+def _set_header(headers: dict[str, str], key: str, value: str) -> None:
+    """Set a header case-insensitively, replacing any existing spelling."""
+    lower = key.lower()
+    for existing in list(headers.keys()):
+        if existing.lower() == lower:
+            del headers[existing]
+    headers[key] = value
+
+
+def _merge_headers(headers: dict[str, str], extra: Any) -> None:
+    if not extra:
+        return
+    for key, value in extra.items():
+        _set_header(headers, str(key), str(value))
+
+
+def _open(req: Any, transport: Any) -> Any:
+    """Dispatch a prepared urllib.request.Request through the transport hook.
+
+    'transport' is a callable receiving the Request and returning a response
+    with .status, .read() and .headers; the default is
+    urllib.request.urlopen.
+    """
+    if transport is not None:
+        return transport(req)
+    return request.urlopen(req)
+
+
+def _rpc_request(url: str, headers: dict[str, str], data: Any, response_type: Any, error_type: Any, transport: Any = None) -> Any:
     req = request.Request(url, data=data, method="POST", headers=headers)
     status = 0
     text = ""
     try:
-        with request.urlopen(req) as resp:
-            status = resp.getcode()
+        resp = _open(req, transport)
+        try:
+            status = resp.status if hasattr(resp, "status") else resp.getcode()
             text = resp.read().decode("utf-8")
+        finally:
+            close = getattr(resp, "close", None)
+            if close is not None:
+                close()
     except error.HTTPError as err:
         status = err.code
         text = err.read().decode("utf-8")
@@ -259,6 +309,8 @@ type pythonClientMethod struct {
 	ResponseDecodeType string
 	ErrorType          string
 	ErrorDecodeType    string
+	Deprecated         bool
+	DeprecationNote    string
 }
 
 type pythonClientObject struct {
@@ -278,7 +330,7 @@ func buildPythonClientRenderSpec(spec clientSpec) pythonClientSpec {
 	out := pythonClientSpec{
 		Objects: pythonObjects(spec.Objects, typeNames),
 	}
-	serviceAttrs := map[string]struct{}{"_base_url": {}}
+	serviceAttrs := map[string]struct{}{"_base_url": {}, "_headers": {}, "_transport": {}}
 	serviceClasses := map[string]struct{}{}
 	for _, service := range spec.Services {
 		pyService := pythonClientService{
@@ -321,7 +373,10 @@ func pythonReservedModuleNames(services []clientService) map[string]struct{} {
 		"_error_envelope",
 		"_datetime",
 		"_Decimal",
+		"_merge_headers",
+		"_open",
 		"_rpc_request",
+		"_set_header",
 		"_status_text",
 		"create_client",
 		"dataclass",
@@ -402,20 +457,22 @@ func pythonFieldDeclaration(name, wireName, fieldType string, optional bool) str
 }
 
 func pythonMethod(method clientMethod, typeNames map[string]string, methodNames map[string]struct{}) pythonClientMethod {
-	usedParams := map[string]struct{}{"self": {}}
+	usedParams := map[string]struct{}{"self": {}, "headers": {}}
 	if method.HasBody {
 		usedParams["body"] = struct{}{}
 	}
 	pyMethod := pythonClientMethod{
-		Name:         clientgen.UniquePythonIdentifier(method.Name, methodNames),
-		Path:         method.Path,
-		HasBody:      method.HasBody,
-		HasAuth:      method.HasAuth,
-		Auth:         method.Auth,
-		AuthParam:    clientgen.UniquePythonIdentifier(method.AuthParam, usedParams),
-		RequestType:  pythonTypeName(method.RequestType, typeNames),
-		ResponseType: pythonTypeName(method.ResponseType, typeNames),
-		ErrorType:    pythonTypeName(method.ErrorType, typeNames),
+		Name:            clientgen.UniquePythonIdentifier(method.Name, methodNames),
+		Path:            method.Path,
+		HasBody:         method.HasBody,
+		HasAuth:         method.HasAuth,
+		Auth:            method.Auth,
+		AuthParam:       clientgen.UniquePythonIdentifier(method.AuthParam, usedParams),
+		RequestType:     pythonTypeName(method.RequestType, typeNames),
+		ResponseType:    pythonTypeName(method.ResponseType, typeNames),
+		ErrorType:       pythonTypeName(method.ErrorType, typeNames),
+		Deprecated:      method.Deprecated,
+		DeprecationNote: method.DeprecationNote,
 	}
 	pyMethod.ResponseDecodeType = pythonRuntimeTypeName(pyMethod.ResponseType)
 	pyMethod.ErrorDecodeType = pythonRuntimeTypeName(pyMethod.ErrorType)

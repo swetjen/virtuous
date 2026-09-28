@@ -42,22 +42,39 @@ class {{ $object.Name }}:
 
 {{- range $service := .Services }}
 class {{ $service.ClassName }}:
-    def __init__(self, base_url: str{{- if $service.AuthParams }}, *{{- range $auth := $service.AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}):
+    def __init__(self, base_url: str, headers: Optional[dict] = None, transport: Any = None{{- if $service.AuthParams }}, *{{- range $auth := $service.AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}):
         self._base_url = base_url
+        self._headers = headers
+        self._transport = transport
 {{- range $auth := $service.AuthParams }}
         self.{{ $auth.DefaultAttr }} = {{ $auth.ParamName }}
 {{- end }}
 
 {{- range $method := $service.Methods }}
     def {{ $method.Name }}(self{{ $method.SignatureParams }}) -> {{ $method.ReturnType }}:
-        headers = {
-            "Accept": {{ pyStr $method.AcceptType }},
+{{ if $method.Deprecated }}        {{ if $method.DeprecationNote }}{{ pyStr (printf "Deprecated. %s" (pyComment $method.DeprecationNote)) }}{{ else }}"Deprecated."{{ end }}
+{{ end }}        # Header precedence: client-wide default headers first, then declared
+        # typed header params, then the per-call 'headers' argument.
+        # Framework-computed headers (Accept, Content-Type when a body is
+        # sent, and auth headers) are applied last and cannot be overridden.
+        # The merge is case-insensitive.
+        request_headers: dict[str, str] = {}
+        _merge_headers(request_headers, self._headers)
+{{- range $param := $method.HeaderParams }}
+{{- if $param.Optional }}
+        if {{ $param.VarName }} is not None:
+            _set_header(request_headers, {{ pyStr $param.WireName }}, _query_str({{ $param.VarName }}))
+{{- else }}
+        _set_header(request_headers, {{ pyStr $param.WireName }}, _query_str({{ $param.VarName }}))
+{{- end }}
+{{- end }}
+        _merge_headers(request_headers, headers)
+        _set_header(request_headers, "Accept", {{ pyStr $method.AcceptType }})
 {{- if $method.HasBody }}
 {{- if ne $method.BodyMode "multipart" }}
-            "Content-Type": {{ pyStr $method.RequestMedia }},
+        _set_header(request_headers, "Content-Type", {{ pyStr $method.RequestMedia }})
 {{- end }}
 {{- end }}
-        }
         url = self._base_url + {{ pyStr $method.Path }}
 {{- if $method.PathParams }}
 {{- range $param := $method.PathParams }}
@@ -77,7 +94,7 @@ class {{ $service.ClassName }}:
 {{- range $guard := $req.Guards }}
             auth_value = {{ $guard.ParamName }} if {{ $guard.ParamName }} is not None else self.{{ $guard.DefaultAttr }}
             if auth_value is not None:
-                url = _apply_auth(url, headers, {{ pyStr $guard.Spec.In }}, {{ pyStr $guard.Spec.Param }}, {{ pyStr $guard.Spec.Prefix }}, auth_value)
+                url = _apply_auth(url, request_headers, {{ pyStr $guard.Spec.In }}, {{ pyStr $guard.Spec.Param }}, {{ pyStr $guard.Spec.Prefix }}, auth_value)
                 auth_applied = True
 {{- end }}
 {{- else }}
@@ -86,7 +103,7 @@ class {{ $service.ClassName }}:
 {{- end }}
             if {{ range $i, $guard := $req.Guards }}{{ if gt $i 0 }} and {{ end }}{{ $guard.ValueName }} is not None{{ end }}:
 {{- range $guard := $req.Guards }}
-                url = _apply_auth(url, headers, {{ pyStr $guard.Spec.In }}, {{ pyStr $guard.Spec.Param }}, {{ pyStr $guard.Spec.Prefix }}, {{ $guard.ValueName }})
+                url = _apply_auth(url, request_headers, {{ pyStr $guard.Spec.In }}, {{ pyStr $guard.Spec.Param }}, {{ pyStr $guard.Spec.Prefix }}, {{ $guard.ValueName }})
 {{- end }}
                 auth_applied = True
 {{- end }}
@@ -103,39 +120,82 @@ class {{ $service.ClassName }}:
 {{- end }}
             ])
             if content_type:
-                headers["Content-Type"] = content_type
+                _set_header(request_headers, "Content-Type", content_type)
 {{- end }}
-        return _request({{ pyStr $method.HTTPMethod }}, url, headers, data, {{ pyStr $method.ResponseMode }}, {{ if $method.ResponseDecodeType }}{{ $method.ResponseDecodeType }}{{ else }}None{{ end }})
+        return _request({{ pyStr $method.HTTPMethod }}, url, request_headers, data, {{ pyStr $method.ResponseMode }}, {{ if $method.ResponseDecodeType }}{{ $method.ResponseDecodeType }}{{ else }}None{{ end }}, transport=self._transport)
 
 {{- end }}
 {{- end }}
 
 class _VirtuousClient:
-    def __init__(self, base_url: str = "/"{{- if .AuthParams }}, *{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}):
+    def __init__(self, base_url: str = "/", *, headers: Optional[dict] = None, transport: Any = None{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}):
         self._base_url = base_url
 {{- range $service := .Services }}
-        self.{{ $service.AttrName }} = {{ $service.ClassName }}(base_url{{- range $auth := $service.AuthParams }}, {{ $auth.ParamName }}={{ $auth.ParamName }}{{- end }})
+        self.{{ $service.AttrName }} = {{ $service.ClassName }}(base_url, headers=headers, transport=transport{{- range $auth := $service.AuthParams }}, {{ $auth.ParamName }}={{ $auth.ParamName }}{{- end }})
 {{- end }}
 
 {{- range $method := .DirectMethods }}
     def {{ $method.Name }}(self{{ $method.SignatureParams }}) -> {{ $method.ReturnType }}:
-        return self.{{ $method.ServiceAttr }}.{{ $method.ServiceMethodName }}({{ $method.CallArgs }})
+{{ if $method.Deprecated }}        {{ if $method.DeprecationNote }}{{ pyStr (printf "Deprecated. %s" (pyComment $method.DeprecationNote)) }}{{ else }}"Deprecated."{{ end }}
+{{ end }}        return self.{{ $method.ServiceAttr }}.{{ $method.ServiceMethodName }}({{ $method.CallArgs }})
 
 {{- end }}
 
 
-def create_client(base_url: str = "/"{{- if .AuthParams }}, *{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}{{- end }}) -> _VirtuousClient:
-    return _VirtuousClient(base_url{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}={{ $auth.ParamName }}{{- end }})
+def create_client(base_url: str = "/", *, headers: Optional[dict] = None, transport: Any = None{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}: Optional[str] = None{{- end }}) -> _VirtuousClient:
+    """Create a client.
+
+    'headers' are default headers sent with every request; per-call
+    'headers' arguments override them, and framework-computed headers
+    (Accept, Content-Type, auth) always win. 'transport' is a callable
+    receiving the prepared urllib.request.Request and returning a response
+    object with .status, .read() and .headers (the default is
+    urllib.request.urlopen).
+    """
+    return _VirtuousClient(base_url, headers=headers, transport=transport{{- range $auth := .AuthParams }}, {{ $auth.ParamName }}={{ $auth.ParamName }}{{- end }})
 
 
-def _request(method: str, url: str, headers: dict[str, str], data: Any, response_mode: str, response_type: Any) -> Any:
+def _set_header(headers: dict[str, str], key: str, value: str) -> None:
+    """Set a header case-insensitively, replacing any existing spelling."""
+    lower = key.lower()
+    for existing in list(headers.keys()):
+        if existing.lower() == lower:
+            del headers[existing]
+    headers[key] = value
+
+
+def _merge_headers(headers: dict[str, str], extra: Any) -> None:
+    if not extra:
+        return
+    for key, value in extra.items():
+        _set_header(headers, str(key), str(value))
+
+
+def _open(req: Any, transport: Any) -> Any:
+    """Dispatch a prepared urllib.request.Request through the transport hook.
+
+    'transport' is a callable receiving the Request and returning a response
+    with .status, .read() and .headers; the default is
+    urllib.request.urlopen.
+    """
+    if transport is not None:
+        return transport(req)
+    return request.urlopen(req)
+
+
+def _request(method: str, url: str, headers: dict[str, str], data: Any, response_mode: str, response_type: Any, transport: Any = None) -> Any:
     req = request.Request(url, data=data, method=method, headers=headers)
     status = 0
     payload = b""
     try:
-        with request.urlopen(req) as resp:
-            status = resp.getcode()
+        resp = _open(req, transport)
+        try:
+            status = resp.status if hasattr(resp, "status") else resp.getcode()
             payload = resp.read()
+        finally:
+            close = getattr(resp, "close", None)
+            if close is not None:
+                close()
     except error.HTTPError as err:
         status = err.code
         payload = err.read()
@@ -454,6 +514,7 @@ type pythonClientMethod struct {
 	RequestMedia       string
 	HasQuery           bool
 	QueryParams        []pythonQueryParam
+	HeaderParams       []pythonHeaderParam
 	AcceptType         string
 	ResponseMode       string
 	HasAuth            bool
@@ -463,6 +524,8 @@ type pythonClientMethod struct {
 	RequestType        string
 	ResponseType       string
 	ResponseDecodeType string
+	Deprecated         bool
+	DeprecationNote    string
 }
 
 type pythonClientDirectMethod struct {
@@ -472,6 +535,8 @@ type pythonClientDirectMethod struct {
 	SignatureParams   string
 	CallArgs          string
 	ReturnType        string
+	Deprecated        bool
+	DeprecationNote   string
 }
 
 type pythonClientObject struct {
@@ -493,6 +558,13 @@ type pythonPathParam struct {
 }
 
 type pythonQueryParam struct {
+	WireName string
+	VarName  string
+	Type     string
+	Optional bool
+}
+
+type pythonHeaderParam struct {
 	WireName string
 	VarName  string
 	Type     string
@@ -528,7 +600,7 @@ func buildPythonClientRenderSpec(spec clientSpec) pythonClientSpec {
 	for _, auth := range authParams {
 		authByName[auth.OriginalName] = auth
 	}
-	serviceAttrs := map[string]struct{}{"_base_url": {}}
+	serviceAttrs := map[string]struct{}{"_base_url": {}, "_headers": {}, "_transport": {}}
 	serviceClasses := map[string]struct{}{}
 	directNames := map[string]struct{}{}
 	for _, service := range spec.Services {
@@ -551,6 +623,8 @@ func buildPythonClientRenderSpec(spec clientSpec) pythonClientSpec {
 				SignatureParams:   method.SignatureParams,
 				CallArgs:          method.CallArgs,
 				ReturnType:        method.ReturnType,
+				Deprecated:        method.Deprecated,
+				DeprecationNote:   method.DeprecationNote,
 			})
 		}
 	}
@@ -587,7 +661,10 @@ func pythonReservedModuleNames(services []clientService) map[string]struct{} {
 		"_encode_multipart",
 		"_encode_value",
 		"_error_envelope",
+		"_merge_headers",
+		"_open",
 		"_query_str",
+		"_set_header",
 		"_datetime",
 		"_Decimal",
 		"_multipart_file_value",
@@ -674,24 +751,26 @@ func pythonFieldDeclaration(name, wireName, fieldType string, optional bool) str
 }
 
 func pythonMethod(method clientMethod, typeNames map[string]string, methodNames map[string]struct{}, authByName map[string]pythonAuthGuard) pythonClientMethod {
-	usedParams := map[string]struct{}{"self": {}}
+	usedParams := map[string]struct{}{"self": {}, "headers": {}}
 	if method.HasBody {
 		usedParams["body"] = struct{}{}
 	}
 	pyMethod := pythonClientMethod{
-		Name:         clientgen.UniquePythonIdentifier(method.OperationID, methodNames),
-		HTTPMethod:   method.HTTPMethod,
-		Path:         method.Path,
-		HasBody:      method.HasBody,
-		BodyOptional: method.BodyOptional,
-		BodyMode:     method.BodyMode,
-		RequestMedia: method.RequestMedia,
-		HasQuery:     method.HasQuery,
-		AcceptType:   method.AcceptType,
-		ResponseMode: method.ResponseMode,
-		HasAuth:      method.HasAuth,
-		RequestType:  pythonTypeName(method.RequestType, typeNames),
-		ResponseType: pythonTypeName(method.ResponseType, typeNames),
+		Name:            clientgen.UniquePythonIdentifier(method.OperationID, methodNames),
+		HTTPMethod:      method.HTTPMethod,
+		Path:            method.Path,
+		HasBody:         method.HasBody,
+		BodyOptional:    method.BodyOptional,
+		BodyMode:        method.BodyMode,
+		RequestMedia:    method.RequestMedia,
+		HasQuery:        method.HasQuery,
+		AcceptType:      method.AcceptType,
+		ResponseMode:    method.ResponseMode,
+		HasAuth:         method.HasAuth,
+		RequestType:     pythonTypeName(method.RequestType, typeNames),
+		ResponseType:    pythonTypeName(method.ResponseType, typeNames),
+		Deprecated:      method.Deprecated,
+		DeprecationNote: method.DeprecationNote,
 	}
 	pyMethod.ResponseDecodeType = pythonRuntimeTypeName(pyMethod.ResponseType)
 	pyMethod.ReturnType = pythonReturnType(pyMethod)
@@ -704,6 +783,14 @@ func pythonMethod(method clientMethod, typeNames map[string]string, methodNames 
 	}
 	for _, param := range method.QueryParams {
 		pyMethod.QueryParams = append(pyMethod.QueryParams, pythonQueryParam{
+			WireName: param.Name,
+			VarName:  clientgen.UniquePythonIdentifier(pythonSnakeName(param.Name), usedParams),
+			Type:     param.Type,
+			Optional: param.Optional,
+		})
+	}
+	for _, param := range method.HeaderParams {
+		pyMethod.HeaderParams = append(pyMethod.HeaderParams, pythonHeaderParam{
 			WireName: param.Name,
 			VarName:  clientgen.UniquePythonIdentifier(pythonSnakeName(param.Name), usedParams),
 			Type:     param.Type,
@@ -750,7 +837,7 @@ func pythonMethod(method clientMethod, typeNames map[string]string, methodNames 
 }
 
 func pythonSpecAuthParams(spec clientSpec) []pythonAuthGuard {
-	used := map[string]struct{}{"self": {}, "base_url": {}}
+	used := map[string]struct{}{"self": {}, "base_url": {}, "headers": {}, "transport": {}}
 	seen := map[string]struct{}{}
 	var out []pythonAuthGuard
 	for _, service := range spec.Services {
@@ -809,6 +896,11 @@ func pythonMethodSignatureParams(method pythonClientMethod) string {
 			keywords = append(keywords, param.VarName+": "+param.Type)
 		}
 	}
+	for _, param := range method.HeaderParams {
+		if !param.Optional {
+			keywords = append(keywords, param.VarName+": "+param.Type)
+		}
+	}
 	if method.HasBody {
 		bodyType := method.RequestType
 		if bodyType == "" {
@@ -821,6 +913,12 @@ func pythonMethodSignatureParams(method pythonClientMethod) string {
 			keywords = append(keywords, param.VarName+": Optional["+param.Type+"] = None")
 		}
 	}
+	for _, param := range method.HeaderParams {
+		if param.Optional {
+			keywords = append(keywords, param.VarName+": Optional["+param.Type+"] = None")
+		}
+	}
+	keywords = append(keywords, "headers: Optional[dict] = None")
 	for _, auth := range method.AuthParams {
 		keywords = append(keywords, auth.ParamName+": Optional[str] = None")
 	}
@@ -850,6 +948,10 @@ func pythonMethodCallArgs(method pythonClientMethod) string {
 	for _, param := range method.QueryParams {
 		args = append(args, param.VarName+"="+param.VarName)
 	}
+	for _, param := range method.HeaderParams {
+		args = append(args, param.VarName+"="+param.VarName)
+	}
+	args = append(args, "headers=headers")
 	for _, auth := range method.AuthParams {
 		args = append(args, auth.ParamName+"="+auth.ParamName)
 	}

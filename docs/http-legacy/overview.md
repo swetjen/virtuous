@@ -56,6 +56,10 @@ To serve the React Query client from `ServeAllDocs`, opt in with an explicit pat
 router.ServeAllDocs(httpapi.WithReactQueryTSPath("/react-query.client.gen.ts"))
 ```
 
+`ServeAllDocs` also serves the versioned, machine-readable client model at
+`/client.spec.json` (override with `httpapi.WithClientSpecPath(...)`); see
+[Client Codegen](../agents/client-codegen.md) for the document shape.
+
 See [React Query client](./react-query.md) for the generated API shape and path-param `enabled` behavior.
 
 For routes already mounted elsewhere, register the contract only:

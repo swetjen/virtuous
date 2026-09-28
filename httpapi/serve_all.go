@@ -17,6 +17,7 @@ type ServeAllDocsOptions struct {
 	ClientJSPath     string
 	ClientTSPath     string
 	ClientPYPath     string
+	ClientSpecPath   string
 	ReactQueryTSPath string
 }
 
@@ -59,6 +60,15 @@ func WithClientPYPath(path string) ServeAllDocsOpt {
 	}
 }
 
+// WithClientSpecPath overrides the client-spec JSON document route path.
+func WithClientSpecPath(path string) ServeAllDocsOpt {
+	return func(o *ServeAllDocsOptions) {
+		if path != "" {
+			o.ClientSpecPath = ensureLeadingSlash(path)
+		}
+	}
+}
+
 // WithReactQueryTSPath enables and overrides the React Query TS client route path.
 func WithReactQueryTSPath(path string) ServeAllDocsOpt {
 	return func(o *ServeAllDocsOptions) {
@@ -81,10 +91,11 @@ func WithoutDocs() ServeAllDocsOpt {
 func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
 	r.mustBeMutable()
 	config := ServeAllDocsOptions{
-		DocsEnabled:  true,
-		ClientJSPath: "/client.gen.js",
-		ClientTSPath: "/client.gen.ts",
-		ClientPYPath: "/client.gen.py",
+		DocsEnabled:    true,
+		ClientJSPath:   "/client.gen.js",
+		ClientTSPath:   "/client.gen.ts",
+		ClientPYPath:   "/client.gen.py",
+		ClientSpecPath: "/client.spec.json",
 	}
 	for _, opt := range opts {
 		opt(&config)
@@ -104,6 +115,10 @@ func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
 	if config.ClientPYPath != "" {
 		r.Handle("GET "+config.ClientPYPath, http.HandlerFunc(r.ServeClientPY), clientGuards...)
 		r.logger.Info("client py available", "path", config.ClientPYPath)
+	}
+	if config.ClientSpecPath != "" {
+		r.Handle("GET "+config.ClientSpecPath, http.HandlerFunc(r.ServeClientSpec), clientGuards...)
+		r.logger.Info("client spec available", "path", config.ClientSpecPath)
 	}
 	if config.ReactQueryTSPath != "" {
 		r.Handle("GET "+config.ReactQueryTSPath, http.HandlerFunc(r.ServeReactQueryTS), clientGuards...)

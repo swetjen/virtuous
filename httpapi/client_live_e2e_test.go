@@ -22,6 +22,18 @@ type liveEchoScalarRequest struct {
 	Kind string `query:"kind"`
 }
 
+type liveEchoHeadersRequest struct {
+	Brand string `header:"X-Brand-Ray"`
+}
+
+type liveEchoHeadersResponse struct {
+	Env    string `json:"env"`
+	Brand  string `json:"brand"`
+	Tenant string `json:"tenant"`
+	Accept string `json:"accept"`
+	APIKey string `json:"apiKey"`
+}
+
 func TestHTTPAPIGeneratedClientsLiveE2E(t *testing.T) {
 	router := newLiveClientE2ERouter(t)
 	server := httptest.NewServer(router)
@@ -91,6 +103,21 @@ assert client.live_echo_query(req="x") == "req=x"
 assert client.live_echo_scalar(kind="null") is None
 assert client.live_echo_scalar(kind="false") is False
 assert client.live_echo_scalar(kind="zero") == 0
+
+hclient = mod.create_client(
+    base_url="` + server.URL + `",
+    headers={"X-Env": "prod", "x-brand-ray": "from-default", "accept": "text/hack"},
+)
+echoed_headers = hclient.live_echo_headers(
+    x_brand_ray="declared",
+    headers={"X-Tenant": "t1", "ACCEPT": "text/forged", "x-api-key": "forged"},
+    api_key_auth="secret",
+)
+assert echoed_headers.env == "prod", echoed_headers
+assert echoed_headers.brand == "declared", echoed_headers
+assert echoed_headers.tenant == "t1", echoed_headers
+assert echoed_headers.accept == "application/json", echoed_headers
+assert echoed_headers.apiKey == "secret", echoed_headers
 `
 		if err := runPythonCommand("-c", snippet); err != nil {
 			t.Fatalf("python live E2E failed: %v", err)
@@ -226,14 +253,34 @@ func newLiveClientE2ERouter(t *testing.T) *Router {
 		Method:      "Scalar",
 		OperationID: "live_echo_scalar",
 	}))
+	router.HandleTyped("GET /echo/headers", WrapFunc(func(w http.ResponseWriter, r *http.Request) {
+		if tenants := r.Header.Values("X-Tenant"); len(tenants) > 1 {
+			http.Error(w, "case-colliding duplicate X-Tenant headers", http.StatusBadRequest)
+			return
+		}
+		Encode(w, r, http.StatusOK, liveEchoHeadersResponse{
+			Env:    r.Header.Get("X-Env"),
+			Brand:  r.Header.Get("X-Brand-Ray"),
+			Tenant: r.Header.Get("X-Tenant"),
+			Accept: r.Header.Get("Accept"),
+			APIKey: r.Header.Get("X-API-Key"),
+		})
+	}, liveEchoHeadersRequest{}, liveEchoHeadersResponse{}, HandlerMeta{
+		Service:     "Echo",
+		Method:      "Headers",
+		OperationID: "live_echo_headers",
+	}), testGuard{name: "ApiKeyAuth", in: "header", param: "X-API-Key"})
 	return router
 }
 
 func writeLiveNodeHarness(t *testing.T, path, baseURL string, tsClient bool) {
 	t.Helper()
 	createClient := `const client = createClient({ baseUrl: "` + baseURL + `" });`
+	headerDefaults := `{ "X-Env": "prod", "x-brand-ray": "from-default", "accept": "text/hack" }`
+	createHeaderClient := `const headerClient = createClient({ baseUrl: "` + baseURL + `", headers: ` + headerDefaults + ` });`
 	if !tsClient {
 		createClient = `const client = createClient("` + baseURL + `");`
+		createHeaderClient = `const headerClient = createClient("` + baseURL + `", { headers: ` + headerDefaults + ` });`
 	}
 	harness := `
 import { createClient } from "./client.gen.js";
@@ -291,6 +338,17 @@ const falseValue = await client.Echo.scalar({ kind: "false" });
 if (falseValue !== false) throw new Error("JSON false must reach the caller, got " + JSON.stringify(falseValue));
 const zeroValue = await client.Echo.scalar({ kind: "zero" });
 if (zeroValue !== 0) throw new Error("JSON zero must reach the caller, got " + JSON.stringify(zeroValue));
+
+` + createHeaderClient + `
+const echoedHeaders = await headerClient.Echo.headers(
+  { "X-Brand-Ray": "declared" },
+  { auth: "secret", headers: { "X-Tenant": "t1", "ACCEPT": "text/forged", "x-api-key": "forged" } },
+);
+if (echoedHeaders.env !== "prod") throw new Error("client default header missing: " + JSON.stringify(echoedHeaders));
+if (echoedHeaders.brand !== "declared") throw new Error("declared header param must override default: " + JSON.stringify(echoedHeaders));
+if (echoedHeaders.tenant !== "t1") throw new Error("per-call header missing: " + JSON.stringify(echoedHeaders));
+if (echoedHeaders.accept !== "application/json") throw new Error("Accept must stay framework-owned: " + JSON.stringify(echoedHeaders));
+if (echoedHeaders.apiKey !== "secret") throw new Error("auth header must survive override attempts: " + JSON.stringify(echoedHeaders));
 `
 	if err := os.WriteFile(path, []byte(harness), 0644); err != nil {
 		t.Fatalf("write live node harness: %v", err)

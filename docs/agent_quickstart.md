@@ -46,7 +46,7 @@ _ = server.ListenAndServe()
 ## Docs and clients
 
 - `ServeDocs()` is the convenience path for default docs wiring (`/rpc/docs`, `/rpc/openapi.json`).
-- `ServeAllDocs()` adds generated clients (`/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`).
+- `ServeAllDocs()` adds generated clients (`/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`) and the machine-readable client spec (`/rpc/client.spec.json`).
 - `WithModules(...)` controls visible docs modules: `api`, `observability`.
 - `DocsHandler(...)` returns a mountable docs subtree handler for custom route placement and docs-only middleware.
 - `AdminHandler(...)` returns mountable admin endpoints for enabled observability modules; mount it explicitly under a guarded `_admin` subtree when those modules are exposed.
@@ -136,6 +136,25 @@ Rules:
 - Query params are serialized as strings and URL-escaped.
 - Nested structs/maps are not supported.
 - Fields with `query` tags cannot also use `json` tags.
+
+## Header params
+
+`header` tags declare typed request headers, symmetric with `query`/`path`:
+
+```go
+type CreateRequest struct {
+	BrandRay string  `header:"X-Brand-Ray"`
+	Trace    *string `header:"X-Trace,omitempty"`
+	Name     string  `json:"name"`
+}
+```
+
+Rules:
+- `header:"Name"` is required; `,omitempty` or a pointer field makes it optional.
+- Header-tagged fields render as `in: header` OpenAPI parameters and typed header arguments in generated clients; they never count toward the request body.
+- Scalars only (same types as query params, no arrays); no `json`/`query`/`path` tag on the same field.
+- Names must be RFC 9110 tokens and must not collide case-insensitively with `Accept`, `Content-Type`, or a route's auth-guard header; violations panic at registration.
+- Generated clients also accept ad-hoc headers: client-wide defaults (`createClient({ headers })`, `create_client(headers=...)`), per-call `options.headers` / `headers=` kwarg, and a transport hook (`ClientOptions.fetch`, Python `transport=`). Precedence: client defaults → declared header params → per-call headers → framework-computed headers (Accept, Content-Type, auth) last and unoverridable; merging is case-insensitive.
 
 ## Canonical flow (byodb-sqlite-style)
 

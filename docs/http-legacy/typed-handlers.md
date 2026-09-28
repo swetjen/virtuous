@@ -153,8 +153,12 @@ handler := httpapi.WrapFunc(
 - `Params`
 - `RequestBody`
 - `Responses`
+- `Deprecated`
+- `DeprecationNote`
 
 If metadata is omitted, the router infers `Service` and `Method` when possible.
+
+Set `Deprecated: true` to mark an operation deprecated without changing its runtime behavior. OpenAPI emits `deprecated: true` for the operation, the exported client-spec document sets `deprecated` on the method, and every generated client tags the method so IDEs flag call sites: JS, TS, and React Query output gets a `@deprecated` JSDoc/TSDoc tag, and Python methods get a `"Deprecated."` docstring. `DeprecationNote` is optional guidance (typically the replacement) that is appended to those tags and to the OpenAPI description as `Deprecated: <note>`.
 OpenAPI `operationId` defaults to a stable method/path-derived value such as `api_v1_reports_report_id_get`; set `OperationID` when a migration needs an exact downstream SDK method name. If `Tags` is empty, OpenAPI output derives one tag from the first meaningful path segment, such as `Creative` for `/api/v1/creative/...`.
 Native `httpapi` Python client methods also use the OpenAPI operation ID, so `GET /api/v1/reports/{report_id}` emits `api_v1_reports_report_id_get(...)`; JS and TS clients continue to use `HandlerMeta.Method`.
 Native `httpapi` Python model names use API context for route-owned request and response bodies: explicit `Tags[0]` wins, then `Service`, then the inferred path tag. For example, `InstanceCreateRequest` under `Personas` emits `PersonasInstanceCreateRequest`, and `Organization` under `/api/v1/organizations` emits `OrganizationsOrganization`.
@@ -219,6 +223,44 @@ Notes:
 - OpenAPI emits every declared response entry.
 - Generated clients use the first `2xx` response as the primary return type.
 - Runtime headers such as `Content-Type` and `Content-Disposition` are still set by the handler itself.
+
+### Response headers
+
+Use `ResponseSpec.Headers` to document headers a response carries, such as a pagination continuation cursor:
+
+```go
+Responses: []httpapi.ResponseSpec{
+	{
+		Status: 200,
+		Body:   WidgetPage{},
+		Headers: []httpapi.ResponseHeaderSpec{
+			{Name: "X-Next-Cursor", Description: "Opaque continuation cursor for the next page."},
+			{Name: "X-Rate-Limit-Remaining", Type: 0, Optional: true},
+		},
+	},
+	{
+		Status:  429,
+		Body:    ErrorResponse{},
+		Headers: []httpapi.ResponseHeaderSpec{httpapi.ResponseHeader("Retry-After", 0)},
+	},
+}
+```
+
+Each header renders into the OpenAPI response as `responses.<status>.headers.<Name>` with its `description`, `schema`, and `required: true` unless `Optional` is set. `Type` follows the same scalar conventions as request header params (`0` → integer, `""` or `nil` → string, `false` → boolean). Names are validated at registration time — they must be RFC 9110 tokens, unique (case-insensitively) within one `ResponseSpec`, and must not be `Content-Type` (that is expressed via `MediaType`); violations panic with the route name.
+
+Declaring a response header does not change generated client return shapes — client methods keep returning the decoded body. Callers that need a documented header read it from the transport, for example via the TS client's `ClientOptions.fetch` hook:
+
+```ts
+let nextCursor: string | null = null
+const client = createClient({
+	baseUrl,
+	fetch: async (input, init) => {
+		const res = await fetch(input, init)
+		nextCursor = res.headers.get("X-Next-Cursor")
+		return res
+	},
+})
+```
 
 ## Request body note
 

@@ -30,6 +30,17 @@ type HandlerMeta struct {
 	RequestBody *RequestBodySpec
 	Responses   []ResponseSpec
 	Security    SecuritySpec
+
+	// Deprecated marks the operation deprecated. OpenAPI emits
+	// `deprecated: true`, the client-spec document sets Method.Deprecated,
+	// and generated clients tag the method (`@deprecated` in JS/TS/React
+	// Query, a "Deprecated." docstring in Python) so IDEs flag call sites.
+	// Runtime behavior is unchanged.
+	Deprecated bool
+	// DeprecationNote is optional guidance rendered with the deprecation tag,
+	// such as the replacement operation. It is ignored unless Deprecated is
+	// set.
+	DeprecationNote string
 }
 
 // ParamSpec describes an explicit operation parameter.
@@ -65,6 +76,20 @@ type ResponseSpec struct {
 	Body        any
 	MediaType   string
 	Description string
+	Headers     []ResponseHeaderSpec
+}
+
+// ResponseHeaderSpec documents a response header emitted with one response
+// status. Name must be a valid HTTP field name (RFC 9110 token) and unique
+// (case-insensitively) within its ResponseSpec; Content-Type is expressed via
+// ResponseSpec.MediaType and may not be declared here. Type follows the same
+// scalar conventions as request header params; a nil Type means string.
+// Headers are documented as required unless Optional is set.
+type ResponseHeaderSpec struct {
+	Name        string
+	Type        any
+	Description string
+	Optional    bool
 }
 
 // SecuritySpec describes operation auth requirements. Requirements within an
@@ -103,7 +128,7 @@ type Route struct {
 // every route (Handle, HandleFunc, HandleTyped, Describe, ServeDocs,
 // ServeAdmin, ServeAllDocs) and apply settings (SetTypeOverrides,
 // SetOpenAPIOptions). Typed routes are validated eagerly: an invalid response
-// spec, unparseable query:/path: tag, or missing response type panics at
+// spec, unparseable query:/path:/header: tag, or missing response type panics at
 // registration time rather than failing later during docs or client
 // generation. Concurrent registration before serving is safe.
 //
@@ -129,6 +154,7 @@ type Router struct {
 	clientTSCache     clientArtifact
 	clientPYCache     clientArtifact
 	reactQueryTSCache clientArtifact
+	clientSpecCache   clientArtifact
 }
 
 // mustBeMutable panics when the router has already started serving requests.
@@ -385,9 +411,11 @@ func (r *Router) describe(pattern string, typed TypedHandler, guards ...Guard) {
 // validateRoute checks at registration time everything that could otherwise
 // make OpenAPI, docs, or client generation fail later: the response contract
 // (a response type or explicit ResponseSpecs with legal statuses), parseable
-// query:/path: tag options, and schema generability of the request/response
-// types. It reuses the same derivation code the generators run, once per
-// route, and panics naming the route and rule on any violation.
+// query:/path:/header: tag options, header param names (RFC 9110 tokens that
+// do not collide with Accept, Content-Type, or the route's auth headers), and
+// schema generability of the request/response types. It reuses the same
+// derivation code the generators run, once per route, and panics naming the
+// route and rule on any violation.
 func (r *Router) validateRoute(route Route) {
 	if err := validateRouteMetadata(route, r.currentTypeOverrides()); err != nil {
 		panic("httpapi: invalid route " + route.Pattern + ": " + err.Error())
@@ -400,6 +428,7 @@ func validateRouteMetadata(route Route, overrides map[string]TypeOverride) error
 	}
 	gen := schema.NewGenerator(overrides)
 	reqInfo := resolveRequestType(route.Handler.RequestType())
+	var tagHeaderParams []headerParam
 	if reqInfo.Present {
 		// Exercise schema generation so a request type the generator cannot
 		// handle fails here instead of in OpenAPI() or client generation.
@@ -410,6 +439,14 @@ func validateRouteMetadata(route Route, overrides map[string]TypeOverride) error
 		if _, err := pathParamsFor(reqInfo.Type); err != nil {
 			return err
 		}
+		headers, err := headerParamsFor(reqInfo.Type)
+		if err != nil {
+			return err
+		}
+		tagHeaderParams = headers
+	}
+	if err := validateHeaderParamNames(route, tagHeaderParams); err != nil {
+		return err
 	}
 	if route.Meta.RequestBody != nil {
 		if _, err := openAPIRequestBodyFor(gen, route.Meta, *route.Meta.RequestBody, nil); err != nil {

@@ -33,7 +33,9 @@ func (r *Router) OpenAPI() ([]byte, error) {
 			Description: route.Meta.Description,
 			Tags:        operationTagsForRoute(route),
 			Responses:   map[string]openAPIResponse{},
+			Deprecated:  route.Meta.Deprecated,
 		}
+		op.Description = openAPIDeprecationDescription(op.Description, route.Meta.Deprecated, route.Meta.DeprecationNote)
 
 		addSecuritySchemes(securitySchemes, route.Meta.Security)
 		op.Security = openAPISecurity(route.Meta.Security)
@@ -59,6 +61,17 @@ func (r *Router) OpenAPI() ([]byte, error) {
 				}
 				op.Parameters = append(op.Parameters, openAPIParameterForField(gen, param.Name, ParamInQuery, !param.Optional, param.Doc, param.Type, param.Field))
 				seenParams[paramKey(param.Name, ParamInQuery)] = struct{}{}
+			}
+			headerInfo, err := headerParamsFor(reqReflect)
+			if err != nil {
+				return nil, err
+			}
+			for _, param := range headerInfo {
+				if _, ok := explicitParams[paramKey(param.Name, ParamInHeader)]; ok {
+					continue
+				}
+				op.Parameters = append(op.Parameters, openAPIParameterForField(gen, param.Name, ParamInHeader, !param.Optional, param.Doc, param.Type, param.Field))
+				seenParams[paramKey(param.Name, ParamInHeader)] = struct{}{}
 			}
 			pathInfo, err := pathParamsFor(reqReflect)
 			if err != nil {
@@ -112,6 +125,16 @@ func (r *Router) OpenAPI() ([]byte, error) {
 					response.Content = map[string]openAPIMedia{}
 				}
 				response.Content[resp.MediaType] = openAPIMedia{Schema: respSchema}
+			}
+			for _, header := range resp.Headers {
+				if response.Headers == nil {
+					response.Headers = map[string]openAPIResponseHeader{}
+				}
+				response.Headers[header.Name] = openAPIResponseHeader{
+					Description: header.Description,
+					Required:    !header.Optional,
+					Schema:      paramSchemaForType(gen, reflect.TypeOf(header.Type)),
+				}
 			}
 			op.Responses[resp.Status] = response
 		}
@@ -241,7 +264,7 @@ func requestBodySchema(gen *schema.Generator, t reflect.Type, skip map[string]st
 		if _, ok := skip[field.Name]; ok {
 			continue
 		}
-		if field.Tag.Get("path") != "" {
+		if field.Tag.Get("path") != "" || field.Tag.Get("header") != "" {
 			continue
 		}
 		fieldSchema := gen.SchemaForType(field.Type)
@@ -608,6 +631,21 @@ type openAPIOperation struct {
 	RequestBody *openAPIRequestBody        `json:"requestBody,omitempty"`
 	Responses   map[string]openAPIResponse `json:"responses"`
 	Security    []map[string][]string      `json:"security,omitempty"`
+	Deprecated  bool                       `json:"deprecated,omitempty"`
+}
+
+// openAPIDeprecationDescription appends a deprecated operation's note to its
+// description, since OpenAPI has no dedicated field for the note. The
+// description is returned unchanged for non-deprecated routes or when no note
+// is set.
+func openAPIDeprecationDescription(description string, deprecated bool, note string) string {
+	if !deprecated || note == "" {
+		return description
+	}
+	if description == "" {
+		return "Deprecated: " + note
+	}
+	return description + "\n\nDeprecated: " + note
 }
 
 type openAPIRequestBody struct {
@@ -616,8 +654,18 @@ type openAPIRequestBody struct {
 }
 
 type openAPIResponse struct {
-	Description string                  `json:"description"`
-	Content     map[string]openAPIMedia `json:"content,omitempty"`
+	Description string                           `json:"description"`
+	Headers     map[string]openAPIResponseHeader `json:"headers,omitempty"`
+	Content     map[string]openAPIMedia          `json:"content,omitempty"`
+}
+
+// openAPIResponseHeader is an OpenAPI 3.0 response Header Object. Unlike
+// parameters, response headers carry no name/in pair (the map key is the
+// name) and use `required` directly.
+type openAPIResponseHeader struct {
+	Description string                `json:"description,omitempty"`
+	Required    bool                  `json:"required,omitempty"`
+	Schema      *schema.OpenAPISchema `json:"schema,omitempty"`
 }
 
 type openAPIMedia struct {

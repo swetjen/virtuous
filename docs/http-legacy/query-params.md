@@ -35,6 +35,27 @@ Rules:
 - Tag aliases are literal wire names. If you set `query:"limit"`, the query key is exactly `limit`.
 - Use `enum:"a,b,c"` on scalar fields when the OpenAPI contract needs allowed values.
 
+## Header params
+
+Use `header` tags for typed request headers, symmetric with `query`/`path`:
+
+```go
+type CreateWidgetRequest struct {
+	BrandRay string  `header:"X-Brand-Ray"`
+	Trace    *string `header:"X-Trace,omitempty"`
+	Name     string  `json:"name"`
+}
+```
+
+Rules:
+
+- `header:"Name"` is required; `header:"Name,omitempty"` or a pointer field is optional.
+- Header-tagged fields become `in: header` OpenAPI parameters and typed header arguments in generated clients; they are excluded from the request body (a GET request struct with only header-tagged fields has no body).
+- Explicit `httpapi.HeaderParam(...)` specs and `header:` tags de-duplicate by name; the explicit spec wins.
+- Scalar types only (same scalars as query params); arrays are not supported.
+- A field cannot combine `header` with `json`, `query`, or `path` tags.
+- Header names are validated at registration: they must be RFC 9110 tokens and must not collide (case-insensitively) with `Accept`, `Content-Type`, or the header used by an auth guard on the same route. Violations panic with the route name.
+
 ## Mixed query + JSON body
 
 Use separate fields for query and JSON body in one request type:

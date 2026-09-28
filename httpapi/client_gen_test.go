@@ -332,10 +332,10 @@ func TestGeneratedClientsAreValid(t *testing.T) {
 	if !strings.Contains(pyText, "_encode_multipart") || !strings.Contains(pyText, `("file", "file", True)`) || !strings.Contains(pyText, `("client_id", "clientID", False)`) {
 		t.Fatalf("py client missing multipart encoding")
 	}
-	if !strings.Contains(pyText, "def create_client(base_url: str = \"/\", *, api_key_auth: Optional[str] = None, token_auth: Optional[str] = None)") {
+	if !strings.Contains(pyText, "def create_client(base_url: str = \"/\", *, headers: Optional[dict] = None, transport: Any = None, api_key_auth: Optional[str] = None, token_auth: Optional[str] = None)") {
 		t.Fatalf("py client missing base_url constructor auth defaults")
 	}
-	if !strings.Contains(pyText, "def secure_get(self, *, api_key_auth: Optional[str] = None, token_auth: Optional[str] = None)") {
+	if !strings.Contains(pyText, "def secure_get(self, *, headers: Optional[dict] = None, api_key_auth: Optional[str] = None, token_auth: Optional[str] = None)") {
 		t.Fatalf("py client missing snake_case per-call auth params")
 	}
 }
@@ -677,9 +677,9 @@ func TestPythonClientSanitizesIdentifiersAndPreservesWireNames(t *testing.T) {
 	assertContains(t, pyText, `try_: str = field(metadata={"wire": "try"})`)
 	assertContains(t, pyText, `else_: str = field(metadata={"wire": "else"})`)
 	assertContains(t, pyText, `from_2: str = field(metadata={"wire": "from_"})`)
-	assertContains(t, pyText, `def keyword_from_get(self, from_: str, *, try_: Optional[str] = None)`)
-	assertContains(t, pyText, `def class_(self, *, body: Optional["KeywordPythonPayload"] = None)`)
-	assertContains(t, pyText, `self.class_ = _classService(base_url, try_=try_)`)
+	assertContains(t, pyText, `def keyword_from_get(self, from_: str, *, headers: Optional[dict] = None, try_: Optional[str] = None)`)
+	assertContains(t, pyText, `def class_(self, *, body: Optional["KeywordPythonPayload"] = None, headers: Optional[dict] = None)`)
+	assertContains(t, pyText, `self.class_ = _classService(base_url, headers=headers, transport=transport, try_=try_)`)
 
 	dir := t.TempDir()
 	pyPath := filepath.Join(dir, "client.gen.py")
@@ -852,7 +852,7 @@ func TestPythonClientTransportDoesNotShadowClientModels(t *testing.T) {
 	assertContains(t, pyText, "class Client:")
 	assertContains(t, pyText, "class APIClient:")
 	assertContains(t, pyText, "class _VirtuousClient:")
-	assertContains(t, pyText, "def create_client(base_url: str = \"/\") -> _VirtuousClient:")
+	assertContains(t, pyText, "def create_client(base_url: str = \"/\", *, headers: Optional[dict] = None, transport: Any = None) -> _VirtuousClient:")
 	if strings.Count(pyText, "class Client:") != 1 {
 		t.Fatalf("transport client should not shadow Client DTO:\n%s", pyText)
 	}
@@ -1124,10 +1124,10 @@ func TestGeneratedClientsSupportTextAndBytesResponses(t *testing.T) {
 	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
 
 	jsText := string(js)
-	if !strings.Contains(jsText, `"Accept": "text/plain"`) {
+	if !strings.Contains(jsText, `_setHeader(requestHeaders, "Accept", "text/plain")`) {
 		t.Fatalf("js client missing text/plain accept header")
 	}
-	if !strings.Contains(jsText, `"Accept": "application/octet-stream"`) {
+	if !strings.Contains(jsText, `_setHeader(requestHeaders, "Accept", "application/octet-stream")`) {
 		t.Fatalf("js client missing octet-stream accept header")
 	}
 	if !strings.Contains(jsText, "new Uint8Array(raw)") {
@@ -1143,10 +1143,10 @@ func TestGeneratedClientsSupportTextAndBytesResponses(t *testing.T) {
 	}
 
 	pyText := string(py)
-	if !strings.Contains(pyText, "def assets_blob_get") || !strings.Contains(pyText, `return _request("GET", url, headers, data, "bytes", bytes)`) {
+	if !strings.Contains(pyText, "def assets_blob_get") || !strings.Contains(pyText, `return _request("GET", url, request_headers, data, "bytes", bytes, transport=self._transport)`) {
 		t.Fatalf("python client missing bytes response handling")
 	}
-	if !strings.Contains(pyText, `"Accept": "text/plain"`) {
+	if !strings.Contains(pyText, `_set_header(request_headers, "Accept", "text/plain")`) {
 		t.Fatalf("python client missing text/plain accept header")
 	}
 }
@@ -1185,7 +1185,7 @@ func TestGeneratedClientsUsePrimaryResponseSpec(t *testing.T) {
 	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
 
 	jsText := string(js)
-	if !strings.Contains(jsText, `"Accept": "image/png"`) {
+	if !strings.Contains(jsText, `_setHeader(requestHeaders, "Accept", "image/png")`) {
 		t.Fatalf("js client missing custom media type accept header")
 	}
 	if !strings.Contains(jsText, "new Uint8Array(raw)") {
@@ -1201,10 +1201,10 @@ func TestGeneratedClientsUsePrimaryResponseSpec(t *testing.T) {
 	}
 
 	pyText := string(py)
-	if !strings.Contains(pyText, `"Accept": "image/png"`) {
+	if !strings.Contains(pyText, `_set_header(request_headers, "Accept", "image/png")`) {
 		t.Fatalf("python client missing custom media type accept header")
 	}
-	if !strings.Contains(pyText, `return _request("GET", url, headers, data, "bytes", bytes)`) {
+	if !strings.Contains(pyText, `return _request("GET", url, request_headers, data, "bytes", bytes, transport=self._transport)`) {
 		t.Fatalf("python client missing bytes return for response spec")
 	}
 }
@@ -1218,7 +1218,7 @@ func TestGeneratedClientsUseFirstListedMediaForSameStatus(t *testing.T) {
 	py := renderClient(t, func(buf *bytes.Buffer) error { return router.WriteClientPY(buf) })
 
 	jsText := string(js)
-	if !strings.Contains(jsText, `"Accept": "text/plain"`) {
+	if !strings.Contains(jsText, `_setHeader(requestHeaders, "Accept", "text/plain")`) {
 		t.Fatalf("js client should use first listed media type for same-status response specs")
 	}
 
@@ -1231,7 +1231,7 @@ func TestGeneratedClientsUseFirstListedMediaForSameStatus(t *testing.T) {
 	}
 
 	pyText := string(py)
-	if !strings.Contains(pyText, `"Accept": "text/plain"`) {
+	if !strings.Contains(pyText, `_set_header(request_headers, "Accept", "text/plain")`) {
 		t.Fatalf("python client should use first listed media type for same-status response specs")
 	}
 }
@@ -1250,7 +1250,7 @@ func TestGeneratedClientsSupportPointerResponseSpecTypes(t *testing.T) {
 	}
 
 	pyText := string(py)
-	if !strings.Contains(pyText, "class "+expectedType) || !strings.Contains(pyText, `_request("GET", url, headers, data, "json", `+expectedType+`)`) {
+	if !strings.Contains(pyText, "class "+expectedType) || !strings.Contains(pyText, `_request("GET", url, request_headers, data, "json", `+expectedType+`, transport=self._transport)`) {
 		t.Fatalf("python client missing pointer response spec type %q", expectedType)
 	}
 }

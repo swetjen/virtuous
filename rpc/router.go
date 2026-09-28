@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -33,27 +34,28 @@ type PythonClientSigning = clientgen.PythonClientSigning
 // serving; register everything before starting". Docs and generated clients
 // are therefore stable snapshots of the frozen route set.
 type Router struct {
-	mux            *http.ServeMux
-	mu             sync.Mutex
-	frozen         atomic.Bool
-	routes         []Route
-	prefix         string
-	guards         []Guard
-	logger         *slog.Logger
-	events         *adminui.EventFeed
-	observability  *adminui.ObservabilityTracker
-	loggerAttached uint32
-	loggerActive   uint32
-	typeOverrides  map[string]TypeOverride
-	openAPIOptions *OpenAPIOptions
-	maxBodyBytes   int64
-	strictJSON     bool
-	debugConsole   *debugconsole.Logger
-	debugHandler   http.Handler
-	pythonSigning  *clientgen.PythonClientSigning
-	clientJSCache  clientArtifact
-	clientTSCache  clientArtifact
-	clientPYCache  clientArtifact
+	mux             *http.ServeMux
+	mu              sync.Mutex
+	frozen          atomic.Bool
+	routes          []Route
+	prefix          string
+	guards          []Guard
+	logger          *slog.Logger
+	events          *adminui.EventFeed
+	observability   *adminui.ObservabilityTracker
+	loggerAttached  uint32
+	loggerActive    uint32
+	typeOverrides   map[string]TypeOverride
+	openAPIOptions  *OpenAPIOptions
+	maxBodyBytes    int64
+	strictJSON      bool
+	debugConsole    *debugconsole.Logger
+	debugHandler    http.Handler
+	pythonSigning   *clientgen.PythonClientSigning
+	clientJSCache   clientArtifact
+	clientTSCache   clientArtifact
+	clientPYCache   clientArtifact
+	clientSpecCache clientArtifact
 }
 
 // mustBeMutable panics when the router has already started serving requests.
@@ -238,11 +240,54 @@ func (r *Router) SetOpenAPIOptions(opts OpenAPIOptions) {
 	r.mu.Unlock()
 }
 
+// RouteOption is a per-handler registration option. HandleRPC accepts route
+// options in its guards position: every RouteOption satisfies Guard with an
+// empty spec and no middleware, so it never participates in auth, and
+// existing HandleRPC(fn, guards...) call sites keep compiling.
+type RouteOption interface {
+	Guard
+	applyRoute(*Route)
+}
+
+// deprecatedOption is the RouteOption returned by Deprecated.
+type deprecatedOption struct {
+	note string
+}
+
+func (deprecatedOption) Spec() GuardSpec { return GuardSpec{} }
+
+func (deprecatedOption) Middleware() func(http.Handler) http.Handler { return nil }
+
+func (o deprecatedOption) applyRoute(route *Route) {
+	route.Deprecated = true
+	if o.note != "" {
+		route.DeprecationNote = o.note
+	}
+}
+
+// Deprecated marks a handler deprecated. Pass it to HandleRPC alongside any
+// guards:
+//
+//	router.HandleRPC(states.GetByCodeLegacy, rpc.Deprecated("Use states.GetByCode."))
+//
+// OpenAPI emits `deprecated: true` for the operation (with the note in its
+// description), the client-spec document sets Method.Deprecated, and
+// generated clients tag the method (`@deprecated` in JS/TS, a "Deprecated."
+// docstring in Python) so IDEs flag call sites. Runtime behavior is
+// unchanged. The optional note (multiple arguments are joined with spaces)
+// names the replacement or other guidance.
+func Deprecated(note ...string) RouteOption {
+	return deprecatedOption{note: strings.TrimSpace(strings.Join(note, " "))}
+}
+
 // HandleRPC registers a typed RPC handler. The handler signature, route path,
 // and request/response schemas are validated eagerly: HandleRPC panics on any
 // violation so misconfiguration surfaces at registration time instead of when
 // docs or clients are generated. It must be called before the router starts
 // serving.
+//
+// The variadic guards may also carry route options such as Deprecated; those
+// are applied to the route's metadata and excluded from the guard chain.
 func (r *Router) HandleRPC(fn any, guards ...Guard) {
 	r.mustBeMutable()
 	spec, err := parseHandler(fn, r.prefix)
@@ -262,7 +307,14 @@ func (r *Router) HandleRPC(fn any, guards ...Guard) {
 	_ = gen.SchemaForType(spec.respType)
 
 	allGuards := append([]Guard(nil), r.guards...)
-	allGuards = append(allGuards, guards...)
+	var options []RouteOption
+	for _, guard := range guards {
+		if option, ok := guard.(RouteOption); ok {
+			options = append(options, option)
+			continue
+		}
+		allGuards = append(allGuards, guard)
+	}
 
 	handler := r.buildRPCHandler(spec)
 	handler = r.wrapRPCHandler(spec, handler, allGuards)
@@ -274,6 +326,9 @@ func (r *Router) HandleRPC(fn any, guards ...Guard) {
 		RequestType:  spec.reqType,
 		ResponseType: spec.respType,
 		Guards:       guardSpecs(allGuards),
+	}
+	for _, option := range options {
+		option.applyRoute(&route)
 	}
 
 	r.mu.Lock()

@@ -112,7 +112,7 @@ func TestRPCPythonClientTransportDoesNotShadowClientModels(t *testing.T) {
 	pyText := string(py)
 	assertRPCContains(t, pyText, "class Client:")
 	assertRPCContains(t, pyText, "class _VirtuousClient:")
-	assertRPCContains(t, pyText, "def create_client(base_url: str = \"/\") -> _VirtuousClient:")
+	assertRPCContains(t, pyText, "def create_client(base_url: str = \"/\", *, headers: Optional[dict] = None, transport: Any = None) -> _VirtuousClient:")
 	if strings.Count(pyText, "class Client:") != 1 {
 		t.Fatalf("transport client should not shadow Client DTO:\n%s", pyText)
 	}

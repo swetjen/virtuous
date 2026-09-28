@@ -12,6 +12,7 @@ import (
 var clientTSTemplate = template.Must(template.New("virtuous-ts").Funcs(clientgen.TemplateFuncs()).Parse(`export type RequestOptions = {
 	signal?: AbortSignal
 	auth?: RequestAuth
+	headers?: Record<string, string>
 }
 
 export type RequestAuth = {
@@ -28,6 +29,11 @@ export type AuthProvider = RequestAuth | (() => MaybePromise<RequestAuth | null 
 export type ClientOptions = {
 	baseUrl?: string
 	auth?: AuthProvider
+	// Default headers sent with every request; per-call RequestOptions.headers
+	// and framework-computed headers override them (see _request).
+	headers?: Record<string, string>
+	// Transport hook: replaces the global fetch for every request.
+	fetch?: typeof fetch
 }
 
 export class AuthNotReadyError extends Error {
@@ -52,11 +58,16 @@ export type {{ $method.PathParamsType }} = { {{- range $param := $method.PathPar
 {{- if $method.HasQuery }}
 export type {{ $method.QueryParamsType }} = { {{- range $param := $method.QueryParams }}{{ tsKey $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ $param.Type }}; {{- end }} }
 {{ end -}}
+{{- if $method.HasHeaders }}
+export type {{ $method.HeaderParamsType }} = { {{- range $param := $method.HeaderParams }}{{ tsKey $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ $param.Type }}; {{- end }} }
+{{ end -}}
 {{- end }}{{- end }}
 export function createClient(options: ClientOptions = {}) {
 	let clientOptions: ClientOptions = {
 		baseUrl: options.baseUrl ?? "/",
 		auth: options.auth,
+		headers: options.headers,
+		fetch: options.fetch,
 	}
 	return {
 		configure(nextOptions: ClientOptions) {
@@ -65,7 +76,8 @@ export function createClient(options: ClientOptions = {}) {
 {{- range $service := .Services }}
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
-			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: {{ $method.PathParamsType }}, {{ end }}{{ if $method.HasBody }}request{{ if $method.BodyOptional }}?{{ end }}: {{ $method.RequestType }}, {{ end }}{{ if $method.HasQuery }}query?: {{ $method.QueryParamsType }}, {{ end }}options?: RequestOptions): Promise<{{ if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}> {
+			{{ if $method.Deprecated }}/** @deprecated{{ if $method.DeprecationNote }} {{ jsdoc $method.DeprecationNote }}{{ end }} */
+			{{ end }}async {{ $method.Name }}({{ if $method.PathParams }}pathParams: {{ $method.PathParamsType }}, {{ end }}{{ if $method.HasBody }}request{{ if not $method.BodyOptional }}: {{ $method.RequestType }}{{ else if $method.HeadersRequired }}: {{ $method.RequestType }} | undefined{{ else }}?: {{ $method.RequestType }}{{ end }}, {{ end }}{{ if $method.HasQuery }}query{{ if $method.HeadersRequired }}: {{ $method.QueryParamsType }} | undefined{{ else }}?: {{ $method.QueryParamsType }}{{ end }}, {{ end }}{{ if $method.HasHeaders }}headers{{ if not $method.HeadersRequired }}?{{ end }}: {{ $method.HeaderParamsType }}, {{ end }}options?: RequestOptions): Promise<{{ if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}> {
 				let path = {{ tsStr $method.Path }}
 {{- if $method.PathParams }}
 				if (!pathParams) {
@@ -102,6 +114,13 @@ export function createClient(options: ClientOptions = {}) {
 					query: [
 {{- range $param := $method.QueryParams }}
 						[{{ tsStr $param.Name }}, {{ jsGetOpt "query" $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }}],
+{{- end }}
+					],
+{{- end }}
+{{- if $method.HasHeaders }}
+					headerParams: [
+{{- range $param := $method.HeaderParams }}
+						[{{ tsStr $param.Name }}, {{ jsGetOpt "headers" $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }}],
 {{- end }}
 					],
 {{- end }}
@@ -143,15 +162,46 @@ type RequestConfig = {
 	bodyMode?: string
 	bodyFields?: BodyField[]
 	query?: QueryItem[]
+	headerParams?: QueryItem[]
 	auth?: AuthGuard[][]
 	cookie?: boolean
 	options?: RequestOptions
 }
 
+// _setHeader sets a header case-insensitively: any existing spelling of key
+// is removed before the new value is stored under the given spelling.
+function _setHeader(headers: Record<string, string>, key: string, value: string) {
+	const lower = key.toLowerCase()
+	for (const existing of Object.keys(headers)) {
+		if (existing.toLowerCase() === lower) {
+			delete headers[existing]
+		}
+	}
+	headers[key] = value
+}
+
 async function _request<T>(clientOptions: ClientOptions, config: RequestConfig): Promise<T> {
-	const headers: Record<string, string> = { "Accept": config.accept }
+	// Header precedence: client-wide ClientOptions.headers defaults first,
+	// then declared typed header params, then per-call RequestOptions.headers.
+	// Framework-computed headers (Accept, Content-Type when a body is sent,
+	// and auth headers) are applied last and cannot be overridden. The merge
+	// is case-insensitive.
+	const headers: Record<string, string> = {}
+	for (const [key, value] of Object.entries(clientOptions.headers ?? {})) {
+		_setHeader(headers, key, String(value))
+	}
+	for (const item of config.headerParams ?? []) {
+		if (item[1] === undefined || item[1] === null) {
+			continue
+		}
+		_setHeader(headers, item[0], String(item[1]))
+	}
+	for (const [key, value] of Object.entries(config.options?.headers ?? {})) {
+		_setHeader(headers, key, String(value))
+	}
+	_setHeader(headers, "Accept", config.accept)
 	if (config.contentType) {
-		headers["Content-Type"] = config.contentType
+		_setHeader(headers, "Content-Type", config.contentType)
 	}
 	let url = (clientOptions.baseUrl ?? "/") + config.path
 	for (const item of config.query ?? []) {
@@ -190,7 +240,8 @@ async function _request<T>(clientOptions: ClientOptions, config: RequestConfig):
 	if (body !== undefined) {
 		init.body = body
 	}
-	const response = await fetch(url, init)
+	const fetchFn = clientOptions.fetch ?? fetch
+	const response = await fetchFn(url, init)
 	return await _decodeResponse<T>(response, config.response)
 }
 
@@ -201,7 +252,7 @@ async function _resolveAuth(provider: AuthProvider | undefined): Promise<Request
 function _applyAuth(url: string, headers: Record<string, string>, guard: AuthGuard, value: string): string {
 	const authValue = guard.prefix ? guard.prefix + " " + value : value
 	if (guard.in === "header") {
-		headers[guard.param] = authValue
+		_setHeader(headers, guard.param, authValue)
 	} else if (guard.in === "query") {
 		url = _appendQuery(url, guard.param, authValue, false)
 	} else if (guard.in === "cookie") {

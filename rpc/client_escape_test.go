@@ -100,7 +100,7 @@ func TestRPCJSClientEscapesHostileWireNamesDocsAndGuards(t *testing.T) {
 	assertRPCContains(t, js, "@property {string} user-id")
 
 	// Guard param/prefix quotes are escaped inside string literals.
-	assertRPCContains(t, js, `headers["X-Api\"Key"] = "Bear\"er " + authValue`)
+	assertRPCContains(t, js, `_setHeader(headers, "X-Api\"Key", "Bear\"er " + authValue)`)
 
 	dir := t.TempDir()
 	jsPath := filepath.Join(dir, "client.gen.js")
@@ -122,7 +122,7 @@ func TestRPCTSClientEscapesHostileWireNamesAndGuards(t *testing.T) {
 	assertRPCNotContains(t, ts, "\tuser-id: string")
 
 	// Guard param/prefix quotes are escaped inside string literals.
-	assertRPCContains(t, ts, `headers["X-Api\"Key"] = "Bear\"er " + authValue`)
+	assertRPCContains(t, ts, `_setHeader(headers, "X-Api\"Key", "Bear\"er " + authValue)`)
 
 	dir := t.TempDir()
 	tsPath := filepath.Join(dir, "client.gen.ts")
@@ -148,7 +148,7 @@ func TestRPCPythonClientEscapesHostileWireNamesDocsAndGuards(t *testing.T) {
 
 	// Guard param/prefix quotes are escaped literals.
 	assertRPCContains(t, py, `auth_value = "Bear\"er " + evilAuth`)
-	assertRPCContains(t, py, `headers["X-Api\"Key"] = auth_value`)
+	assertRPCContains(t, py, `_set_header(request_headers, "X-Api\"Key", auth_value)`)
 
 	dir := t.TempDir()
 	pyPath := filepath.Join(dir, "client.gen.py")

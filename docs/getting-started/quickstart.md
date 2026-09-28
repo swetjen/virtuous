@@ -59,6 +59,7 @@ By default, `ServeAllDocs()` registers:
 - JS client at `/rpc/client.gen.js`
 - TS client at `/rpc/client.gen.ts`
 - Python client at `/rpc/client.gen.py`
+- Client spec JSON at `/rpc/client.spec.json`
 - Observability redirect at `/rpc/_virtuous/observability`
 - Metrics JSON at `/rpc/_virtuous/metrics`
 

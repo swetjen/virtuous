@@ -21,32 +21,38 @@ type clientService struct {
 }
 
 type clientMethod struct {
-	Name            string
-	FlatName        string
-	OperationID     string
-	Summary         string
-	HTTPMethod      string
-	Path            string
-	PathParams      []clientPathParam
-	PathParamsType  string
-	HasBody         bool
-	BodyOptional    bool
-	BodyMode        string
-	BodyFields      []clientBodyField
-	RequestMedia    string
-	HasQuery        bool
-	QueryParams     []clientQueryParam
-	QueryParamsType string
-	AcceptType      string
-	ResponseMode    string
-	HasAuth         bool
-	HasCookieAuth   bool
-	Auth            GuardSpec
-	AuthParam       string
-	AuthReqs        []clientAuthRequirement
-	AuthParams      []clientAuthGuard
-	RequestType     string
-	ResponseType    string
+	Name             string
+	FlatName         string
+	OperationID      string
+	Summary          string
+	HTTPMethod       string
+	Path             string
+	PathParams       []clientPathParam
+	PathParamsType   string
+	HasBody          bool
+	BodyOptional     bool
+	BodyMode         string
+	BodyFields       []clientBodyField
+	RequestMedia     string
+	HasQuery         bool
+	QueryParams      []clientQueryParam
+	QueryParamsType  string
+	HasHeaders       bool
+	HeaderParams     []clientHeaderParam
+	HeaderParamsType string
+	HeadersRequired  bool
+	AcceptType       string
+	ResponseMode     string
+	HasAuth          bool
+	HasCookieAuth    bool
+	Auth             GuardSpec
+	AuthParam        string
+	AuthReqs         []clientAuthRequirement
+	AuthParams       []clientAuthGuard
+	RequestType      string
+	ResponseType     string
+	Deprecated       bool
+	DeprecationNote  string
 }
 
 type clientObject = schema.Object
@@ -57,6 +63,13 @@ type clientQueryParam struct {
 	IsArray  bool
 	Doc      string
 	Type     string
+}
+
+type clientHeaderParam struct {
+	Name     string
+	Type     string
+	Optional bool
+	Doc      string
 }
 
 type clientPathParam struct {
@@ -86,24 +99,41 @@ type clientSchemaNaming struct {
 	CollisionNames func([]Route) map[reflect.Type]string
 }
 
-func buildClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
-	return buildClientSpecWith(routes, overrides, func(registry *schema.Registry) func(reflect.Type) string {
-		return registry.JSTypeOf
-	}, "Uint8Array", clientSchemaNaming{
+// jsClientNaming and pyClientNaming are the schema-naming configurations for
+// the JS/TS and Python client builds. buildClientSpec, buildPythonClientSpec,
+// and the exported client-spec document builder all share them so the served
+// clients and the exported spec can never disagree.
+func jsClientNaming() clientSchemaNaming {
+	return clientSchemaNaming{
 		PreferredName: func(route Route, t reflect.Type) string {
 			return preferredSchemaName(route.Meta, t)
 		},
 		CollisionNames: routeCollisionSchemaNames,
-	})
+	}
+}
+
+func pyClientNaming() clientSchemaNaming {
+	return clientSchemaNaming{
+		PreferredName:  preferredPythonSchemaName,
+		CollisionNames: routeContextCollisionSchemaNames,
+	}
+}
+
+const (
+	jsClientByteType = "Uint8Array"
+	pyClientByteType = "bytes"
+)
+
+func buildClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
+	return buildClientSpecWith(routes, overrides, func(registry *schema.Registry) func(reflect.Type) string {
+		return registry.JSTypeOf
+	}, jsClientByteType, jsClientNaming())
 }
 
 func buildPythonClientSpec(routes []Route, overrides map[string]TypeOverride) (clientSpec, error) {
 	return buildClientSpecWith(routes, overrides, func(registry *schema.Registry) func(reflect.Type) string {
 		return registry.PyTypeOf
-	}, "bytes", clientSchemaNaming{
-		PreferredName:  preferredPythonSchemaName,
-		CollisionNames: routeContextCollisionSchemaNames,
-	})
+	}, pyClientByteType, pyClientNaming())
 }
 
 func buildClientSpecWith(
@@ -141,6 +171,7 @@ func buildClientSpecWith(
 		hasBody := reqInfo.Present
 		hasQuery := false
 		var queryParams []clientQueryParam
+		var headerParams []clientHeaderParam
 		pathParams := fallbackClientPathParams(route.PathParams, typeFn)
 		requestType := ""
 		responseType := ""
@@ -173,6 +204,18 @@ func buildClientSpecWith(
 						Type:     typeFn(param.Type),
 					})
 				}
+			}
+			headerInfo, err := headerParamsFor(reqReflect)
+			if err != nil {
+				return clientSpec{}, err
+			}
+			for _, param := range headerInfo {
+				headerParams = append(headerParams, clientHeaderParam{
+					Name:     param.Name,
+					Optional: param.Optional,
+					Doc:      param.Doc,
+					Type:     typeFn(param.Type),
+				})
 			}
 			hasBody = queryInfo.BodyFields > 0
 			if hasBody {
@@ -215,7 +258,7 @@ func buildClientSpecWith(
 				bodyFields = clientJSONBodyFieldsFor(bodyType)
 			}
 		}
-		pathParams, queryParams = applyExplicitClientParams(route, pathParams, queryParams, typeFn)
+		pathParams, queryParams, headerParams = applyExplicitClientParams(route, pathParams, queryParams, headerParams, typeFn)
 		if len(queryParams) > 0 {
 			hasQuery = true
 		}
@@ -248,25 +291,33 @@ func buildClientSpecWith(
 		}
 		operationID := operationIDForRoute(route)
 		method := clientMethod{
-			Name:            methodName,
-			OperationID:     operationID,
-			Summary:         route.Meta.Summary,
-			HTTPMethod:      route.Method,
-			Path:            route.Path,
-			PathParams:      pathParams,
-			PathParamsType:  tsOperationTypeName(operationID, "PathParams"),
-			HasBody:         hasBody,
-			BodyOptional:    reqInfo.Optional && hasBody,
-			BodyMode:        bodyMode,
-			BodyFields:      bodyFields,
-			RequestMedia:    requestMedia,
-			HasQuery:        hasQuery,
-			QueryParams:     queryParams,
-			QueryParamsType: tsOperationTypeName(operationID, "Query"),
-			AcceptType:      acceptType,
-			ResponseMode:    responseMode,
-			RequestType:     requestType,
-			ResponseType:    responseType,
+			Name:             methodName,
+			OperationID:      operationID,
+			Summary:          route.Meta.Summary,
+			HTTPMethod:       route.Method,
+			Path:             route.Path,
+			PathParams:       pathParams,
+			PathParamsType:   tsOperationTypeName(operationID, "PathParams"),
+			HasBody:          hasBody,
+			BodyOptional:     reqInfo.Optional && hasBody,
+			BodyMode:         bodyMode,
+			BodyFields:       bodyFields,
+			RequestMedia:     requestMedia,
+			HasQuery:         hasQuery,
+			QueryParams:      queryParams,
+			QueryParamsType:  tsOperationTypeName(operationID, "Query"),
+			HasHeaders:       len(headerParams) > 0,
+			HeaderParams:     headerParams,
+			HeaderParamsType: tsOperationTypeName(operationID, "Headers"),
+			HeadersRequired:  clientHeadersRequired(headerParams),
+			AcceptType:       acceptType,
+			ResponseMode:     responseMode,
+			RequestType:      requestType,
+			ResponseType:     responseType,
+			Deprecated:       route.Meta.Deprecated,
+		}
+		if route.Meta.Deprecated {
+			method.DeprecationNote = route.Meta.DeprecationNote
 		}
 		if len(route.Meta.Security.Alternatives) > 0 {
 			method.HasAuth = true
@@ -540,7 +591,7 @@ func clientPathParamsFor(route Route, req reflect.Type, typeFn func(reflect.Type
 	return out, nil
 }
 
-func applyExplicitClientParams(route Route, pathParams []clientPathParam, queryParams []clientQueryParam, typeFn func(reflect.Type) string) ([]clientPathParam, []clientQueryParam) {
+func applyExplicitClientParams(route Route, pathParams []clientPathParam, queryParams []clientQueryParam, headerParams []clientHeaderParam, typeFn func(reflect.Type) string) ([]clientPathParam, []clientQueryParam, []clientHeaderParam) {
 	pathByName := map[string]int{}
 	for i, param := range pathParams {
 		pathByName[param.Name] = i
@@ -548,6 +599,10 @@ func applyExplicitClientParams(route Route, pathParams []clientPathParam, queryP
 	queryByName := map[string]int{}
 	for i, param := range queryParams {
 		queryByName[param.Name] = i
+	}
+	headerByName := map[string]int{}
+	for i, param := range headerParams {
+		headerByName[param.Name] = i
 	}
 	for _, spec := range route.Meta.Params {
 		typ := typeFn(reflect.TypeOf(spec.Type))
@@ -574,9 +629,31 @@ func applyExplicitClientParams(route Route, pathParams []clientPathParam, queryP
 				queryByName[spec.Name] = len(queryParams)
 				queryParams = append(queryParams, param)
 			}
+		case ParamInHeader:
+			param := clientHeaderParam{
+				Name:     spec.Name,
+				Optional: !spec.Required,
+				Doc:      spec.Description,
+				Type:     typ,
+			}
+			if idx, ok := headerByName[spec.Name]; ok {
+				headerParams[idx] = param
+			} else {
+				headerByName[spec.Name] = len(headerParams)
+				headerParams = append(headerParams, param)
+			}
 		}
 	}
-	return pathParams, queryParams
+	return pathParams, queryParams, headerParams
+}
+
+func clientHeadersRequired(params []clientHeaderParam) bool {
+	for _, param := range params {
+		if !param.Optional {
+			return true
+		}
+	}
+	return false
 }
 
 func isArrayType(t reflect.Type) bool {
@@ -630,7 +707,7 @@ func clientJSONBodyFieldsFor(t reflect.Type) []clientBodyField {
 	out := make([]clientBodyField, 0, len(fields))
 	for _, jsonField := range fields {
 		field := jsonField.Field
-		if field.Tag.Get("path") != "" || field.Tag.Get("query") != "" {
+		if field.Tag.Get("path") != "" || field.Tag.Get("query") != "" || field.Tag.Get("header") != "" {
 			continue
 		}
 		out = append(out, clientBodyField{

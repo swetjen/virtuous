@@ -12,11 +12,12 @@ import (
 
 // ServeAllDocsOptions configures ServeAllDocs behavior.
 type ServeAllDocsOptions struct {
-	DocsEnabled  bool
-	DocsOptions  []DocOpt
-	ClientJSPath string
-	ClientTSPath string
-	ClientPYPath string
+	DocsEnabled    bool
+	DocsOptions    []DocOpt
+	ClientJSPath   string
+	ClientTSPath   string
+	ClientPYPath   string
+	ClientSpecPath string
 }
 
 // ServeAllDocsOpt mutates ServeAllDocsOptions.
@@ -58,6 +59,15 @@ func WithClientPYPath(path string) ServeAllDocsOpt {
 	}
 }
 
+// WithClientSpecPath overrides the client-spec JSON document route path.
+func WithClientSpecPath(path string) ServeAllDocsOpt {
+	return func(o *ServeAllDocsOptions) {
+		if path != "" {
+			o.ClientSpecPath = ensureLeadingSlash(path)
+		}
+	}
+}
+
 // WithoutDocs disables docs/OpenAPI route registration.
 func WithoutDocs() ServeAllDocsOpt {
 	return func(o *ServeAllDocsOptions) {
@@ -71,10 +81,11 @@ func WithoutDocs() ServeAllDocsOpt {
 func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
 	r.mustBeMutable()
 	config := ServeAllDocsOptions{
-		DocsEnabled:  true,
-		ClientJSPath: "/rpc/client.gen.js",
-		ClientTSPath: "/rpc/client.gen.ts",
-		ClientPYPath: "/rpc/client.gen.py",
+		DocsEnabled:    true,
+		ClientJSPath:   "/rpc/client.gen.js",
+		ClientTSPath:   "/rpc/client.gen.ts",
+		ClientPYPath:   "/rpc/client.gen.py",
+		ClientSpecPath: "/rpc/client.spec.json",
 	}
 	for _, opt := range opts {
 		opt(&config)
@@ -94,6 +105,10 @@ func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
 	if config.ClientPYPath != "" {
 		r.mux.Handle("GET "+config.ClientPYPath, wrapWithGuards(http.HandlerFunc(r.ServeClientPY), clientGuards))
 		r.logger.Info("rpc client py available", "path", config.ClientPYPath)
+	}
+	if config.ClientSpecPath != "" {
+		r.mux.Handle("GET "+config.ClientSpecPath, wrapWithGuards(http.HandlerFunc(r.ServeClientSpec), clientGuards))
+		r.logger.Info("rpc client spec available", "path", config.ClientSpecPath)
 	}
 }
 

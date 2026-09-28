@@ -11,7 +11,26 @@ import (
 var clientJSTemplate = template.Must(template.New("virtuous-rpc-js").Funcs(clientgen.TemplateFuncs()).Parse(`/**
  * @typedef {Object} AuthOptions
  * @property {string} [auth]
+ * @property {Object<string, string>} [headers] - Per-call headers; they override client-wide defaults but never framework-computed headers.
  */
+
+/**
+ * @typedef {Object} ClientOptions
+ * @property {Object<string, string>} [headers] - Default headers sent with every request.
+ * @property {Function} [fetch] - Transport hook replacing the global fetch.
+ */
+
+// _setHeader sets a header case-insensitively: any existing spelling of key
+// is removed before the new value is stored under the given spelling.
+function _setHeader(headers, key, value) {
+	const lower = key.toLowerCase()
+	for (const existing of Object.keys(headers)) {
+		if (existing.toLowerCase() === lower) {
+			delete headers[existing]
+		}
+	}
+	headers[key] = value
+}
 
 /**
  * @template E
@@ -61,14 +80,18 @@ function _errorEnvelope(body) {
 
 /**
  * @param {string} [basepath="/"]
+ * @param {ClientOptions} [clientOptions]
  * @returns {object}
  */
-export function createClient(basepath = "/") {
+export function createClient(basepath = "/", clientOptions = {}) {
 	return {
 {{- range $service := .Services }}
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
 			/**
+{{- if $method.Deprecated }}
+			 * @deprecated{{ if $method.DeprecationNote }} {{ jsdoc $method.DeprecationNote }}{{ end }}
+{{- end }}
 {{- if $method.HasBody }}
 			 * @param { {{- if $method.RequestType }}{{ $method.RequestType }}{{ else }}any{{ end }} } request
 			 * @param {AuthOptions} [options]
@@ -78,16 +101,25 @@ export function createClient(basepath = "/") {
 			 * @returns {Promise<{{- if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}any{{ end }}>} 
 			 */
 			async {{ $method.Name }}({{ if $method.HasBody }}request, {{ end }}options) {
-				const headers = {
-					"Accept": "application/json",
-					"Content-Type": "application/json",
+				// Header precedence: client-wide clientOptions.headers first,
+				// then per-call options.headers; framework-computed headers
+				// (Accept, Content-Type, auth) are applied last and cannot be
+				// overridden. The merge is case-insensitive.
+				const headers = {}
+				for (const [key, value] of Object.entries((clientOptions && clientOptions.headers) || {})) {
+					_setHeader(headers, key, String(value))
 				}
+				for (const [key, value] of Object.entries((options && options.headers) || {})) {
+					_setHeader(headers, key, String(value))
+				}
+				_setHeader(headers, "Accept", "application/json")
+				_setHeader(headers, "Content-Type", "application/json")
 				let url = basepath + {{ jsStr $method.Path }}
 {{- if $method.HasAuth }}
 				const authValue = options && options.auth
 				if (authValue) {
 {{- if eq $method.Auth.In "header" }}
-					headers[{{ jsStr $method.Auth.Param }}] = {{ if ne $method.Auth.Prefix "" }}{{ jsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue
+					_setHeader(headers, {{ jsStr $method.Auth.Param }}, {{ if ne $method.Auth.Prefix "" }}{{ jsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue)
 {{- end }}
 {{- if eq $method.Auth.In "query" }}
 					const sep = url.includes("?") ? "&" : "?"
@@ -98,7 +130,8 @@ export function createClient(basepath = "/") {
 {{- end }}
 				}
 {{- end }}
-				const response = await fetch(url, {
+				const fetchFn = (clientOptions && clientOptions.fetch) || fetch
+				const response = await fetchFn(url, {
 					method: "POST",
 					headers,
 {{- if $method.HasAuth }}

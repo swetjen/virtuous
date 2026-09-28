@@ -43,6 +43,12 @@ func CookieParam(name string, typ any) ParamSpec {
 	return ParamSpec{Name: name, In: ParamInCookie, Type: typ}
 }
 
+// ResponseHeader returns an explicit typed response header spec for use in
+// ResponseSpec.Headers. A nil typ documents the header as a string.
+func ResponseHeader(name string, typ any) ResponseHeaderSpec {
+	return ResponseHeaderSpec{Name: name, Type: typ}
+}
+
 // JSONBody returns an explicit JSON request body spec.
 func JSONBody(body any) *RequestBodySpec {
 	return &RequestBodySpec{

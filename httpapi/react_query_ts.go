@@ -40,6 +40,10 @@ type reactQueryTSMethod struct {
 	QueryParams             []clientQueryParam
 	QueryParamsType         string
 	HasQuery                bool
+	HeaderParams            []clientHeaderParam
+	HeaderParamsType        string
+	HasHeaders              bool
+	HeadersRequired         bool
 	HasBody                 bool
 	BodyOptional            bool
 	RequestType             string
@@ -56,6 +60,8 @@ type reactQueryTSMethod struct {
 	QueryOptionsParams      string
 	HookParams              string
 	EnabledExpr             string
+	Deprecated              bool
+	DeprecationNote         string
 }
 
 var reactQueryTSTemplate = template.Must(template.New("virtuous-react-query-ts").Funcs(clientgen.TemplateFuncs()).Parse(`{{ if or .HasQueries .HasMutations }}
@@ -65,6 +71,7 @@ import { {{ if .HasMutations }}useMutation{{ end }}{{ if and .HasQueries .HasMut
 export type RequestOptions = {
 	signal?: AbortSignal
 	auth?: RequestAuth
+	headers?: Record<string, string>
 }
 
 export type RequestAuth = {
@@ -81,6 +88,11 @@ export type AuthProvider = RequestAuth | (() => MaybePromise<RequestAuth | null 
 export type ClientOptions = {
 	baseUrl?: string
 	auth?: AuthProvider
+	// Default headers sent with every request; per-call RequestOptions.headers
+	// and framework-computed headers override them (see _request).
+	headers?: Record<string, string>
+	// Transport hook: replaces the global fetch for every request.
+	fetch?: typeof fetch
 }
 
 export class AuthNotReadyError extends Error {
@@ -105,11 +117,16 @@ export type {{ $method.PathParamsType }} = { {{- range $param := $method.PathPar
 {{- if $method.HasQuery }}
 export type {{ $method.QueryParamsType }} = { {{- range $param := $method.QueryParams }}{{ tsKey $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ $param.Type }}; {{- end }} }
 {{ end -}}
+{{- if $method.HasHeaders }}
+export type {{ $method.HeaderParamsType }} = { {{- range $param := $method.HeaderParams }}{{ tsKey $param.Name }}{{ if $param.Optional }}?{{ end }}: {{ $param.Type }}; {{- end }} }
+{{ end -}}
 {{- end }}{{- end }}
 export function createClient(options: ClientOptions = {}) {
 	let clientOptions: ClientOptions = {
 		baseUrl: options.baseUrl ?? "/",
 		auth: options.auth,
+		headers: options.headers,
+		fetch: options.fetch,
 	}
 	return {
 		configure(nextOptions: ClientOptions) {
@@ -118,7 +135,7 @@ export function createClient(options: ClientOptions = {}) {
 {{- range $service := .ClientServices }}
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
-			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: {{ $method.PathParamsType }}, {{ end }}{{ if $method.HasBody }}request{{ if $method.BodyOptional }}?{{ end }}: {{ $method.RequestType }}, {{ end }}{{ if $method.HasQuery }}query?: {{ $method.QueryParamsType }}, {{ end }}options?: RequestOptions): Promise<{{ if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}> {
+			async {{ $method.Name }}({{ if $method.PathParams }}pathParams: {{ $method.PathParamsType }}, {{ end }}{{ if $method.HasBody }}request{{ if not $method.BodyOptional }}: {{ $method.RequestType }}{{ else if $method.HeadersRequired }}: {{ $method.RequestType }} | undefined{{ else }}?: {{ $method.RequestType }}{{ end }}, {{ end }}{{ if $method.HasQuery }}query{{ if $method.HeadersRequired }}: {{ $method.QueryParamsType }} | undefined{{ else }}?: {{ $method.QueryParamsType }}{{ end }}, {{ end }}{{ if $method.HasHeaders }}headers{{ if not $method.HeadersRequired }}?{{ end }}: {{ $method.HeaderParamsType }}, {{ end }}options?: RequestOptions): Promise<{{ if eq $method.ResponseMode "none" }}void{{ else if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}unknown{{ end }}> {
 				let path = {{ tsStr $method.Path }}
 {{- if $method.PathParams }}
 				if (!pathParams) {
@@ -155,6 +172,13 @@ export function createClient(options: ClientOptions = {}) {
 					query: [
 {{- range $param := $method.QueryParams }}
 						[{{ tsStr $param.Name }}, {{ jsGetOpt "query" $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }}],
+{{- end }}
+					],
+{{- end }}
+{{- if $method.HasHeaders }}
+					headerParams: [
+{{- range $param := $method.HeaderParams }}
+						[{{ tsStr $param.Name }}, {{ jsGetOpt "headers" $param.Name }}, {{ if $param.Optional }}true{{ else }}false{{ end }}],
 {{- end }}
 					],
 {{- end }}
@@ -196,15 +220,46 @@ type RequestConfig = {
 	bodyMode?: string
 	bodyFields?: BodyField[]
 	query?: QueryItem[]
+	headerParams?: QueryItem[]
 	auth?: AuthGuard[][]
 	cookie?: boolean
 	options?: RequestOptions
 }
 
+// _setHeader sets a header case-insensitively: any existing spelling of key
+// is removed before the new value is stored under the given spelling.
+function _setHeader(headers: Record<string, string>, key: string, value: string) {
+	const lower = key.toLowerCase()
+	for (const existing of Object.keys(headers)) {
+		if (existing.toLowerCase() === lower) {
+			delete headers[existing]
+		}
+	}
+	headers[key] = value
+}
+
 async function _request<T>(clientOptions: ClientOptions, config: RequestConfig): Promise<T> {
-	const headers: Record<string, string> = { "Accept": config.accept }
+	// Header precedence: client-wide ClientOptions.headers defaults first,
+	// then declared typed header params, then per-call RequestOptions.headers.
+	// Framework-computed headers (Accept, Content-Type when a body is sent,
+	// and auth headers) are applied last and cannot be overridden. The merge
+	// is case-insensitive.
+	const headers: Record<string, string> = {}
+	for (const [key, value] of Object.entries(clientOptions.headers ?? {})) {
+		_setHeader(headers, key, String(value))
+	}
+	for (const item of config.headerParams ?? []) {
+		if (item[1] === undefined || item[1] === null) {
+			continue
+		}
+		_setHeader(headers, item[0], String(item[1]))
+	}
+	for (const [key, value] of Object.entries(config.options?.headers ?? {})) {
+		_setHeader(headers, key, String(value))
+	}
+	_setHeader(headers, "Accept", config.accept)
 	if (config.contentType) {
-		headers["Content-Type"] = config.contentType
+		_setHeader(headers, "Content-Type", config.contentType)
 	}
 	let url = (clientOptions.baseUrl ?? "/") + config.path
 	for (const item of config.query ?? []) {
@@ -243,7 +298,8 @@ async function _request<T>(clientOptions: ClientOptions, config: RequestConfig):
 	if (body !== undefined) {
 		init.body = body
 	}
-	const response = await fetch(url, init)
+	const fetchFn = clientOptions.fetch ?? fetch
+	const response = await fetchFn(url, init)
 	return await _decodeResponse<T>(response, config.response)
 }
 
@@ -254,7 +310,7 @@ async function _resolveAuth(provider: AuthProvider | undefined): Promise<Request
 function _applyAuth(url: string, headers: Record<string, string>, guard: AuthGuard, value: string): string {
 	const authValue = guard.prefix ? guard.prefix + " " + value : value
 	if (guard.in === "header") {
-		headers[guard.param] = authValue
+		_setHeader(headers, guard.param, authValue)
 	} else if (guard.in === "query") {
 		url = _appendQuery(url, guard.param, authValue, false)
 	} else if (guard.in === "cookie") {
@@ -411,11 +467,13 @@ export function configureVirtuousClient(options: ClientOptions) {
 }
 {{ range $service := .Services }}{{ range $method := $service.Methods }}
 {{- if $method.IsQuery }}
-export function {{ $method.QueryKeyName }}({{ $method.QueryKeyParams }}) {
+{{ if $method.Deprecated }}/** @deprecated{{ if $method.DeprecationNote }} {{ jsdoc $method.DeprecationNote }}{{ end }} */
+{{ end }}export function {{ $method.QueryKeyName }}({{ $method.QueryKeyParams }}) {
 	return [{{ $method.QueryKeyArgs }}] as const
 }
 
-export function {{ $method.QueryOptionsName }}({{ $method.QueryOptionsParams }}) {
+{{ if $method.Deprecated }}/** @deprecated{{ if $method.DeprecationNote }} {{ jsdoc $method.DeprecationNote }}{{ end }} */
+{{ end }}export function {{ $method.QueryOptionsName }}({{ $method.QueryOptionsParams }}) {
 	return {
 		queryKey: {{ $method.QueryKeyName }}({{ $method.QueryKeyCallArgs }}),
 		queryFn: ({ signal }: { signal?: AbortSignal }) => virtuousClient.{{ $method.ServiceName }}.{{ $method.Name }}({{ $method.QueryCallArgs }}),
@@ -425,14 +483,16 @@ export function {{ $method.QueryOptionsName }}({{ $method.QueryOptionsParams }})
 	}
 }
 
-export function {{ $method.HookName }}({{ $method.HookParams }}) {
+{{ if $method.Deprecated }}/** @deprecated{{ if $method.DeprecationNote }} {{ jsdoc $method.DeprecationNote }}{{ end }} */
+{{ end }}export function {{ $method.HookName }}({{ $method.HookParams }}) {
 	return useQuery({
 		...{{ $method.QueryOptionsName }}({{ $method.QueryOptionsArgs }}),
 		...queryOptions,
 	})
 }
 {{- else }}
-export function {{ $method.HookName }}({{ $method.HookParams }}) {
+{{ if $method.Deprecated }}/** @deprecated{{ if $method.DeprecationNote }} {{ jsdoc $method.DeprecationNote }}{{ end }} */
+{{ end }}export function {{ $method.HookName }}({{ $method.HookParams }}) {
 	return useMutation({
 		mutationFn: {{ if $method.MutationVarsArg }}({{ $method.MutationVarsArg }}){{ else }}(){{ end }} => virtuousClient.{{ $method.ServiceName }}.{{ $method.Name }}({{ $method.MutationCallArgs }}),
 		...mutationOptions,
@@ -574,10 +634,16 @@ func buildReactQueryTSMethod(serviceName string, method clientMethod, nameCollid
 		QueryParams:      method.QueryParams,
 		QueryParamsType:  method.QueryParamsType,
 		HasQuery:         method.HasQuery,
+		HeaderParams:     method.HeaderParams,
+		HeaderParamsType: method.HeaderParamsType,
+		HasHeaders:       method.HasHeaders,
+		HeadersRequired:  method.HeadersRequired,
 		HasBody:          method.HasBody,
 		BodyOptional:     method.BodyOptional,
 		RequestType:      reactQueryRequestType(method.RequestType),
 		ResponseType:     reactQueryResponseType(method),
+		Deprecated:       method.Deprecated,
+		DeprecationNote:  method.DeprecationNote,
 	}
 	if rqMethod.IsQuery {
 		fillReactQueryQueryArgs(&rqMethod)
@@ -615,24 +681,48 @@ func fillReactQueryQueryArgs(method *reactQueryTSMethod) {
 		method.EnabledExpr = reactQueryEnabledExpr(method.PathParams)
 	}
 	if method.HasBody {
-		optional := ""
+		requestParam := "request: " + method.RequestType
 		if method.BodyOptional {
-			optional = "?"
+			// A required headers param may follow, and TS forbids required
+			// params after optional ones, so use an explicit undefined union.
+			if method.HeadersRequired {
+				requestParam = "request: " + method.RequestType + " | undefined"
+			} else {
+				requestParam = "request?: " + method.RequestType
+			}
 		}
-		keyParams = append(keyParams, "request"+optional+": "+method.RequestType)
+		keyParams = append(keyParams, requestParam)
 		keyArgs = append(keyArgs, "request")
-		optionsParams = append(optionsParams, "request"+optional+": "+method.RequestType)
+		optionsParams = append(optionsParams, requestParam)
 		optionsArgs = append(optionsArgs, "request")
-		hookParams = append(hookParams, "request"+optional+": "+method.RequestType)
+		hookParams = append(hookParams, requestParam)
 		rawCallArgs = append(rawCallArgs, "request")
 	}
 	if method.HasQuery {
-		keyParams = append(keyParams, "query?: "+method.QueryParamsType)
+		queryParam := "query?: " + method.QueryParamsType
+		if method.HeadersRequired {
+			queryParam = "query: " + method.QueryParamsType + " | undefined"
+		}
+		keyParams = append(keyParams, queryParam)
 		keyArgs = append(keyArgs, "query")
-		optionsParams = append(optionsParams, "query?: "+method.QueryParamsType)
+		optionsParams = append(optionsParams, queryParam)
 		optionsArgs = append(optionsArgs, "query")
-		hookParams = append(hookParams, "query?: "+method.QueryParamsType)
+		hookParams = append(hookParams, queryParam)
 		rawCallArgs = append(rawCallArgs, "query")
+	}
+	if method.HasHeaders {
+		headersParam := "headers?: " + method.HeaderParamsType
+		if method.HeadersRequired {
+			headersParam = "headers: " + method.HeaderParamsType
+		}
+		// The query key tolerates undefined and earlier key params (such as
+		// pathParams) stay optional, so the key param is always optional.
+		keyParams = append(keyParams, "headers?: "+method.HeaderParamsType)
+		keyArgs = append(keyArgs, "headers")
+		optionsParams = append(optionsParams, headersParam)
+		optionsArgs = append(optionsArgs, "headers")
+		hookParams = append(hookParams, headersParam)
+		rawCallArgs = append(rawCallArgs, "headers")
 	}
 	hookParams = append(hookParams, "queryOptions?: Omit<UseQueryOptions<"+method.ResponseType+", Error>, 'queryKey' | 'queryFn'>")
 	rawCallArgs = append(rawCallArgs, "{ signal }")
@@ -666,7 +756,7 @@ func fillReactQueryMutationArgs(method *reactQueryTSMethod) {
 	}
 	method.HookParams += ">"
 
-	callArgs := make([]string, 0, 4)
+	callArgs := make([]string, 0, 5)
 	if method.HasPathParams {
 		callArgs = append(callArgs, "variables.pathParams")
 	}
@@ -680,11 +770,14 @@ func fillReactQueryMutationArgs(method *reactQueryTSMethod) {
 	if method.HasQuery {
 		callArgs = append(callArgs, "variables.query")
 	}
+	if method.HasHeaders {
+		callArgs = append(callArgs, "variables.headers")
+	}
 	method.MutationCallArgs = strings.Join(callArgs, ", ")
 }
 
 func (method reactQueryTSMethod) optionalBodyOnlyMutation() bool {
-	return method.HasBody && method.BodyOptional && !method.HasPathParams && !method.HasQuery
+	return method.HasBody && method.BodyOptional && !method.HasPathParams && !method.HasQuery && !method.HasHeaders
 }
 
 func reactQueryMutationVarFields(method *reactQueryTSMethod) []string {
@@ -701,6 +794,13 @@ func reactQueryMutationVarFields(method *reactQueryTSMethod) []string {
 	}
 	if method.HasQuery {
 		fields = append(fields, "query?: "+method.QueryParamsType)
+	}
+	if method.HasHeaders {
+		optional := "?"
+		if method.HeadersRequired {
+			optional = ""
+		}
+		fields = append(fields, "headers"+optional+": "+method.HeaderParamsType)
 	}
 	return fields
 }

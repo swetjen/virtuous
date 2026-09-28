@@ -52,6 +52,9 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `rpc.WithDocsPath(path string)`
 - `rpc.WithOpenAPIPath(path string)`
 - `(*rpc.Router).HandleRPC(fn any, guards ...rpc.Guard)`
+- `rpc.RouteOption` (per-handler option accepted by `HandleRPC` in the guards position; carries no auth spec or middleware)
+- `rpc.Deprecated(note ...string)` (marks the handler deprecated in OpenAPI, the client spec, and generated clients)
+- `rpc.Route` (`Deprecated`, `DeprecationNote` fields populated by `rpc.Deprecated`)
 - `(*rpc.Router).DocsHandler(opts ...rpc.DocOpt)`
 - `(*rpc.Router).AdminHandler(opts ...rpc.DocOpt)`
 - `(*rpc.Router).ServeDocs(opts ...rpc.DocOpt)`
@@ -65,6 +68,10 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `(*rpc.Router).WriteClientJS(w io.Writer)`
 - `(*rpc.Router).WriteClientTS(w io.Writer)`
 - `(*rpc.Router).WriteClientPY(w io.Writer)`
+- `(*rpc.Router).ClientSpec()`
+- `(*rpc.Router).WriteClientSpecJSON(w io.Writer)`
+- `(*rpc.Router).ServeClientSpec(w http.ResponseWriter, r *http.Request)`
+- `rpc.WithClientSpecPath(path string)`
 
 ## httpapi package
 
@@ -79,6 +86,7 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `(*httpapi.Router).Describe(pattern string, req any, resp any, meta httpapi.HandlerMeta, guards ...httpapi.Guard)`
 - `httpapi.Wrap(handler http.Handler, req any, resp any, meta httpapi.HandlerMeta)`
 - `httpapi.WrapFunc(handler func(http.ResponseWriter, *http.Request), req any, resp any, meta httpapi.HandlerMeta)`
+- `httpapi.HandlerMeta` (`Service`, `Method`, `OperationID`, `Summary`, `Description`, `Tags`, `Params`, `RequestBody`, `Responses`, `Security`, `Deprecated`, `DeprecationNote`)
 - `httpapi.TypedHandler`
 - `httpapi.TypedHandlerFunc`
 - `httpapi.Optional[T any](req ...T)`
@@ -89,6 +97,8 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `httpapi.MultipartBody(body any)`
 - `httpapi.File`
 - `httpapi.ResponseSpec`
+- `httpapi.ResponseHeaderSpec`
+- `httpapi.ResponseHeader(name string, typ any)`
 - `httpapi.SecurityAny(guards ...httpapi.GuardSpec)`
 - `httpapi.SecurityAll(guards ...httpapi.GuardSpec)`
 - `httpapi.AuthAny(guards ...httpapi.Guard)`
@@ -126,6 +136,18 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `(*httpapi.Router).ServeReactQueryTS(w http.ResponseWriter, r *http.Request)`
 - `(*httpapi.Router).ServeReactQueryTSHash(w http.ResponseWriter, r *http.Request)`
 - `httpapi.WithReactQueryTSPath(path string)`
+- `(*httpapi.Router).ClientSpec()`
+- `(*httpapi.Router).WriteClientSpecJSON(w io.Writer)`
+- `(*httpapi.Router).ServeClientSpec(w http.ResponseWriter, r *http.Request)`
+- `httpapi.WithClientSpecPath(path string)`
+
+## clientspec package
+
+- `clientspec.SpecVersion`
+- `clientspec.Document` (and its member types: `Service`, `Method`, `PathParam`,
+  `QueryParam`, `HeaderParam`, `Body`, `BodyField`, `Response`,
+  `AuthRequirement`, `AuthParam`, `Object`, `Field`)
+- `(clientspec.Document).WriteJSON(w io.Writer)`
 
 ## guard package
 

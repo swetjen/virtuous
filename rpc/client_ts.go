@@ -10,6 +10,28 @@ import (
 
 var clientTSTemplate = template.Must(template.New("virtuous-rpc-ts").Funcs(clientgen.TemplateFuncs()).Parse(`export type AuthOptions = {
 	auth?: string
+	// Per-call headers; they override client-wide defaults but never
+	// framework-computed headers (Accept, Content-Type, auth).
+	headers?: Record<string, string>
+}
+
+export type ClientOptions = {
+	// Default headers sent with every request.
+	headers?: Record<string, string>
+	// Transport hook: replaces the global fetch for every request.
+	fetch?: typeof fetch
+}
+
+// _setHeader sets a header case-insensitively: any existing spelling of key
+// is removed before the new value is stored under the given spelling.
+function _setHeader(headers: Record<string, string>, key: string, value: string) {
+	const lower = key.toLowerCase()
+	for (const existing of Object.keys(headers)) {
+		if (existing.toLowerCase() === lower) {
+			delete headers[existing]
+		}
+	}
+	headers[key] = value
 }
 
 export class RPCError<E = unknown> extends Error {
@@ -50,22 +72,32 @@ export interface {{$object.Name}} {
 {{- end}}
 }
 {{end}}
-export function createClient(basepath: string = "/") {
+export function createClient(basepath: string = "/", clientOptions: ClientOptions = {}) {
 	return {
 {{- range $service := .Services }}
 		{{ $service.Name }}: {
 {{- range $method := $service.Methods }}
-			async {{ $method.Name }}({{ if $method.HasBody }}request: {{ $method.RequestType }}, {{ end }}options?: AuthOptions): Promise<{{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}void{{ end }}> {
-				const headers: Record<string, string> = {
-					"Accept": "application/json",
-					"Content-Type": "application/json",
+			{{ if $method.Deprecated }}/** @deprecated{{ if $method.DeprecationNote }} {{ jsdoc $method.DeprecationNote }}{{ end }} */
+			{{ end }}async {{ $method.Name }}({{ if $method.HasBody }}request: {{ $method.RequestType }}, {{ end }}options?: AuthOptions): Promise<{{ if $method.ResponseType }}{{ $method.ResponseType }}{{ else }}void{{ end }}> {
+				// Header precedence: client-wide clientOptions.headers first,
+				// then per-call options.headers; framework-computed headers
+				// (Accept, Content-Type, auth) are applied last and cannot be
+				// overridden. The merge is case-insensitive.
+				const headers: Record<string, string> = {}
+				for (const [key, value] of Object.entries(clientOptions.headers ?? {})) {
+					_setHeader(headers, key, String(value))
 				}
+				for (const [key, value] of Object.entries((options && options.headers) ?? {})) {
+					_setHeader(headers, key, String(value))
+				}
+				_setHeader(headers, "Accept", "application/json")
+				_setHeader(headers, "Content-Type", "application/json")
 				let url = basepath + {{ tsStr $method.Path }}
 {{- if $method.HasAuth }}
 				const authValue = options && options.auth
 				if (authValue) {
 {{- if eq $method.Auth.In "header" }}
-					headers[{{ tsStr $method.Auth.Param }}] = {{ if ne $method.Auth.Prefix "" }}{{ tsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue
+					_setHeader(headers, {{ tsStr $method.Auth.Param }}, {{ if ne $method.Auth.Prefix "" }}{{ tsStr (printf "%s " $method.Auth.Prefix) }} + {{ end }}authValue)
 {{- end }}
 {{- if eq $method.Auth.In "query" }}
 					const sep = url.includes("?") ? "&" : "?"
@@ -76,7 +108,8 @@ export function createClient(basepath: string = "/") {
 {{- end }}
 				}
 {{- end }}
-				const response = await fetch(url, {
+				const fetchFn = clientOptions.fetch ?? fetch
+				const response = await fetchFn(url, {
 					method: "POST",
 					headers,
 {{- if $method.HasAuth }}

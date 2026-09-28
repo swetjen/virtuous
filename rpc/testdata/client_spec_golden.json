@@ -1,0 +1,184 @@
+{
+  "specVersion": "1.0",
+  "module": "github.com/swetjen/virtuous",
+  "version": "vGOLDEN",
+  "services": [
+    {
+      "name": "billing",
+      "methods": [
+        {
+          "name": "ListInvoices",
+          "httpMethod": "POST",
+          "path": "/rpc/billing/list-invoices",
+          "body": {
+            "mode": "json",
+            "mediaType": "application/json",
+            "tsType": "InvoiceQuery",
+            "pyType": "\"InvoiceQuery\""
+          },
+          "response": {
+            "mode": "json",
+            "mediaType": "application/json",
+            "tsType": "Page_Invoice",
+            "pyType": "\"Page_Invoice\""
+          },
+          "auth": [
+            {
+              "guards": [
+                {
+                  "name": "TokenAuth",
+                  "in": "header",
+                  "param": "Authorization",
+                  "prefix": "Bearer ",
+                  "paramName": "tokenAuth"
+                },
+                {
+                  "name": "SessionAuth",
+                  "in": "cookie",
+                  "param": "session",
+                  "paramName": "sessionAuth"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "ListInvoicesLegacy",
+          "httpMethod": "POST",
+          "path": "/rpc/billing/list-invoices-legacy",
+          "response": {
+            "mode": "json",
+            "mediaType": "application/json",
+            "tsType": "Page_Invoice",
+            "pyType": "\"Page_Invoice\""
+          },
+          "deprecated": true,
+          "deprecationNote": "Use billing.ListInvoices."
+        }
+      ]
+    },
+    {
+      "name": "media",
+      "methods": [
+        {
+          "name": "GetAsset",
+          "httpMethod": "POST",
+          "path": "/rpc/media/get-asset",
+          "response": {
+            "mode": "json",
+            "mediaType": "application/json",
+            "tsType": "Asset",
+            "pyType": "\"Asset\""
+          },
+          "auth": [
+            {
+              "guards": [
+                {
+                  "name": "KeyAuth",
+                  "in": "query",
+                  "param": "api_key",
+                  "paramName": "keyAuth"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "name": "Asset",
+      "fields": [
+        {
+          "name": "id",
+          "tsType": "string",
+          "pyType": "str"
+        }
+      ]
+    },
+    {
+      "name": "Invoice",
+      "fields": [
+        {
+          "name": "id",
+          "tsType": "string",
+          "pyType": "str",
+          "doc": "Invoice id"
+        },
+        {
+          "name": "amount",
+          "tsType": "number",
+          "pyType": "float"
+        },
+        {
+          "name": "note",
+          "tsType": "string",
+          "pyType": "str",
+          "optional": true,
+          "nullable": true,
+          "doc": "Optional note"
+        },
+        {
+          "name": "paidAt",
+          "tsType": "string",
+          "pyType": "str",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "InvoiceQuery",
+      "fields": [
+        {
+          "name": "limit",
+          "tsType": "number",
+          "pyType": "int"
+        },
+        {
+          "name": "cursor",
+          "tsType": "string",
+          "pyType": "str",
+          "optional": true,
+          "doc": "Opaque page cursor"
+        }
+      ]
+    },
+    {
+      "name": "Page_Invoice",
+      "fields": [
+        {
+          "name": "items",
+          "tsType": "Invoice[]",
+          "pyType": "list[\"Invoice\"]"
+        },
+        {
+          "name": "total",
+          "tsType": "number",
+          "pyType": "int"
+        }
+      ]
+    }
+  ],
+  "authParams": [
+    {
+      "name": "TokenAuth",
+      "in": "header",
+      "param": "Authorization",
+      "prefix": "Bearer ",
+      "paramName": "tokenAuth"
+    },
+    {
+      "name": "SessionAuth",
+      "in": "cookie",
+      "param": "session",
+      "paramName": "sessionAuth"
+    },
+    {
+      "name": "KeyAuth",
+      "in": "query",
+      "param": "api_key",
+      "paramName": "keyAuth"
+    }
+  ]
+}

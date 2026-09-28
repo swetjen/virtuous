@@ -24,9 +24,21 @@ type clientMethod struct {
 	HasAuth      bool
 	Auth         GuardSpec
 	AuthParam    string
+	AuthGuards   []clientAuthGuard
 	RequestType  string
 	ResponseType string
 	ErrorType    string
+	// Deprecated and DeprecationNote come from the rpc.Deprecated route
+	// option and only drive documentation tags in generated clients.
+	Deprecated      bool
+	DeprecationNote string
+}
+
+// clientAuthGuard pairs a guard spec with the client-facing parameter name
+// the generators bind its credential to.
+type clientAuthGuard struct {
+	Spec      GuardSpec
+	ParamName string
 }
 
 type clientObject = schema.Object
@@ -84,13 +96,27 @@ func buildClientSpecWith(
 			RequestType:  requestType,
 			ResponseType: responseType,
 			ErrorType:    responseType,
+			Deprecated:   route.Deprecated,
+		}
+		if route.Deprecated {
+			method.DeprecationNote = route.DeprecationNote
 		}
 		if len(route.Guards) > 0 {
 			// Current client templates expose a single auth input, so they bind
-			// to the first declared guard for the route.
+			// to the first declared guard for the route. AuthGuards carries the
+			// full ANDed guard list for the exported client-spec document.
 			method.HasAuth = true
 			method.Auth = route.Guards[0]
 			method.AuthParam = authParamName(route.Guards[0].Name)
+			for _, guardSpec := range route.Guards {
+				if guardSpec.Name == "" {
+					continue
+				}
+				method.AuthGuards = append(method.AuthGuards, clientAuthGuard{
+					Spec:      guardSpec,
+					ParamName: authParamName(guardSpec.Name),
+				})
+			}
 		}
 		cs.Methods = append(cs.Methods, method)
 	}

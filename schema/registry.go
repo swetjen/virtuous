@@ -120,6 +120,17 @@ func (r *Registry) Objects() []Object {
 	return r.ObjectsWith(r.jsType)
 }
 
+// ObjectNames returns the schema name assigned to each registered object
+// type. It lets callers correlate objects across registries that named the
+// same Go types differently (for example JS- and Python-oriented builds).
+func (r *Registry) ObjectNames() map[reflect.Type]string {
+	out := make(map[reflect.Type]string, len(r.objects))
+	for typ, obj := range r.objects {
+		out[typ] = obj.Name
+	}
+	return out
+}
+
 // JSType renders the JavaScript type for a value.
 func (r *Registry) JSType(v any) string {
 	return r.jsType(reflect.TypeOf(v))

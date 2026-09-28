@@ -100,6 +100,7 @@ Default `ServeAllDocs()` endpoints:
 - Docs: `/rpc/docs/`
 - OpenAPI: `/rpc/openapi.json`
 - Clients: `/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`
+- Client spec JSON: `/rpc/client.spec.json`
 - Observability redirect: `/rpc/_virtuous/observability`
 - Metrics JSON: `/rpc/_virtuous/metrics`
 

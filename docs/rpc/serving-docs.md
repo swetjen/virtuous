@@ -83,6 +83,8 @@ Default client paths:
 - JS client: `/rpc/client.gen.js`
 - TS client: `/rpc/client.gen.ts`
 - Python client: `/rpc/client.gen.py`
+- Client spec JSON: `/rpc/client.spec.json` (the versioned, machine-readable
+  client model; see [Client Codegen](../agents/client-codegen.md))
 
 ## DocsHandler and AdminHandler (mountable)
 

@@ -16,4 +16,8 @@ type Route struct {
 	RequestType  reflect.Type
 	ResponseType reflect.Type
 	Guards       []GuardSpec
+	// Deprecated and DeprecationNote are set by the rpc.Deprecated route
+	// option; see Deprecated for how they surface in OpenAPI and clients.
+	Deprecated      bool
+	DeprecationNote string
 }

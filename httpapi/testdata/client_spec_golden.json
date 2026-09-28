@@ -1,0 +1,348 @@
+{
+  "specVersion": "1.0",
+  "module": "github.com/swetjen/virtuous",
+  "version": "vGOLDEN",
+  "services": [
+    {
+      "name": "Billing",
+      "methods": [
+        {
+          "name": "create",
+          "operationId": "billing_invoice_create",
+          "summary": "Create an invoice",
+          "httpMethod": "POST",
+          "path": "/billing/invoices",
+          "body": {
+            "mode": "json",
+            "mediaType": "application/json",
+            "optional": true,
+            "tsType": "BillingspecFixtureInvoiceCreateRequest",
+            "pyType": "\"BillingspecFixtureInvoiceCreateRequest\"",
+            "fields": [
+              {
+                "name": "amount",
+                "wireName": "amount"
+              },
+              {
+                "name": "note",
+                "wireName": "note",
+                "optional": true
+              }
+            ]
+          },
+          "response": {
+            "mode": "json",
+            "mediaType": "application/json",
+            "tsType": "specFixtureInvoice",
+            "pyType": "\"specFixtureInvoice\"",
+            "headers": [
+              {
+                "name": "X-Next-Cursor",
+                "tsType": "string",
+                "pyType": "str",
+                "optional": true,
+                "description": "Continuation cursor for the next page."
+              },
+              {
+                "name": "X-Total-Count",
+                "tsType": "number",
+                "pyType": "int"
+              }
+            ]
+          }
+        },
+        {
+          "name": "get",
+          "operationId": "billing_invoice_get",
+          "summary": "Fetch one invoice",
+          "httpMethod": "GET",
+          "path": "/billing/invoices/{invoiceId}",
+          "pathParams": [
+            {
+              "name": "invoiceId",
+              "tsType": "string",
+              "pyType": "str"
+            }
+          ],
+          "queryParams": [
+            {
+              "name": "limit",
+              "tsType": "number",
+              "pyType": "int"
+            },
+            {
+              "name": "expand",
+              "tsType": "string[]",
+              "pyType": "list[str]",
+              "optional": true,
+              "array": true,
+              "doc": "Relations to expand"
+            }
+          ],
+          "headerParams": [
+            {
+              "name": "X-Tenant",
+              "tsType": "string",
+              "pyType": "str",
+              "doc": "Tenant id"
+            },
+            {
+              "name": "X-Trace",
+              "tsType": "string",
+              "pyType": "str",
+              "optional": true
+            }
+          ],
+          "response": {
+            "mode": "json",
+            "mediaType": "application/json",
+            "tsType": "BillingspecFixturePage_specFixtureInvoice",
+            "pyType": "\"BillingspecFixturePage_specFixtureInvoice\""
+          },
+          "auth": [
+            {
+              "guards": [
+                {
+                  "name": "TokenAuth",
+                  "in": "header",
+                  "param": "Authorization",
+                  "prefix": "Bearer ",
+                  "paramName": "tokenAuth"
+                }
+              ]
+            },
+            {
+              "guards": [
+                {
+                  "name": "KeyAuth",
+                  "in": "query",
+                  "param": "api_key",
+                  "paramName": "keyAuth"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "listLegacy",
+          "operationId": "billing_invoice_list_legacy",
+          "summary": "List invoices (legacy)",
+          "httpMethod": "GET",
+          "path": "/billing/invoices",
+          "response": {
+            "mode": "json",
+            "mediaType": "application/json",
+            "tsType": "BillingspecFixturePage_specFixtureInvoice",
+            "pyType": "\"BillingspecFixturePage_specFixtureInvoice\""
+          },
+          "deprecated": true,
+          "deprecationNote": "Use Billing.Get with an invoice id."
+        }
+      ]
+    },
+    {
+      "name": "Media",
+      "methods": [
+        {
+          "name": "callback",
+          "operationId": "media_callback",
+          "httpMethod": "POST",
+          "path": "/media/callbacks",
+          "body": {
+            "mode": "form",
+            "mediaType": "application/x-www-form-urlencoded",
+            "tsType": "MediaspecFixtureCallbackForm",
+            "pyType": "\"MediaspecFixtureCallbackForm\"",
+            "fields": [
+              {
+                "name": "mode",
+                "wireName": "hub.mode"
+              },
+              {
+                "name": "token",
+                "wireName": "hub.verify_token"
+              }
+            ]
+          },
+          "response": {
+            "mode": "none",
+            "mediaType": "application/json"
+          }
+        },
+        {
+          "name": "upload",
+          "operationId": "media_asset_upload",
+          "httpMethod": "POST",
+          "path": "/media/assets",
+          "body": {
+            "mode": "multipart",
+            "mediaType": "multipart/form-data",
+            "tsType": "MediaspecFixtureUploadForm",
+            "pyType": "\"MediaspecFixtureUploadForm\"",
+            "fields": [
+              {
+                "name": "file",
+                "wireName": "file",
+                "file": true
+              },
+              {
+                "name": "label",
+                "wireName": "label",
+                "optional": true
+              }
+            ]
+          },
+          "response": {
+            "mode": "json",
+            "mediaType": "application/json",
+            "tsType": "MediaspecFixtureAsset",
+            "pyType": "\"MediaspecFixtureAsset\""
+          },
+          "auth": [
+            {
+              "guards": [
+                {
+                  "name": "SessionAuth",
+                  "in": "cookie",
+                  "param": "session",
+                  "paramName": "sessionAuth"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "name": "BillingspecFixtureInvoiceCreateRequest",
+      "fields": [
+        {
+          "name": "amount",
+          "tsType": "number",
+          "pyType": "float"
+        },
+        {
+          "name": "note",
+          "tsType": "string",
+          "pyType": "str",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "BillingspecFixturePage_specFixtureInvoice",
+      "fields": [
+        {
+          "name": "items",
+          "tsType": "specFixtureInvoice[]",
+          "pyType": "list[\"specFixtureInvoice\"]"
+        },
+        {
+          "name": "total",
+          "tsType": "number",
+          "pyType": "int"
+        },
+        {
+          "name": "more",
+          "tsType": "boolean",
+          "pyType": "bool",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "MediaspecFixtureAsset",
+      "fields": [
+        {
+          "name": "id",
+          "tsType": "string",
+          "pyType": "str"
+        }
+      ]
+    },
+    {
+      "name": "MediaspecFixtureCallbackForm",
+      "fields": [
+        {
+          "name": "mode",
+          "tsType": "string",
+          "pyType": "str"
+        },
+        {
+          "name": "token",
+          "tsType": "string",
+          "pyType": "str"
+        }
+      ]
+    },
+    {
+      "name": "MediaspecFixtureUploadForm",
+      "fields": [
+        {
+          "name": "file",
+          "tsType": "File|Blob",
+          "pyType": "bytes",
+          "doc": "Asset file"
+        },
+        {
+          "name": "label",
+          "tsType": "string",
+          "pyType": "str"
+        }
+      ]
+    },
+    {
+      "name": "specFixtureInvoice",
+      "fields": [
+        {
+          "name": "id",
+          "tsType": "string",
+          "pyType": "str",
+          "doc": "Invoice id"
+        },
+        {
+          "name": "amount",
+          "tsType": "number",
+          "pyType": "float"
+        },
+        {
+          "name": "note",
+          "tsType": "string",
+          "pyType": "str",
+          "optional": true,
+          "nullable": true,
+          "doc": "Optional note"
+        },
+        {
+          "name": "paidAt",
+          "tsType": "string",
+          "pyType": "str",
+          "nullable": true
+        }
+      ]
+    }
+  ],
+  "authParams": [
+    {
+      "name": "TokenAuth",
+      "in": "header",
+      "param": "Authorization",
+      "prefix": "Bearer ",
+      "paramName": "tokenAuth"
+    },
+    {
+      "name": "KeyAuth",
+      "in": "query",
+      "param": "api_key",
+      "paramName": "keyAuth"
+    },
+    {
+      "name": "SessionAuth",
+      "in": "cookie",
+      "param": "session",
+      "paramName": "sessionAuth"
+    }
+  ]
+}

@@ -22,7 +22,12 @@ func (r *Router) OpenAPI() ([]byte, error) {
 
 	for _, route := range routes {
 		op := &openAPIOperation{
-			Responses: map[string]openAPIResponse{},
+			Responses:  map[string]openAPIResponse{},
+			Deprecated: route.Deprecated,
+		}
+		if route.Deprecated && route.DeprecationNote != "" {
+			// OpenAPI has no field for the note; surface it in the description.
+			op.Description = "Deprecated: " + route.DeprecationNote
 		}
 		if route.Service != "" {
 			op.Tags = []string{titleTag(route.Service)}
@@ -171,6 +176,7 @@ type openAPIOperation struct {
 	RequestBody *openAPIRequestBody        `json:"requestBody,omitempty"`
 	Responses   map[string]openAPIResponse `json:"responses"`
 	Security    []map[string][]string      `json:"security,omitempty"`
+	Deprecated  bool                       `json:"deprecated,omitempty"`
 }
 
 type openAPIRequestBody struct {

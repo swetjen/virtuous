@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/swetjen/virtuous/schema"
 )
@@ -15,6 +16,7 @@ type resolvedResponseSpec struct {
 	BodyType    reflect.Type
 	MediaType   string
 	Description string
+	Headers     []ResponseHeaderSpec
 }
 
 func routeResponseSpecs(route Route) ([]resolvedResponseSpec, error) {
@@ -62,6 +64,9 @@ func resolveExplicitResponseSpec(spec ResponseSpec) (resolvedResponseSpec, error
 	if spec.Status < 100 || spec.Status > 599 {
 		return resolvedResponseSpec{}, fmt.Errorf("invalid response status %d", spec.Status)
 	}
+	if err := validateResponseHeaderSpecs(spec.Headers); err != nil {
+		return resolvedResponseSpec{}, fmt.Errorf("response status %d: %w", spec.Status, err)
+	}
 	bodyType := responseBodyType(spec.Body)
 	mediaType := spec.MediaType
 	if mediaType == "" && bodyType != nil {
@@ -80,7 +85,31 @@ func resolveExplicitResponseSpec(spec ResponseSpec) (resolvedResponseSpec, error
 		BodyType:    bodyType,
 		MediaType:   mediaType,
 		Description: description,
+		Headers:     spec.Headers,
 	}, nil
+}
+
+// validateResponseHeaderSpecs enforces the registration-time response header
+// rules: every declared name must be a valid HTTP field name (RFC 9110
+// token), names may not repeat case-insensitively within one ResponseSpec,
+// and Content-Type may not be declared (it is expressed via
+// ResponseSpec.MediaType).
+func validateResponseHeaderSpecs(headers []ResponseHeaderSpec) error {
+	seen := map[string]string{}
+	for _, header := range headers {
+		if !isHTTPToken(header.Name) {
+			return fmt.Errorf("response header %q is not a valid HTTP field name (RFC 9110 token)", header.Name)
+		}
+		if strings.EqualFold(header.Name, "Content-Type") {
+			return fmt.Errorf("response header %q is expressed via ResponseSpec.MediaType, not Headers", header.Name)
+		}
+		key := strings.ToLower(header.Name)
+		if prev, ok := seen[key]; ok {
+			return fmt.Errorf("duplicate response header %q (already declared as %q)", header.Name, prev)
+		}
+		seen[key] = header.Name
+	}
+	return nil
 }
 
 func resolveLegacyResponse(respType any) (resolvedResponseSpec, error) {
