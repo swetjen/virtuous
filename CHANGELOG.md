@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.59
+
+- Accept a plain string for auth in the generated httpapi TypeScript and React Query clients: `RequestOptions.auth` and `AuthProvider` (including provider-function results) take `RequestAuth | string`; a string is normalized into the generic auth slot, matching the JS and rpc TS runtimes. Keyed `RequestAuth` objects are unchanged.
+- The root module is now dependency-free: `github.com/jackc/pgtype` and `github.com/jackc/pgx/v5` were only used by tests and move to a nested `pgtypetest/` module that keeps the full pgtype contract coverage (schema, OpenAPI, generated clients, live round-trips). Production pgtype support is unchanged (types are matched by package path). The `go` directive relaxes from `1.25.11` to `1.25`.
+- CI now runs on a Go matrix (the go.mod version and latest stable), enforces `gofmt` and `go vet`, runs tests with `-race`, tests every `example/*` module and the `pgtypetest` module, installs node/tsc/`@tanstack/react-query`/uv so all generated-client checks execute, and triggers on `v*` tags. Generated-client test helpers fail when a toolchain is missing under `CI=true` and skip visibly otherwise. `make test` mirrors CI (`make test-strict` for the CI behavior locally) and `make publish` refuses to tag until CI has passed for `HEAD`.
+- Remove the stale `CURRENT_STATE.md`; `README.md`, `docs/overview.md`, and `AGENTS.md` are the current-state documentation.
+
 ## 0.0.58
 
 - Add request-header support to generated clients end to end: a new `header:"X-Name"` struct tag (symmetric with `query:`/`path:`, embedded structs flattened, excluded from request bodies) and explicit `HeaderParam` specs now produce typed header arguments in the JS/TS/Python/React Query clients; every client gains client-wide default headers (`ClientOptions.headers` / `create_client(headers=...)`) and per-call headers, merged case-insensitively with documented precedence (defaults → declared params → per-call → framework-owned `Accept`/`Content-Type`/auth keys, which cannot be overridden). Header names are validated at registration (RFC 9110 token; collisions with framework-owned keys panic).
