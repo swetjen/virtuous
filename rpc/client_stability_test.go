@@ -2,11 +2,32 @@ package rpc
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/swetjen/virtuous/internal/clientgen"
 )
+
+// nullableScalarsRequest is the stdlib stand-in for the pgtype contract
+// fixture (which lives in the separate pgtypetest module): pointer scalars are
+// nullable and json.RawMessage is arbitrary JSON, so the determinism check
+// still covers those rendering paths without importing pgx here.
+type nullableScalarsRequest struct {
+	Text   *string         `json:"text"`
+	Flag   *bool           `json:"flag"`
+	Amount *float64        `json:"amount"`
+	When   *time.Time      `json:"when"`
+	Raw    json.RawMessage `json:"raw"`
+}
+
+type nullableScalarsResponse nullableScalarsRequest
+
+func nullableScalarsHandler(_ context.Context, req nullableScalarsRequest) (nullableScalarsResponse, int) {
+	return nullableScalarsResponse(req), StatusOK
+}
 
 func TestRPCLargeContractOutputIsDeterministic(t *testing.T) {
 	router := NewRouter()
@@ -25,7 +46,7 @@ func TestRPCLargeContractOutputIsDeterministic(t *testing.T) {
 		},
 	})
 	router.HandleRPC(pythonMegaContractHandler)
-	router.HandleRPC(pgtypeHandler)
+	router.HandleRPC(nullableScalarsHandler)
 
 	assertRPCStableBytes(t, "openapi", func() ([]byte, error) { return router.OpenAPI() })
 	assertRPCStableRender(t, "js", router.WriteClientJS)

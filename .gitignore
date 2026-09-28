@@ -3,3 +3,5 @@ __pycache__/
 dist/
 *.egg-info/
 .idea/
+node_modules/
+package-lock.json

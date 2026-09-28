@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	testa "github.com/swetjen/virtuous/internal/testtypes/a"
 	testb "github.com/swetjen/virtuous/internal/testtypes/b"
 )
@@ -54,17 +54,17 @@ type embeddedPointerResponse struct {
 	Error string `json:"error"`
 }
 
-type openAPIPgNullableMatrix struct {
+// openAPINullableMatrix covers the stdlib nullable/optional shapes; the pgtype
+// rows of this matrix live in the pgtypetest module.
+type openAPINullableMatrix struct {
 	Plain       string          `json:"plain"`
 	PlainPtr    *string         `json:"plain_ptr,omitempty"`
-	Text        pgtype.Text     `json:"text"`
-	TextPtr     *pgtype.Text    `json:"text_ptr,omitempty"`
 	Raw         json.RawMessage `json:"raw"`
 	OptionalRaw json.RawMessage `json:"optional_raw,omitempty"`
 }
 
-type openAPIPgOverridePayload struct {
-	Text pgtype.Text `json:"text"`
+type openAPIOverridePayload struct {
+	When time.Time `json:"when"`
 }
 
 type openAPIRawMessageShapes struct {
@@ -254,36 +254,37 @@ func TestOpenAPISchemaMakesPromotedPointerFieldsOptional(t *testing.T) {
 	}
 }
 
-func TestOpenAPIUserOverrideBeatsBuiltInPgtypeOverride(t *testing.T) {
+// TestOpenAPIUserOverrideBeatsBuiltInOverride pins that a user-supplied
+// override for a type with a built-in mapping (time.Time -> string/date-time)
+// replaces the built-in rather than merging with it.
+func TestOpenAPIUserOverrideBeatsBuiltInOverride(t *testing.T) {
 	gen := NewGenerator(map[string]TypeOverride{
-		"github.com/jackc/pgx/v5/pgtype.Text": {
-			JSType:        "CustomText",
-			PyType:        "CustomTextPy",
+		"time.Time": {
+			JSType:        "CustomTime",
+			PyType:        "CustomTimePy",
 			OpenAPIType:   "integer",
-			OpenAPIFormat: "int32",
+			OpenAPIFormat: "int64",
 		},
 	})
-	_ = gen.SchemaFor(openAPIPgOverridePayload{})
+	_ = gen.SchemaFor(openAPIOverridePayload{})
 
-	component := gen.Components()["openAPIPgOverridePayload"]
-	text := component.Properties["text"]
-	if text.Type != "integer" || text.Format != "int32" || text.Nullable {
-		t.Fatalf("text schema = %#v, want custom non-null integer override", text)
+	component := gen.Components()["openAPIOverridePayload"]
+	when := component.Properties["when"]
+	if when == nil || when.Type != "integer" || when.Format != "int64" || when.Nullable {
+		t.Fatalf("when schema = %#v, want custom non-null integer override", when)
 	}
-	if _, ok := gen.Components()["Text"]; ok {
-		t.Fatalf("pgtype.Text should stay scalar and not emit implementation schema")
+	if _, ok := gen.Components()["Time"]; ok {
+		t.Fatalf("time.Time should stay scalar and not emit implementation schema")
 	}
 }
 
 func TestOpenAPINullableSemanticsMatrix(t *testing.T) {
 	gen := NewGenerator(nil)
-	_ = gen.SchemaFor(openAPIPgNullableMatrix{})
+	_ = gen.SchemaFor(openAPINullableMatrix{})
 
-	component := gen.Components()["openAPIPgNullableMatrix"]
+	component := gen.Components()["openAPINullableMatrix"]
 	assertOpenAPIField(t, component, "plain", "string", "", false, true)
 	assertOpenAPIField(t, component, "plain_ptr", "string", "", true, false)
-	assertOpenAPIField(t, component, "text", "string", "", true, true)
-	assertOpenAPIField(t, component, "text_ptr", "string", "", true, false)
 	assertOpenAPIField(t, component, "raw", "", "", false, true)
 	assertOpenAPIField(t, component, "optional_raw", "", "", false, false)
 }

@@ -11,16 +11,15 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/swetjen/virtuous/clientspec"
 	"github.com/swetjen/virtuous/schema"
 )
 
 type specFixtureInvoice struct {
-	ID     string      `json:"id" doc:"Invoice id"`
-	Amount float64     `json:"amount"`
-	Note   *string     `json:"note,omitempty" doc:"Optional note"`
-	PaidAt pgtype.Text `json:"paidAt"`
+	ID     string  `json:"id" doc:"Invoice id"`
+	Amount float64 `json:"amount"`
+	Note   *string `json:"note,omitempty" doc:"Optional note"`
+	PaidAt *string `json:"paidAt"`
 }
 
 type specFixturePage[T any] struct {

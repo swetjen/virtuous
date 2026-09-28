@@ -1,11 +1,7 @@
 // Package billing provides RPC fixture handlers for client-spec tests.
 package billing
 
-import (
-	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
-)
+import "context"
 
 // InvoiceQuery is the fixture request payload.
 type InvoiceQuery struct {
@@ -15,10 +11,10 @@ type InvoiceQuery struct {
 
 // Invoice exercises optional, nullable, and documented fields.
 type Invoice struct {
-	ID     string      `json:"id" doc:"Invoice id"`
-	Amount float64     `json:"amount"`
-	Note   *string     `json:"note,omitempty" doc:"Optional note"`
-	PaidAt pgtype.Text `json:"paidAt"`
+	ID     string  `json:"id" doc:"Invoice id"`
+	Amount float64 `json:"amount"`
+	Note   *string `json:"note,omitempty" doc:"Optional note"`
+	PaidAt *string `json:"paidAt"`
 }
 
 // Page exercises a generic type name in the schema graph.

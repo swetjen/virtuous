@@ -21,10 +21,10 @@ func TestHTTPAPILargeContractOutputIsDeterministic(t *testing.T) {
 		Method:      "Mixed",
 		OperationID: "python_mixed",
 	})
-	router.Describe("POST /db/pgtype", httpPgtypeRequest{}, httpPgtypeResponse{}, HandlerMeta{
+	router.Describe("POST /db/nullable", httpNullableRequest{}, httpNullableResponse{}, HandlerMeta{
 		Service:     "DB",
 		Method:      "RoundTrip",
-		OperationID: "pgtype_round_trip",
+		OperationID: "nullable_round_trip",
 	})
 
 	assertStableBytes(t, "openapi", func() ([]byte, error) { return router.OpenAPI() })

@@ -66,30 +66,21 @@ assert optional.accepted is False
 
 assert client.live_clear_cache("acct-2") is None
 
-PgReq = next(getattr(mod, name) for name in dir(mod) if name.endswith("PgtypeRequest"))
-pg_resp = client.live_pgtype(body=PgReq(
+NullableReq = next(getattr(mod, name) for name in dir(mod) if name.endswith("NullableRequest"))
+nullable_resp = client.live_nullable(body=NullableReq(
     text="hello",
     flag=True,
-    small=12,
     num=123,
-    big=9007199254740991,
-    ratio32=1.5,
-    ratio64=2.25,
-    count=4294967295,
-    when=datetime.fromisoformat("2025-01-02T03:04:05+00:00"),
-    uuid="00112233-4455-6677-8899-aabbccddeeff",
     amount=123.45,
-    timestamptz=datetime.fromisoformat("2025-01-02T03:04:05+00:00"),
-    date=mod._date.fromisoformat("2025-01-02"),
+    when=datetime.fromisoformat("2025-01-02T03:04:05+00:00"),
     raw={"ok": True},
-    legacy_json={"items": [1, "two", True]},
-    legacy_jsonb=["a", {"b": 2}],
 ))
-assert pg_resp.text == "hello"
-assert pg_resp.flag is True
-assert pg_resp.amount == 123.45
-assert pg_resp.date.isoformat() == "2025-01-02"
-assert pg_resp.legacy_jsonb[1]["b"] == 2
+assert nullable_resp.text == "hello"
+assert nullable_resp.flag is True
+assert nullable_resp.num == 123
+assert nullable_resp.amount == 123.45
+assert isinstance(nullable_resp.when, datetime), (type(nullable_resp.when), nullable_resp.when)
+assert nullable_resp.raw["ok"] is True
 
 from urllib.parse import parse_qs
 echoed = client.live_echo_query(req="", page=0, flag=False, label="")
@@ -215,18 +206,18 @@ func newLiveClientE2ERouter(t *testing.T) *Router {
 		Method:      "ClearCache",
 		OperationID: "live_clear_cache",
 	}))
-	router.HandleTyped("POST /db/pgtype", WrapFunc(func(w http.ResponseWriter, r *http.Request) {
-		req, err := Decode[httpPgtypeRequest](r)
+	router.HandleTyped("POST /db/nullable", WrapFunc(func(w http.ResponseWriter, r *http.Request) {
+		req, err := Decode[httpNullableRequest](r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		assertHTTPPgtypeDecoded(t, req)
-		Encode(w, r, http.StatusOK, httpPgtypeResponse(req))
-	}, httpPgtypeRequest{}, httpPgtypeResponse{}, HandlerMeta{
+		assertHTTPNullableDecoded(t, req)
+		Encode(w, r, http.StatusOK, httpNullableResponse(req))
+	}, httpNullableRequest{}, httpNullableResponse{}, HandlerMeta{
 		Service:     "DB",
 		Method:      "RoundTrip",
-		OperationID: "live_pgtype",
+		OperationID: "live_nullable",
 	}))
 	router.HandleTyped("GET /echo/query", WrapFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -304,28 +295,12 @@ if (optional.accepted !== false) throw new Error("optional response failed");
 const cleared = await client.Contracts.clearCache({ account_id: "acct-2" });
 if (cleared !== undefined) throw new Error("clear cache should return undefined");
 
-const pg = await client.DB.roundTrip({
-  text: "hello",
-  flag: true,
-  small: 12,
-  num: 123,
-  big: 9007199254740991,
-  ratio32: 1.5,
-  ratio64: 2.25,
-  count: 4294967295,
-  when: "2025-01-02T03:04:05Z",
-  uuid: "00112233-4455-6677-8899-aabbccddeeff",
-  amount: 123.45,
-  timestamptz: "2025-01-02T03:04:05Z",
-  date: "2025-01-02",
-  raw: { ok: true },
-  legacy_json: { items: [1, "two", true] },
-  legacy_jsonb: ["a", { b: 2 }],
-});
-if (pg.text !== "hello" || pg.flag !== true || pg.amount !== 123.45 || pg.date !== "2025-01-02") {
-  throw new Error("bad pgtype response " + JSON.stringify(pg));
+const nullable = await client.DB.roundTrip(` + httpNullablePayload + `);
+if (nullable.text !== "hello" || nullable.flag !== true || nullable.num !== 123 || nullable.amount !== 123.45) {
+  throw new Error("bad nullable scalar response " + JSON.stringify(nullable));
 }
-if (pg.legacy_jsonb[1].b !== 2) throw new Error("bad pgtype jsonb");
+if (nullable.when !== "2025-01-02T03:04:05Z") throw new Error("bad nullable datetime " + nullable.when);
+if (nullable.raw.ok !== true) throw new Error("bad nullable raw json " + JSON.stringify(nullable.raw));
 
 const echoed = await client.Echo.query({ page: 0, flag: false, label: "", req: "" });
 const echoParams = new URLSearchParams(echoed);

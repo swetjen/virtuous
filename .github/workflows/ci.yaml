@@ -1,32 +1,88 @@
-name: basebuild
+name: ci
 
 on:
   pull_request:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   test:
+    name: test (go ${{ matrix.go }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: [go-mod, stable]
+        include:
+          # The version pinned in go.mod: the floor we promise to support.
+          - go: go-mod
+            go-version-file: go.mod
+          # The latest stable Go release: catches breakage before the pin moves.
+          - go: stable
+            go-version: stable
     env:
-      flags: ""
+      # Makes the test helpers fail (instead of skip) when node/tsc/uv are missing.
+      CI: "true"
     steps:
-      - if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run: echo "flags=--snapshot" >> $GITHUB_ENV
-
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
-      - uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
-          go-version: '>=1.26.0'
+          # Exactly one of these is set per matrix entry; setup-go ignores an empty value.
+          go-version-file: ${{ matrix.go-version-file }}
+          go-version: ${{ matrix.go-version }}
           cache: true
+          cache-dependency-path: '**/go.sum'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install TypeScript
+        run: npm install -g typescript
+
+      # Installed at the repo root so the require.resolve probe run from
+      # ./httpapi finds it by walking up to ./node_modules.
+      - name: Install @tanstack/react-query
+        run: npm install --no-save --no-package-lock @tanstack/react-query
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Run tests
-        run: go test ./...
+      - name: gofmt
+        run: |
+          offenders="$(gofmt -l . | grep -v -e /testdata/ -e node_modules/ || true)"
+          if [ -n "$offenders" ]; then
+            echo "gofmt: the following files are not formatted:"
+            echo "$offenders"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race ./...
+
+      - name: Example modules
+        run: |
+          for d in example/*/; do
+            echo "== $d"
+            (cd "$d" && go test ./...) || exit 1
+          done
+
+      - name: pgtypetest module
+        run: cd pgtypetest && go test ./...

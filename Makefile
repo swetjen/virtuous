@@ -1,27 +1,41 @@
-.PHONY: test test-go test-js test-python test-ts test-example python-build python-publish python-clean publish
+.PHONY: test fmt-check vet test-go test-go-norace test-example test-pgtype test-strict python-build python-publish python-clean publish
 
-test: test-go test-example test-js test-python test-ts
+# Mirrors .github/workflows/ci.yaml: format check, vet, race tests, then the
+# nested modules (example/* and pgtypetest/).
+test: fmt-check vet test-go test-example test-pgtype
 
+fmt-check:
+	@offenders="$$(gofmt -l . | grep -v -e /testdata/ -e node_modules/ || true)"; \
+	if [ -n "$$offenders" ]; then \
+		echo "gofmt: the following files are not formatted:"; \
+		echo "$$offenders"; \
+		exit 1; \
+	fi
+
+vet:
+	go vet ./...
+
+# -race needs cgo, which means a C toolchain (gcc or clang) on PATH.
+# Use test-go-norace on machines without one.
 test-go:
+	go test -race ./...
+
+test-go-norace:
 	go test ./...
 
 test-example:
-	cd example/basic-combined && go test ./...
-	cd example/basic-httpapi && go test ./...
-	cd example/basic-rpc && go test ./...
-	cd example/byodb-sqlite && go test ./...
+	@for d in example/*/; do \
+		echo "== $$d"; \
+		(cd "$$d" && go test ./...) || exit 1; \
+	done
 
-test-js:
-	@command -v node >/dev/null 2>&1 && echo "node present" || { echo "node not found; skipping"; exit 0; }
-	go test ./... -run TestGeneratedClientsAreValid -count=1
+test-pgtype:
+	cd pgtypetest && go test ./...
 
-test-python:
-	@command -v uv >/dev/null 2>&1 && echo "uv present" || { echo "uv not found; skipping"; exit 0; }
-	go test ./... -run TestGeneratedClientsAreValid -count=1
-
-test-ts:
-	@command -v tsc >/dev/null 2>&1 && echo "tsc present" || { echo "tsc not found; skipping"; exit 0; }
-	go test ./... -run TestGeneratedClientsAreValid -count=1
+# Same as `test`, but the generated-client tests FAIL when node, tsc or uv are
+# missing instead of skipping, exactly as they do in CI.
+test-strict:
+	CI=true $(MAKE) test
 
 ROOT_DIR := $(abspath .)
 PYTHON_LOADER_DIR := $(ROOT_DIR)/python_loader
@@ -61,6 +75,11 @@ publish:
 	@[ -z "$$(git status --porcelain)" ] || { echo "working tree is dirty; commit before publishing"; exit 1; }
 	@[ "$$(git branch --show-current)" = "main" ] || { echo "publish must run from main"; exit 1; }
 	@command -v gh >/dev/null 2>&1 || { echo "gh CLI is required for publishing"; exit 1; }
+	@head="$$(git rev-parse HEAD)"; \
+	runs="$$(gh run list --commit "$$head" --workflow ci.yaml --status success --json databaseId --jq 'length' 2>/dev/null)"; \
+	if [ -z "$$runs" ] || [ "$$runs" = "0" ]; then \
+		echo "CI has not passed for HEAD ($$head); push it and wait for the ci workflow to succeed"; exit 1; \
+	fi
 	@version="$$(cat VERSION)"; \
 	tag="v$${version}"; \
 	notes_file="$$(mktemp)"; \

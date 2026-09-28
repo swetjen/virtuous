@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	testa "github.com/swetjen/virtuous/internal/testtypes/a"
@@ -1291,11 +1292,42 @@ func newRuntimeClientContractRouter() *Router {
 	return router
 }
 
+// requireCommand skips the test when the named toolchain binary is not
+// installed. In CI (the CI environment variable is set) a missing tool is a
+// misconfigured runner, so the test fails instead of silently skipping.
 func requireCommand(t *testing.T, name string) {
 	t.Helper()
 	if _, err := exec.LookPath(name); err != nil {
-		t.Skipf("%s is not installed", name)
+		if inCI() {
+			t.Fatalf("%s is required in CI but is not installed: %v", name, err)
+		}
+		t.Skipf("%s is not installed; skipping (set CI=1 to make this fatal)", name)
 	}
+}
+
+// inCI reports whether the tests run under CI, where every toolchain the
+// generated-client tests depend on (node, tsc, uv) must be present.
+func inCI() bool {
+	return os.Getenv("CI") != ""
+}
+
+// missingToolNotices tracks which missing tools have already been reported so
+// the local skip notice is printed once per tool, not once per call.
+var missingToolNotices sync.Map
+
+// missingTool decides what a run* helper does when its binary is absent:
+// in CI it returns an error (the caller t.Fatalf's), locally it prints a
+// one-time notice to stderr and returns nil so the check is skipped visibly
+// rather than silently. The run* helpers take no *testing.T, so they cannot
+// call t.Skipf themselves.
+func missingTool(name string, lookErr error) error {
+	if inCI() {
+		return fmt.Errorf("%s is required in CI but is not installed: %w", name, lookErr)
+	}
+	if _, seen := missingToolNotices.LoadOrStore(name, true); !seen {
+		fmt.Fprintf(os.Stderr, "httpapi tests: %s is not installed; skipping %s checks (set CI=1 to make this fatal)\n", name, name)
+	}
+	return nil
 }
 
 func writeHTTPAPIErrorNodeHarness(t *testing.T, path string, tsClient bool) {
@@ -1348,7 +1380,7 @@ try {
 func runCommand(name string, args ...string) error {
 	path, err := exec.LookPath(name)
 	if err != nil {
-		return nil
+		return missingTool(name, err)
 	}
 	cmd := exec.Command(path, args...)
 	output, err := cmd.CombinedOutput()
@@ -1365,7 +1397,7 @@ func runCommand(name string, args ...string) error {
 func runPythonCommand(args ...string) error {
 	path, err := exec.LookPath("uv")
 	if err != nil {
-		return fmt.Errorf("uv is required for generated Python contract tests: %w", err)
+		return missingTool("uv", err)
 	}
 	uvArgs := append([]string{"run", "--python", "3.12", "python"}, args...)
 	cmd := exec.Command(path, uvArgs...)

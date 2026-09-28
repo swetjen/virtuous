@@ -72,7 +72,7 @@ func TestGeneratedReactQueryTSClientIsValid(t *testing.T) {
 	assertContains(t, tsText, "return ['GET /users/{id}', pathParams, query] as const")
 	assertContains(t, tsText, "enabled: !!pathParams && pathParams.id !== undefined && pathParams.id !== null")
 	assertContains(t, tsText, "queryFn: ({ signal }: { signal?: AbortSignal }) => virtuousClient.Users.getUser(pathParams!, query, { signal })")
-	assertContains(t, tsText, "const auth = config.options?.auth ?? await _resolveAuth(clientOptions.auth)")
+	assertContains(t, tsText, "const auth = _normalizeAuth(config.options?.auth) ?? await _resolveAuth(clientOptions.auth)")
 	assertContains(t, tsText, "throw new AuthNotReadyError(config.method + \" \" + config.path)")
 	assertContains(t, tsText, "signal: config.options?.signal")
 	assertContains(t, tsText, "FormData")
@@ -218,7 +218,7 @@ func TestReactQueryTSMutationVariableShapes(t *testing.T) {
 	}
 }
 
-func TestReactQueryTSMixedRequestAndPgtypeShapes(t *testing.T) {
+func TestReactQueryTSMixedRequestAndNullableShapes(t *testing.T) {
 	router := NewRouter()
 	router.Describe("PUT /contracts/{account_id}/mixed", clientRuntimeMixedRequest{}, clientRuntimeResponse{}, HandlerMeta{
 		Service: "Contracts",
@@ -232,7 +232,7 @@ func TestReactQueryTSMixedRequestAndPgtypeShapes(t *testing.T) {
 		Service: "Contracts",
 		Method:  "ClearCache",
 	})
-	router.Describe("POST /db/pgtype", httpPgtypeRequest{}, httpPgtypeResponse{}, HandlerMeta{
+	router.Describe("POST /db/nullable", httpNullableRequest{}, httpNullableResponse{}, HandlerMeta{
 		Service: "DB",
 		Method:  "RoundTrip",
 	})
@@ -240,12 +240,10 @@ func TestReactQueryTSMixedRequestAndPgtypeShapes(t *testing.T) {
 	tsText := compileReactQueryTS(t, router)
 	assertContains(t, tsText, "text: string | null;")
 	assertContains(t, tsText, "flag: boolean | null;")
+	assertContains(t, tsText, "num: number | null;")
 	assertContains(t, tsText, "amount: number | null;")
 	assertContains(t, tsText, "when: string | null;")
-	assertContains(t, tsText, "legacy_json: object|any[] | null;")
 	assertContains(t, tsText, "raw: object|any[];")
-	assertNotContains(t, tsText, "export interface Text")
-	assertNotContains(t, tsText, "export interface Numeric")
 
 	assertContains(t, tsText, "export type ContractsAccountIdMixedPutPathParams = {account_id: string; }")
 	assertContains(t, tsText, "export type ContractsAccountIdMixedPutQuery = {id: string[];limit?: number; }")

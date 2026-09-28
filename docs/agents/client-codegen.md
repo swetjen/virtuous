@@ -61,6 +61,7 @@ Rules:
 - use named path/query aliases instead of repeating large inline object types
 - configure auth once at client construction when possible
 - keep per-call `RequestOptions.auth` for explicit overrides
+- accept a bare string wherever `RequestAuth` is accepted (`ClientOptions.auth`, provider results, per-call `RequestOptions.auth`): `"token"` is shorthand for `{ auth: "token" }`, the generic slot that only satisfies single-requirement routes
 - keep transport helpers private
 - keep generated method bodies compact
 

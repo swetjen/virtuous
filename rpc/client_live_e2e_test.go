@@ -176,6 +176,9 @@ finally:
 func requireRPCCommand(t *testing.T, name string) {
 	t.Helper()
 	if _, err := exec.LookPath(name); err != nil {
-		t.Skipf("%s is not installed", name)
+		if rpcInCI() {
+			t.Fatalf("%s is required in CI but is not installed: %v", name, err)
+		}
+		t.Skipf("%s is not installed; skipping (set CI=1 to make this fatal)", name)
 	}
 }

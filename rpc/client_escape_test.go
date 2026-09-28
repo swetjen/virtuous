@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -68,12 +69,37 @@ func assertRPCNotContains(t *testing.T, text, unwanted string) {
 	}
 }
 
-// runRPCCommand runs a toolchain check when the tool is installed and no-ops
-// otherwise, mirroring httpapi's runCommand helper.
+// rpcInCI reports whether the tests run under CI, where every toolchain the
+// generated-client tests depend on (node, tsc, uv) must be present.
+func rpcInCI() bool {
+	return os.Getenv("CI") != ""
+}
+
+// rpcMissingToolNotices tracks which missing tools have already been reported
+// so the local skip notice is printed once per tool, not once per call.
+var rpcMissingToolNotices sync.Map
+
+// rpcMissingTool decides what a run* helper does when its binary is absent:
+// in CI it returns an error (the caller t.Fatalf's), locally it prints a
+// one-time notice to stderr and returns nil so the check is skipped visibly
+// rather than silently. Mirrors httpapi's missingTool.
+func rpcMissingTool(name string, lookErr error) error {
+	if rpcInCI() {
+		return fmt.Errorf("%s is required in CI but is not installed: %w", name, lookErr)
+	}
+	if _, seen := rpcMissingToolNotices.LoadOrStore(name, true); !seen {
+		fmt.Fprintf(os.Stderr, "rpc tests: %s is not installed; skipping %s checks (set CI=1 to make this fatal)\n", name, name)
+	}
+	return nil
+}
+
+// runRPCCommand runs a toolchain check when the tool is installed. When it is
+// missing the check fails in CI and is skipped (with a notice) locally,
+// mirroring httpapi's runCommand helper.
 func runRPCCommand(name string, args ...string) error {
 	path, err := exec.LookPath(name)
 	if err != nil {
-		return nil
+		return rpcMissingTool(name, err)
 	}
 	cmd := exec.Command(path, args...)
 	output, err := cmd.CombinedOutput()

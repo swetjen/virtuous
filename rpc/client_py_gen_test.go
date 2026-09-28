@@ -147,7 +147,7 @@ assert isinstance(client, mod._VirtuousClient)
 func runRPCPython(args ...string) error {
 	path, err := exec.LookPath("uv")
 	if err != nil {
-		return fmt.Errorf("uv is required for generated Python contract tests: %w", err)
+		return rpcMissingTool("uv", err)
 	}
 	uvArgs := append([]string{"run", "--python", "3.12", "python"}, args...)
 	cmd := exec.Command(path, uvArgs...)

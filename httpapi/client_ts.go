@@ -11,7 +11,8 @@ import (
 
 var clientTSTemplate = template.Must(template.New("virtuous-ts").Funcs(clientgen.TemplateFuncs()).Parse(`export type RequestOptions = {
 	signal?: AbortSignal
-	auth?: RequestAuth
+	// A bare string is shorthand for { auth: value } (the generic slot).
+	auth?: RequestAuth | string
 	headers?: Record<string, string>
 }
 
@@ -24,7 +25,7 @@ export type RequestAuth = {
 }
 
 type MaybePromise<T> = T | Promise<T>
-export type AuthProvider = RequestAuth | (() => MaybePromise<RequestAuth | null | undefined>)
+export type AuthProvider = RequestAuth | string | (() => MaybePromise<RequestAuth | string | null | undefined>)
 
 export type ClientOptions = {
 	baseUrl?: string
@@ -208,7 +209,7 @@ async function _request<T>(clientOptions: ClientOptions, config: RequestConfig):
 		url = _appendQuery(url, item[0], item[1], item[2])
 	}
 	if (config.auth) {
-		const auth = config.options?.auth ?? await _resolveAuth(clientOptions.auth)
+		const auth = _normalizeAuth(config.options?.auth) ?? await _resolveAuth(clientOptions.auth)
 		let applied = false
 		for (const requirement of config.auth) {
 			const values: Array<[AuthGuard, string]> = []
@@ -246,7 +247,13 @@ async function _request<T>(clientOptions: ClientOptions, config: RequestConfig):
 }
 
 async function _resolveAuth(provider: AuthProvider | undefined): Promise<RequestAuth | null | undefined> {
-	return typeof provider === "function" ? await provider() : provider
+	return _normalizeAuth(typeof provider === "function" ? await provider() : provider)
+}
+
+// _normalizeAuth widens the string shorthand into the generic auth slot; keyed
+// objects and empty values pass through unchanged.
+function _normalizeAuth(value: RequestAuth | string | null | undefined): RequestAuth | null | undefined {
+	return typeof value === "string" ? { auth: value } : value
 }
 
 function _applyAuth(url: string, headers: Record<string, string>, guard: AuthGuard, value: string): string {

@@ -272,4 +272,5 @@ Runnable example apps live in [`example/`](example):
 
 ## Requirements
 
-- Go 1.25+
+- Go: the version declared in [`go.mod`](go.mod) (currently 1.25). CI tests both that version and the latest stable release.
+- Optional, for the generated-client tests: Node.js, `tsc` and `uv`. Locally the tests skip when a tool is missing; in CI (`CI=true`) they fail.
