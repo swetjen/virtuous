@@ -278,9 +278,13 @@ func writeLiveNodeHarness(t *testing.T, path, baseURL string, tsClient bool) {
 	createClient := `const client = createClient({ baseUrl: "` + baseURL + `" });`
 	headerDefaults := `{ "X-Env": "prod", "x-brand-ray": "from-default", "accept": "text/hack" }`
 	createHeaderClient := `const headerClient = createClient({ baseUrl: "` + baseURL + `", headers: ` + headerDefaults + ` });`
+	// The TS runtime types per-call auth as a RequestAuth object; the JS
+	// runtime also accepts the flat string shorthand.
+	perCallAuth := `{ auth: "secret" }`
 	if !tsClient {
 		createClient = `const client = createClient("` + baseURL + `");`
 		createHeaderClient = `const headerClient = createClient("` + baseURL + `", { headers: ` + headerDefaults + ` });`
+		perCallAuth = `"secret"`
 	}
 	harness := `
 import { createClient } from "./client.gen.js";
@@ -342,7 +346,7 @@ if (zeroValue !== 0) throw new Error("JSON zero must reach the caller, got " + J
 ` + createHeaderClient + `
 const echoedHeaders = await headerClient.Echo.headers(
   { "X-Brand-Ray": "declared" },
-  { auth: "secret", headers: { "X-Tenant": "t1", "ACCEPT": "text/forged", "x-api-key": "forged" } },
+  { auth: ` + perCallAuth + `, headers: { "X-Tenant": "t1", "ACCEPT": "text/forged", "x-api-key": "forged" } },
 );
 if (echoedHeaders.env !== "prod") throw new Error("client default header missing: " + JSON.stringify(echoedHeaders));
 if (echoedHeaders.brand !== "declared") throw new Error("declared header param must override default: " + JSON.stringify(echoedHeaders));

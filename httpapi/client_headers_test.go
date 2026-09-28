@@ -149,11 +149,15 @@ func writeHeaderPrecedenceNodeHarness(t *testing.T, path string, tsClient bool) 
   fetch: fakeFetch,
   headers: { "x-tenant": "t0", "x-brand-ray": "from-default", "accept": "text/hack" },
 });`
+	// The TS runtime types per-call auth as a RequestAuth object; the JS
+	// runtime also accepts the flat string shorthand.
+	perCallAuth := `{ auth: "secret" }`
 	if !tsClient {
 		createClient = `const client = createClient("https://core.example", {
   fetch: fakeFetch,
   headers: { "x-tenant": "t0", "x-brand-ray": "from-default", "accept": "text/hack" },
 });`
+		perCallAuth = `"secret"`
 	}
 	harness := `
 import { createClient } from "./client.gen.js";
@@ -175,7 +179,7 @@ const fakeFetch = async (url, init) => {
 const resp = await client.Brand.create(
   { BrandRay: "body-leak", name: "n" },
   { "X-Brand-Ray": "declared", "X-Trace": "declared-trace" },
-  { auth: "secret", headers: { "X-Tenant": "t1", "x-trace": "per-call", "content-type": "evil", "x-api-key": "forged", "ACCEPT": "text/forged" } },
+  { auth: ` + perCallAuth + `, headers: { "X-Tenant": "t1", "x-trace": "per-call", "content-type": "evil", "x-api-key": "forged", "ACCEPT": "text/forged" } },
 );
 if (!resp.accepted) throw new Error("custom fetch response was not used");
 if (calls.length !== 1) throw new Error("custom fetch was not called");
