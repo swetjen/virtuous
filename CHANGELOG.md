@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.58
+
+- Add request-header support to generated clients end to end: a new `header:"X-Name"` struct tag (symmetric with `query:`/`path:`, embedded structs flattened, excluded from request bodies) and explicit `HeaderParam` specs now produce typed header arguments in the JS/TS/Python/React Query clients; every client gains client-wide default headers (`ClientOptions.headers` / `create_client(headers=...)`) and per-call headers, merged case-insensitively with documented precedence (defaults → declared params → per-call → framework-owned `Accept`/`Content-Type`/auth keys, which cannot be overridden). Header names are validated at registration (RFC 9110 token; collisions with framework-owned keys panic).
+- Add transport hooks to generated clients: `ClientOptions.fetch` (JS/TS/React Query) and `create_client(transport=...)` (Python) let callers intercept requests for retries, tracing, and response-header access.
+- Export the client-generation model as a versioned document: new `clientspec` package (`specVersion` 1.0), `ClientSpec()`/`WriteClientSpecJSON()` on both routers, and a `client.spec.json` endpoint registered by `ServeAllDocs` (cached, ETagged, guarded like the sibling client endpoints). The document carries service/method naming, path/query/header params, body modes, primary responses with documented response headers, and auth as OR-alternatives of ANDed guards — with both `tsType` and `pyType` renderings — so first-party SDK generators no longer have to reverse-engineer `openapi.json`. Golden-file tests pin the output; drift tests assert the document covers the internal model.
+- Add `ResponseSpec.Headers` (`ResponseHeaderSpec`, `ResponseHeader(name, typ)` constructor) so httpapi routes can document response headers (e.g. pagination cursors); rendered into OpenAPI `responses.<status>.headers` and the client-spec document, validated at registration. Generated client return shapes are unchanged — read documented headers via the new fetch/transport hook.
+- JS `createClient` gains an optional second `clientOptions` parameter; Python `create_client` gains keyword-only `headers` and `transport` and every generated Python method gains a `headers` kwarg.
+- Add operation deprecation: `HandlerMeta.Deprecated`/`DeprecationNote` (httpapi) and the `rpc.Deprecated(note...)` route option (passed in `HandleRPC`'s guards position) render `deprecated: true` in OpenAPI, `deprecated`/`deprecationNote` in the client-spec document, `@deprecated` JSDoc/TSDoc tags on generated JS/TS/React Query methods, and a `Deprecated.` docstring on generated Python methods. No runtime behavior change.
+
 ## 0.0.57
 
 Security fixes:
