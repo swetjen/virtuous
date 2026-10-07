@@ -18,7 +18,19 @@ type ServeAllDocsOptions struct {
 	ClientTSPath   string
 	ClientPYPath   string
 	ClientSpecPath string
+	// LLMsTxtPath and LLMsFullTxtPath are the llms.txt index and llms-full.txt
+	// routes. Disable them with WithDocsOptions(WithoutLLMsTxt()).
+	LLMsTxtPath     string
+	LLMsFullTxtPath string
 }
+
+// Default generated-artifact route paths registered by ServeAllDocs.
+const (
+	defaultClientJSPath   = "/rpc/client.gen.js"
+	defaultClientTSPath   = "/rpc/client.gen.ts"
+	defaultClientPYPath   = "/rpc/client.gen.py"
+	defaultClientSpecPath = "/rpc/client.spec.json"
+)
 
 // ServeAllDocsOpt mutates ServeAllDocsOptions.
 type ServeAllDocsOpt func(*ServeAllDocsOptions)
@@ -68,6 +80,24 @@ func WithClientSpecPath(path string) ServeAllDocsOpt {
 	}
 }
 
+// WithLLMsTxtPath overrides the llms.txt index route path.
+func WithLLMsTxtPath(path string) ServeAllDocsOpt {
+	return func(o *ServeAllDocsOptions) {
+		if path != "" {
+			o.LLMsTxtPath = ensureLeadingSlash(path)
+		}
+	}
+}
+
+// WithLLMsFullTxtPath overrides the llms-full.txt route path.
+func WithLLMsFullTxtPath(path string) ServeAllDocsOpt {
+	return func(o *ServeAllDocsOptions) {
+		if path != "" {
+			o.LLMsFullTxtPath = ensureLeadingSlash(path)
+		}
+	}
+}
+
 // WithoutDocs disables docs/OpenAPI route registration.
 func WithoutDocs() ServeAllDocsOpt {
 	return func(o *ServeAllDocsOptions) {
@@ -81,11 +111,13 @@ func WithoutDocs() ServeAllDocsOpt {
 func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
 	r.mustBeMutable()
 	config := ServeAllDocsOptions{
-		DocsEnabled:    true,
-		ClientJSPath:   "/rpc/client.gen.js",
-		ClientTSPath:   "/rpc/client.gen.ts",
-		ClientPYPath:   "/rpc/client.gen.py",
-		ClientSpecPath: "/rpc/client.spec.json",
+		DocsEnabled:     true,
+		ClientJSPath:    defaultClientJSPath,
+		ClientTSPath:    defaultClientTSPath,
+		ClientPYPath:    defaultClientPYPath,
+		ClientSpecPath:  defaultClientSpecPath,
+		LLMsTxtPath:     defaultLLMsTxtPath,
+		LLMsFullTxtPath: defaultLLMsFullTxtPath,
 	}
 	for _, opt := range opts {
 		opt(&config)
@@ -93,7 +125,8 @@ func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
 	if config.DocsEnabled {
 		r.ServeDocs(config.DocsOptions...)
 	}
-	clientGuards := applyDocOpts(config.DocsOptions...).clientGuards()
+	docsConfig := applyDocOpts(config.DocsOptions...)
+	clientGuards := docsConfig.clientGuards()
 	if config.ClientJSPath != "" {
 		r.mux.Handle("GET "+config.ClientJSPath, wrapWithGuards(http.HandlerFunc(r.ServeClientJS), clientGuards))
 		r.logger.Info("rpc client js available", "path", config.ClientJSPath)
@@ -109,6 +142,52 @@ func (r *Router) ServeAllDocs(opts ...ServeAllDocsOpt) {
 	if config.ClientSpecPath != "" {
 		r.mux.Handle("GET "+config.ClientSpecPath, wrapWithGuards(http.HandlerFunc(r.ServeClientSpec), clientGuards))
 		r.logger.Info("rpc client spec available", "path", config.ClientSpecPath)
+	}
+	if !docsConfig.LLMsTxtDisabled && docsConfig.enabledModules()[ModuleAPI] {
+		links := config.llmsLinks(docsConfig)
+		if config.LLMsTxtPath != "" {
+			r.mux.Handle("GET "+config.LLMsTxtPath, wrapWithGuards(r.LLMsTxtHandler(links...), clientGuards))
+			r.logger.Info("rpc llms.txt available", "path", config.LLMsTxtPath)
+		}
+		if config.LLMsFullTxtPath != "" {
+			r.mux.Handle("GET "+config.LLMsFullTxtPath, wrapWithGuards(r.LLMsFullTxtHandler(links...), clientGuards))
+			r.logger.Info("rpc llms-full.txt available", "path", config.LLMsFullTxtPath)
+		}
+	}
+}
+
+// llmsLinks builds the llms.txt link set from what ServeAllDocs actually
+// mounts: absolute paths, omitting the OpenAPI and docs links when docs are
+// disabled and every client whose path is empty.
+func (o ServeAllDocsOptions) llmsLinks(docs DocsOptions) []LLMsOpt {
+	openAPIURL, docsURL := "", ""
+	if o.DocsEnabled {
+		if docs.enabledModules()[ModuleAPI] {
+			openAPIURL = ensureLeadingSlash(docs.OpenAPIPath)
+		}
+		docsBase := strings.TrimSuffix(docs.DocsPath, "/")
+		if docsBase == "" {
+			docsBase = defaultDocsOptions().DocsPath
+		}
+		docsURL = docsBase + "/"
+	}
+	var clients []LLMsLink
+	if o.ClientTSPath != "" {
+		clients = append(clients, LLMsLink{Label: "TypeScript client", URL: o.ClientTSPath})
+	}
+	if o.ClientJSPath != "" {
+		clients = append(clients, LLMsLink{Label: "JavaScript client", URL: o.ClientJSPath})
+	}
+	if o.ClientPYPath != "" {
+		clients = append(clients, LLMsLink{Label: "Python client", URL: o.ClientPYPath})
+	}
+	return []LLMsOpt{
+		WithLLMsOpenAPIURL(openAPIURL),
+		WithLLMsDocsURL(docsURL),
+		WithLLMsIndexURL(o.LLMsTxtPath),
+		WithLLMsFullURL(o.LLMsFullTxtPath),
+		WithLLMsClientSpecURL(o.ClientSpecPath),
+		WithLLMsClientLinks(clients...),
 	}
 }
 

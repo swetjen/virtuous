@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.60
+
+- Add `llms.txt` and `llms-full.txt` for RPC routers. `ServeAllDocs()` serves them at `/rpc/llms.txt` and `/rpc/llms-full.txt` behind the client guards. `DocsHandler(...)` serves copies under the docs path with relative links.
+- The index lists every endpoint with its types, auth, and deprecation note, plus links to OpenAPI, the client spec, the clients, and the docs. The full file adds each endpoint's fields, a curl example, and every type.
+- New options: `WithLLMsTxtPath`, `WithLLMsFullTxtPath`, `WithLLMsTxtFile`, `WithLLMsFullTxtFile`, `WithoutLLMsTxt`. New methods: `WriteLLMsTxt`, `WriteLLMsFullTxt`, `LLMsTxtHandler`, `LLMsFullTxtHandler`, `ServeLLMsTxt`, `ServeLLMsFullTxt`, plus file-writing variants.
+- Add the missing `RPCWithClientSpecPath` alias.
+
 ## 0.0.59
 
 - Accept a plain string for auth in the generated httpapi TypeScript and React Query clients: `RequestOptions.auth` and `AuthProvider` (including provider-function results) take `RequestAuth | string`; a string is normalized into the generic auth slot, matching the JS and rpc TS runtimes. Keyed `RequestAuth` objects are unchanged.

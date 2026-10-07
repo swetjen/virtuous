@@ -62,6 +62,15 @@ These instructions describe how to understand and work with this repository.
 - When changing release details or publishing workflows, bump `VERSION`, `python_loader/pyproject.toml`, and add a changelog entry.
 - Before publishing, ensure the tree is clean and run `make publish` to tag, push, and create the GitHub release.
 
+## Work Tracking And Ticket Standard (Tix)
+
+- Tix (`https://tix.corp.ur.mom`) is the tracker for Virtuous development; use project key `VIRT` and the agent's own Tix identity, never another agent's or a human's. The local `Virtuous Developer` identity is stored in the Git-ignored `.tix-virtuous-developer.json`.
+- Follow the CF board's two-phase flow. `Backlog` is collaborative definition, not permission to implement. `Todo` means the user has declared the ticket refined and ready; only the user moves a ticket from Backlog to Todo unless they explicitly delegate that move. Then use `InProgress`, `InReview`, and `Done` for execution, review, and confirmed merge. Use `Blocked` with a comment when work cannot continue, and respect the board's soft WIP limits (4 In Progress, 2 In Review).
+- A refined ticket's description is the source of truth. It has `## What` (2–6 sentences describing observable functionality and its boundary, plus an explicit `Out of scope:` line wherever the boundary could be misread), `## Why` only when the driver is not obvious, and `## Done when` (unchecked checkboxes of independently verifiable, ticket-specific outcomes). Done Whens are acceptance criteria: include functional, non-functional, or technical outcomes as needed, but do not prescribe implementation. Put non-binding code pointers and design suggestions under `### Notes`.
+- Rewrite any Done When that cannot be verified. More than about seven Done Whens, or criteria covering two independently shippable deliverables, means split the ticket. Standing repository gates such as tests, generated-client validation, docs, and changelog updates remain implicit unless their result is specific to the ticket.
+- Large stories may additionally carry a Tix spec revision containing the What and Done Whens for human agreement. Agents never mark a spec agreed. Before implementing a ticket with a spec, read and implement its agreed revision; if the agreed spec and description differ or spec drift is flagged, stop and reconcile. Draft specs are proposals, not work orders.
+- At InReview, comment on every Done When with pass/fail and evidence (test, output, screenshot, or other direct check); flag anything not verified. Link the PR/change to its spec revision before review. After a confirmed merge, reconcile the change-link state and ticket status; leave unfinished work open with an explicit comment.
+
 ## Merge-To-Main Release SOP
 - On merge-ready changes, add or update a top `CHANGELOG.md` entry for the release version.
 - Bump `VERSION` and `python_loader/pyproject.toml` to the same version.

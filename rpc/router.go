@@ -56,6 +56,8 @@ type Router struct {
 	clientTSCache   clientArtifact
 	clientPYCache   clientArtifact
 	clientSpecCache clientArtifact
+	llmsTxtCache    clientArtifact
+	llmsFullCache   clientArtifact
 }
 
 // mustBeMutable panics when the router has already started serving requests.

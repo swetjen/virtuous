@@ -85,6 +85,15 @@ func PythonCommentText(text string) string {
 	return collapseCommentLines(text)
 }
 
+// MarkdownText sanitizes text for interpolation into a single Markdown line
+// (a list item note, a heading, or a blockquote line): line breaks collapse
+// to spaces so tag content cannot open a new heading, list, or code fence,
+// and "-->" is broken so it cannot terminate the artifact's trailing HTML
+// comment footer early.
+func MarkdownText(text string) string {
+	return strings.ReplaceAll(strings.TrimSpace(collapseCommentLines(text)), "-->", "--\\>")
+}
+
 // TemplateFuncs returns the escaping helpers shared by the generated client
 // templates. Every dynamic string interpolated into generated source must go
 // through one of these (or PythonStringLiteral / the Python identifier
@@ -100,6 +109,7 @@ func TemplateFuncs() template.FuncMap {
 		"jsGetOpt":  JSOptionalPropertyAccess,
 		"jsdoc":     JSDocText,
 		"pyComment": PythonCommentText,
+		"md":        MarkdownText,
 	}
 }
 
