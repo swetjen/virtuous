@@ -101,7 +101,7 @@ Default `ServeAllDocs()` endpoints:
 - OpenAPI: `/rpc/openapi.json`
 - Clients: `/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`
 - Client spec JSON: `/rpc/client.spec.json`
-- llms.txt index and full reference: `/rpc/llms.txt`, `/rpc/llms-full.txt`
+- llms.txt: `/rpc/llms.txt`, `/rpc/llms-full.txt`
 - Observability redirect: `/rpc/_virtuous/observability`
 - Metrics JSON: `/rpc/_virtuous/metrics`
 

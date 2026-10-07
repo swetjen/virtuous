@@ -2,10 +2,10 @@
 
 ## 0.0.60
 
-- Add generated `llms.txt` and `llms-full.txt` for RPC routers (llmstxt.org): the index carries the H1 title, a blockquote summary, authentication notes, one link per endpoint (with guard names and deprecation notes), and links to the OpenAPI document, client spec, generated clients, and docs; the full file expands every endpoint with request/response fields from `doc` tags, a curl example with the right credential, and every object type. Both are built from the exported client-spec document plus `SetOpenAPIOptions` (title, version, description, servers, tag descriptions).
-- `ServeAllDocs()` registers `GET /rpc/llms.txt` and `GET /rpc/llms-full.txt` next to the clients, behind the same client guards (default: the docs guards; `WithClientGuards` overrides), rendered once and served with an `ETag`/`304`. Links are absolute and reflect the configured OpenAPI, docs, client-spec, and client paths; `WithoutDocs()` keeps llms.txt and drops the OpenAPI/docs links. New options: `WithLLMsTxtPath`, `WithLLMsFullTxtPath`; `WithoutLLMsTxt()` (a doc option, passed via `WithDocsOptions`) removes both files.
-- `DocsHandler(...)` serves subtree-local `llms.txt` and `llms-full.txt` with relative links (so `http.StripPrefix` mounts resolve), named by `WithLLMsTxtFile`/`WithLLMsFullTxtFile`, and the Scalar shell advertises the index with `<link rel="alternate" type="text/markdown">`.
-- New router methods for custom placement: `WriteLLMsTxt`/`WriteLLMsFullTxt` (`io.Writer`), `WriteLLMsTxtFile`/`WriteLLMsFullTxtFile`, `LLMsTxtHandler`/`LLMsFullTxtHandler` (mountable, link set via `LLMsOpt` options such as `WithLLMsOpenAPIURL`, `WithLLMsClientLinks`, `WithLLMsBaseURL`), and zero-config `ServeLLMsTxt`/`ServeLLMsFullTxt` handler funcs. Provenance (hash and generated line) is a trailing HTML comment so the H1 stays first; `doc` text is collapsed to one line so tags cannot inject Markdown structure. Root aliases `RPCWithLLMsTxtPath`, `RPCWithLLMsFullTxtPath`, `RPCWithLLMsTxtFile`, `RPCWithLLMsFullTxtFile`, `RPCWithoutLLMsTxt`, and the previously missing `RPCWithClientSpecPath` are added.
+- Add `llms.txt` and `llms-full.txt` for RPC routers. `ServeAllDocs()` serves them at `/rpc/llms.txt` and `/rpc/llms-full.txt` behind the client guards. `DocsHandler(...)` serves copies under the docs path with relative links.
+- The index lists every endpoint with its types, auth, and deprecation note, plus links to OpenAPI, the client spec, the clients, and the docs. The full file adds each endpoint's fields, a curl example, and every type.
+- New options: `WithLLMsTxtPath`, `WithLLMsFullTxtPath`, `WithLLMsTxtFile`, `WithLLMsFullTxtFile`, `WithoutLLMsTxt`. New methods: `WriteLLMsTxt`, `WriteLLMsFullTxt`, `LLMsTxtHandler`, `LLMsFullTxtHandler`, `ServeLLMsTxt`, `ServeLLMsFullTxt`, plus file-writing variants.
+- Add the missing `RPCWithClientSpecPath` alias.
 
 ## 0.0.59
 
