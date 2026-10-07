@@ -46,7 +46,7 @@ _ = server.ListenAndServe()
 ## Docs and clients
 
 - `ServeDocs()` is the convenience path for default docs wiring (`/rpc/docs`, `/rpc/openapi.json`).
-- `ServeAllDocs()` adds generated clients (`/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`) and the machine-readable client spec (`/rpc/client.spec.json`).
+- `ServeAllDocs()` adds generated clients (`/rpc/client.gen.js`, `/rpc/client.gen.ts`, `/rpc/client.gen.py`), the machine-readable client spec (`/rpc/client.spec.json`), and the agent-facing `llms.txt` index and `llms-full.txt` reference (`/rpc/llms.txt`, `/rpc/llms-full.txt`).
 - `WithModules(...)` controls visible docs modules: `api`, `observability`.
 - `DocsHandler(...)` returns a mountable docs subtree handler for custom route placement and docs-only middleware.
 - `AdminHandler(...)` returns mountable admin endpoints for enabled observability modules; mount it explicitly under a guarded `_admin` subtree when those modules are exposed.

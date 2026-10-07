@@ -121,3 +121,27 @@ func RPCWithClientPYPath(path string) RPCServeAllDocsOpt {
 func RPCWithoutDocs() RPCServeAllDocsOpt {
 	return rpc.WithoutDocs()
 }
+
+func RPCWithClientSpecPath(path string) RPCServeAllDocsOpt {
+	return rpc.WithClientSpecPath(path)
+}
+
+func RPCWithLLMsTxtPath(path string) RPCServeAllDocsOpt {
+	return rpc.WithLLMsTxtPath(path)
+}
+
+func RPCWithLLMsFullTxtPath(path string) RPCServeAllDocsOpt {
+	return rpc.WithLLMsFullTxtPath(path)
+}
+
+func RPCWithLLMsTxtFile(path string) RPCDocOpt {
+	return rpc.WithLLMsTxtFile(path)
+}
+
+func RPCWithLLMsFullTxtFile(path string) RPCDocOpt {
+	return rpc.WithLLMsFullTxtFile(path)
+}
+
+func RPCWithoutLLMsTxt() RPCDocOpt {
+	return rpc.WithoutLLMsTxt()
+}

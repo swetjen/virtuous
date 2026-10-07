@@ -14,7 +14,7 @@ import (
 
 const (
 	virtuousModulePath       = "github.com/swetjen/virtuous"
-	fallbackVirtuousVersion  = "0.0.59"
+	fallbackVirtuousVersion  = "0.0.60"
 	generatedTimestampFormat = "2006-01-02 15:04:05 UTC"
 )
 
@@ -40,6 +40,17 @@ func WriteArtifactHeader(w io.Writer, commentPrefix, hashLabel, hash string) err
 		return err
 	}
 	_, err := io.WriteString(w, GeneratedLine(commentPrefix, time.Now().UTC()))
+	return err
+}
+
+// WriteHTMLCommentFooter writes the generated artifact metadata as trailing
+// HTML comments, for Markdown artifacts whose first line must stay a heading.
+func WriteHTMLCommentFooter(w io.Writer, hashLabel, hash string) error {
+	if _, err := fmt.Fprintf(w, "<!-- %s: %s -->\n", hashLabel, hash); err != nil {
+		return err
+	}
+	line := strings.TrimSuffix(GeneratedLine("<!--", time.Now().UTC()), "\n")
+	_, err := io.WriteString(w, line+" -->\n")
 	return err
 }
 

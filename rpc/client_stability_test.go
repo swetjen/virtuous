@@ -52,6 +52,8 @@ func TestRPCLargeContractOutputIsDeterministic(t *testing.T) {
 	assertRPCStableRender(t, "js", router.WriteClientJS)
 	assertRPCStableRender(t, "ts", router.WriteClientTS)
 	assertRPCStableRender(t, "py", router.WriteClientPY)
+	assertRPCStableRender(t, "llms", func(w io.Writer) error { return router.WriteLLMsTxt(w) })
+	assertRPCStableRender(t, "llms-full", func(w io.Writer) error { return router.WriteLLMsFullTxt(w) })
 }
 
 func assertRPCStableRender(t *testing.T, name string, render func(io.Writer) error) {

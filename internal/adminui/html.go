@@ -12,6 +12,7 @@ const scalarCDNURL = "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.57.5"
 type DocsShellOptions struct {
 	Title            string
 	OpenAPIURL       string
+	LLMsTxtURL       string
 	Modules          []string
 	EventsURL        string
 	EventsStreamURL  string
@@ -41,8 +42,14 @@ func DocsShellHTML(opts DocsShellOptions) string {
 		}
 	}
 
+	llmsLink := ""
+	if llmsTxtURL := strings.TrimSpace(opts.LLMsTxtURL); llmsTxtURL != "" {
+		llmsLink = "\n\t<link rel=\"alternate\" type=\"text/markdown\" href=\"" + html.EscapeString(llmsTxtURL) + "\" />"
+	}
+
 	replacer := strings.NewReplacer(
 		"__TITLE__", html.EscapeString(title),
+		"__LLMS_LINK__", llmsLink,
 		"__OPENAPI_URL__", strconv.Quote(openAPIURL),
 		"__SCALAR_CDN_URL__", scalarCDNURL,
 		"__MODULE_API__", strconv.FormatBool(moduleAPI),
@@ -55,7 +62,7 @@ const docsShellTemplate = `<!doctype html>
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>__TITLE__</title>
+	<title>__TITLE__</title>__LLMS_LINK__
 	<style>
 		body {
 			margin: 0;

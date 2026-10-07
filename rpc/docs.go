@@ -48,15 +48,21 @@ func WriteDocsHTMLFile(path, openAPIPath string) error {
 
 // DocsOptions configures docs and OpenAPI routes.
 type DocsOptions struct {
-	DocsPath        string
-	DocsFile        string
-	OpenAPIPath     string
-	OpenAPIFile     string
-	Modules         []Module
-	DocsGuards      []Guard
-	AdminGuards     []Guard
-	ClientGuards    []Guard
-	PublicAdmin     bool
+	DocsPath     string
+	DocsFile     string
+	OpenAPIPath  string
+	OpenAPIFile  string
+	Modules      []Module
+	DocsGuards   []Guard
+	AdminGuards  []Guard
+	ClientGuards []Guard
+	PublicAdmin  bool
+	// LLMsTxtFile and LLMsFullTxtFile name the subtree-local llms.txt routes
+	// served by DocsHandler; LLMsTxtDisabled removes llms.txt output from
+	// DocsHandler and ServeAllDocs.
+	LLMsTxtFile     string
+	LLMsFullTxtFile string
+	LLMsTxtDisabled bool
 	modulesSet      bool
 	clientGuardsSet bool
 }
@@ -110,6 +116,35 @@ func WithOpenAPIFile(path string) DocOpt {
 	}
 }
 
+// WithLLMsTxtFile overrides the subtree-local llms.txt route name served by
+// DocsHandler (default "llms.txt").
+func WithLLMsTxtFile(path string) DocOpt {
+	return func(o *DocsOptions) {
+		if path != "" {
+			o.LLMsTxtFile = path
+		}
+	}
+}
+
+// WithLLMsFullTxtFile overrides the subtree-local llms-full.txt route name
+// served by DocsHandler (default "llms-full.txt").
+func WithLLMsFullTxtFile(path string) DocOpt {
+	return func(o *DocsOptions) {
+		if path != "" {
+			o.LLMsFullTxtFile = path
+		}
+	}
+}
+
+// WithoutLLMsTxt disables the llms.txt and llms-full.txt routes in DocsHandler
+// and, when passed through WithDocsOptions, in ServeAllDocs. It is an explicit
+// option because the With*Path setters ignore empty paths.
+func WithoutLLMsTxt() DocOpt {
+	return func(o *DocsOptions) {
+		o.LLMsTxtDisabled = true
+	}
+}
+
 // WithModules enables the docs modules shown in the UI.
 func WithModules(modules ...Module) DocOpt {
 	return func(o *DocsOptions) {
@@ -153,10 +188,12 @@ func WithPublicAdmin() DocOpt {
 
 func defaultDocsOptions() DocsOptions {
 	return DocsOptions{
-		DocsPath:    "/rpc/docs",
-		DocsFile:    "docs.html",
-		OpenAPIPath: "/rpc/openapi.json",
-		OpenAPIFile: "openapi.json",
+		DocsPath:        "/rpc/docs",
+		DocsFile:        "docs.html",
+		OpenAPIPath:     "/rpc/openapi.json",
+		OpenAPIFile:     "openapi.json",
+		LLMsTxtFile:     "llms.txt",
+		LLMsFullTxtFile: "llms-full.txt",
 	}
 }
 
@@ -259,9 +296,17 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 		return docsGenerationFailedHandler()
 	}
 	openAPIFile := docsAssetFile(config.OpenAPIFile, "openapi.json")
+	llmsFile := docsAssetFile(config.LLMsTxtFile, "llms.txt")
+	llmsFullFile := docsAssetFile(config.LLMsFullTxtFile, "llms-full.txt")
+	serveLLMs := modules[ModuleAPI] && !config.LLMsTxtDisabled
+	llmsTxtURL := ""
+	if serveLLMs {
+		llmsTxtURL = docsAssetURL(llmsFile)
+	}
 	docsHTML := adminui.DocsShellHTML(adminui.DocsShellOptions{
 		Title:            r.docsTitle("Virtuous RPC Docs"),
 		OpenAPIURL:       docsAssetURL(openAPIFile),
+		LLMsTxtURL:       llmsTxtURL,
 		Modules:          enabledModuleNames(modules),
 		EventsURL:        "./_admin/events",
 		EventsStreamURL:  "./_admin/events.stream",
@@ -282,6 +327,21 @@ func (r *Router) DocsHandler(opts ...DocOpt) http.Handler {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_, _ = w.Write(openAPI)
 		}))
+	}
+
+	if serveLLMs {
+		// Subtree-local copies link to their siblings relatively, because the
+		// handler cannot know the public prefix it is mounted under.
+		links := []LLMsOpt{
+			WithLLMsOpenAPIURL(docsAssetURL(openAPIFile)),
+			WithLLMsDocsURL("./"),
+			WithLLMsIndexURL(docsAssetURL(llmsFile)),
+			WithLLMsFullURL(docsAssetURL(llmsFullFile)),
+			WithLLMsClientSpecURL(""),
+			WithLLMsClientLinks(),
+		}
+		handler.Handle("GET /"+llmsFile, r.LLMsTxtHandler(links...))
+		handler.Handle("GET /"+llmsFullFile, r.LLMsFullTxtHandler(links...))
 	}
 
 	return wrapWithGuards(handler, config.DocsGuards)

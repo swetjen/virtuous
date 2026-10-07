@@ -85,6 +85,51 @@ Default client paths:
 - Python client: `/rpc/client.gen.py`
 - Client spec JSON: `/rpc/client.spec.json` (the versioned, machine-readable
   client model; see [Client Codegen](../agents/client-codegen.md))
+- llms.txt index: `/rpc/llms.txt`
+- llms.txt full reference: `/rpc/llms-full.txt`
+
+The client, client-spec, and llms.txt routes are guarded by `WithClientGuards(...)`,
+which defaults to the `WithDocsGuards(...)` guards. Override the llms.txt paths
+with `WithLLMsTxtPath(...)` / `WithLLMsFullTxtPath(...)`; remove both files with
+`WithDocsOptions(WithoutLLMsTxt())`. `WithoutDocs()` keeps llms.txt and omits the
+OpenAPI and docs links from it.
+
+## llms.txt
+
+`llms.txt` ([llmstxt.org](https://llmstxt.org/)) is the Markdown entry point
+coding agents fetch before reading OpenAPI or HTML docs. Virtuous generates two
+files from the same client-spec model the clients render from:
+
+- `llms.txt` — the index: H1 title, a blockquote summary, the authentication
+  schemes and which endpoints need them, one link-list entry per endpoint
+  (request and response types, guard names, deprecation notes), and links to
+  the OpenAPI document, client spec, generated clients, and the Scalar page.
+- `llms-full.txt` — every endpoint expanded with request and response fields
+  (from `doc` tags), a curl example carrying the right credential, and every
+  object type.
+
+Title, version, description, server URL, and tag descriptions come from
+`SetOpenAPIOptions(...)`. The curl examples use the first OpenAPI server URL, or a
+`$BASE_URL` placeholder when none is set. Provenance (body hash and generated
+line) is a trailing HTML comment so the H1 stays first.
+
+To place the index somewhere other than the router prefix — at the site root, or
+public while the Scalar docs stay guarded — mount the handler yourself and pass the
+public paths of the sibling resources:
+
+```go
+mux.Handle("GET /llms.txt", router.LLMsTxtHandler(
+	rpc.WithLLMsOpenAPIURL("/rpc/openapi.json"),
+	rpc.WithLLMsFullURL("/llms-full.txt"),
+	rpc.WithLLMsClientLinks(rpc.LLMsLink{Label: "TypeScript client", URL: "/rpc/client.gen.ts"}),
+))
+mux.Handle("GET /llms-full.txt", router.LLMsFullTxtHandler(rpc.WithLLMsIndexURL("/llms.txt")))
+```
+
+Every `LLMsOpt` sets its link verbatim and an empty value omits the link. The
+zero-config `ServeLLMsTxt` / `ServeLLMsFullTxt` handler funcs emit the
+`ServeAllDocs()` default links. `WriteLLMsTxt` / `WriteLLMsFullTxt` and the
+`*File` variants write the same output to an `io.Writer` or a path.
 
 ## DocsHandler and AdminHandler (mountable)
 
@@ -124,6 +169,10 @@ Docs-handler-local endpoints:
 
 - `GET /` — Scalar API reference
 - `GET /openapi.json` — when `api` module enabled
+- `GET /llms.txt`, `GET /llms-full.txt` — when `api` module enabled and not
+  `WithoutLLMsTxt()`; links are relative (`./openapi.json`, `./llms-full.txt`)
+  so they resolve under any mount prefix. Rename them with `WithLLMsTxtFile(...)`
+  / `WithLLMsFullTxtFile(...)`.
 
 Admin-handler-local endpoints:
 

@@ -72,6 +72,11 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `(*rpc.Router).WriteClientSpecJSON(w io.Writer)`
 - `(*rpc.Router).ServeClientSpec(w http.ResponseWriter, r *http.Request)`
 - `rpc.WithClientSpecPath(path string)`
+- `rpc.WithLLMsTxtPath(path string)`, `rpc.WithLLMsFullTxtPath(path string)`
+- `rpc.WithLLMsTxtFile(path string)`, `rpc.WithLLMsFullTxtFile(path string)`, `rpc.WithoutLLMsTxt()` (doc options)
+- `(*rpc.Router).WriteLLMsTxt(w io.Writer, opts ...rpc.LLMsOpt) error`, `WriteLLMsFullTxt`, `WriteLLMsTxtFile`, `WriteLLMsFullTxtFile`
+- `(*rpc.Router).LLMsTxtHandler(opts ...rpc.LLMsOpt) http.Handler`, `LLMsFullTxtHandler`, `ServeLLMsTxt`, `ServeLLMsFullTxt`
+- `rpc.LLMsOptions`, `rpc.LLMsLink`, `rpc.LLMsOpt`: `WithLLMsOpenAPIURL`, `WithLLMsDocsURL`, `WithLLMsIndexURL`, `WithLLMsFullURL`, `WithLLMsClientSpecURL`, `WithLLMsClientLinks`, `WithLLMsBaseURL`
 
 ## httpapi package
 

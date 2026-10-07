@@ -25,6 +25,7 @@ Generated clients are part of the product. They should be direct-use, typed, sta
 | `httpapi` Python | REST/OpenAPI migration Python consumers | Direct operation methods plus service tree | Constructor auth plus per-call overrides | Uses path-then-verb operation names |
 | `httpapi` TypeScript | Framework-free TS consumers | Service methods with named path/query aliases | `createClient({ baseUrl, auth })` plus per-call override | Compact shared transport helpers |
 | React Query TS | Frontend hooks | Standalone hooks plus embedded raw client | `configureVirtuousClient({ auth })` | No local generated imports |
+| RPC llms.txt | Coding agents discovering the API | Markdown index plus `llms-full.txt` expansion | Documents guards and curl credentials | Built from the client spec; see [Serving Docs](../rpc/serving-docs.md#llmstxt) |
 
 ## Python
 
