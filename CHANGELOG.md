@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0
+
+- First stable release. Virtuous now follows semantic versioning; see `docs/reference/stability.md` for the covered surface. In short: the exported API of the root, `rpc`, `httpapi`, `clientspec`, `guard`, and `schema` packages and the Python loader; generated client service names, method names, signatures, and construction options for an unchanged route set; the `client.spec.json` document under its own `specVersion`; and the RPC error envelope, status model, and default endpoint paths. Breaking changes to any of these ship only in a new major, after at least one minor release of deprecation.
+- Document the client method naming rules (`rpc`: package and function name; `httpapi`: `HandlerMeta.Service`/`Method` or inferred from the HTTP method and path) as part of the contract.
+- The Go module path is unchanged (`github.com/swetjen/virtuous`). No code changes from 0.0.60.
+
 ## 0.0.60
 
 - Add `llms.txt` and `llms-full.txt` for RPC routers. `ServeAllDocs()` serves them at `/rpc/llms.txt` and `/rpc/llms-full.txt` behind the client guards. `DocsHandler(...)` serves copies under the docs path with relative links.

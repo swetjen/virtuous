@@ -15,6 +15,7 @@ This is a quick index of the primary entry points used in Virtuous apps. For ful
 - `docs/overview.md`
 - `docs/tutorials/migrate-swaggo.md`
 - `docs/specs/overview.md`
+- `docs/reference/stability.md` — which of these entry points are covered by semantic versioning, and the deprecation policy
 
 ## Root package
 

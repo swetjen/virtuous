@@ -14,7 +14,7 @@ import (
 
 const (
 	virtuousModulePath       = "github.com/swetjen/virtuous"
-	fallbackVirtuousVersion  = "0.0.60"
+	fallbackVirtuousVersion  = "1.0.0"
 	generatedTimestampFormat = "2006-01-02 15:04:05 UTC"
 )
 

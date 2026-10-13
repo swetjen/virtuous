@@ -10,8 +10,13 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/swetjen/virtuous)](https://goreportcard.com/report/github.com/swetjen/virtuous)
 
 > [!NOTE]
-> Virtuous is pre-1.0 (`v0.0.x`). It is usable and tested, but the API may change
-> between releases — pin a version with `go get github.com/swetjen/virtuous@vX.Y.Z`.
+> **Stability.** Virtuous is at `v1` and follows semantic versioning. The Go API
+> of the public packages, generated client method names and signatures, the
+> `client.spec.json` document, and the RPC wire contract only break in a new
+> major version, after a deprecation period. See
+> [`docs/reference/stability.md`](docs/reference/stability.md) for the exact
+> covered surface and the naming rules. Pin with
+> `go get github.com/swetjen/virtuous@v1.x.y`.
 
 Virtuous gives you two libraries and a strong opinion about which to use:
 
@@ -268,6 +273,7 @@ Runnable example apps live in [`example/`](example):
 - [`docs/overview.md`](docs/overview.md) — primary documentation (RPC-first)
 - [`docs/agent_quickstart.md`](docs/agent_quickstart.md) — agent-oriented usage guide
 - [`docs/doc-spec.md`](docs/doc-spec.md) — the documentation contract these docs follow
+- [`docs/reference/stability.md`](docs/reference/stability.md) — versioning, covered surface, and deprecation policy
 - [`example/byodb-sqlite/`](example/byodb-sqlite/) — full-app example: SQLite-backed RPC service with an embedded frontend and generated clients
 
 ## Requirements
